@@ -1,0 +1,98 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Prefix DHCP Configuration</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Prefix</th>
+                        <td><a href="{{ object.prefix.get_absolute_url }}">{{ object.prefix }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>VRF</th>
+                        <td>
+                            {% if object.prefix.vrf %}
+                                <a href="{{ object.prefix.vrf.get_absolute_url }}">{{ object.prefix.vrf }}</a>
+                            {% else %}
+                                <span class="text-muted">Global</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Server</th>
+                        <td><a href="{{ object.server.get_absolute_url }}">{{ object.server }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Valid Lifetime</th>
+                        <td>{{ object.valid_lifetime }} seconds</td>
+                    </tr>
+                    <tr>
+                        <th>Max Lifetime</th>
+                        <td>{{ object.max_lifetime }} seconds</td>
+                    </tr>
+                    <tr>
+                        <th>Router Option Offset</th>
+                        <td>
+                            {% if object.routers_option_offset %}
+                                {{ object.routers_option_offset }}
+                                <br><small class="text-muted">Router IP: {{ object.get_router_ip }}</small>
+                            {% else %}
+                                <span class="text-muted">Disabled (0)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% if object.option_data.exists %}
+        <div class="card">
+            <h5 class="card-header">Option Data</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Code</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for option in object.option_data.all %}
+                        <tr>
+                            <td><a href="{{ option.get_absolute_url }}">{{ option.distinctive_name }}</a></td>
+                            <td>{{ option.code }}</td>
+                            <td>{{ option.data }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if object.client_classes.exists %}
+        <div class="card">
+            <h5 class="card-header">Client Classes</h5>
+            <div class="card-body">
+                <ul>
+                    {% for client_class in object.client_classes.all %}
+                    <li><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Subnet Configuration</h5>
+            <div class="card-body">
+                <pre><code class="language-json">{{ kea_config }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

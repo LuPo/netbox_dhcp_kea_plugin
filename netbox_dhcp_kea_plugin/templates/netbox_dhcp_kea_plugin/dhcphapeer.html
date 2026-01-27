@@ -1,0 +1,59 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">HA Peer</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>HA Relationship</th>
+                        <td><a href="{{ object.ha_relationship.get_absolute_url }}">{{ object.ha_relationship.name }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Server</th>
+                        <td><a href="{{ object.server.get_absolute_url }}">{{ object.server.name }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Role</th>
+                        <td>{{ object.get_role_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>URL</th>
+                        <td>{{ object.url }}</td>
+                    </tr>
+                    <tr>
+                        <th>Auto Failover</th>
+                        <td>{% if object.auto_failover %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Authentication</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Basic Auth User</th>
+                        <td>{{ object.basic_auth_user|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Basic Auth Password</th>
+                        <td>
+                            {% if object.basic_auth_password %}
+                            <span class="text-muted">********</span>
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

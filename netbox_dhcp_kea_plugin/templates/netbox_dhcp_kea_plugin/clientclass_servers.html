@@ -1,0 +1,41 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card">
+            <h5 class="card-header">DHCP Servers</h5>
+            <div class="card-body">
+                {% if object.servers.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>IP Address</th>
+                            <th>Active</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in object.servers.all %}
+                        <tr>
+                            <td><a href="{{ server.get_absolute_url }}">{{ server.name }}</a></td>
+                            <td>
+                                <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
+                            </td>
+                            <td>{% if server.is_active %}<span class="badge bg-green">Yes</span>{% else %}<span class="badge bg-red">No</span>{% endif %}</td>
+                            <td>{{ server.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted">This client class is not assigned to any DHCP servers.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

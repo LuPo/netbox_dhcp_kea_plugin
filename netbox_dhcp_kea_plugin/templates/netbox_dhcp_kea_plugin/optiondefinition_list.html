@@ -1,0 +1,132 @@
+{% extends 'generic/object_list.html' %}
+{% load buttons %}
+{% load helpers %}
+{% load i18n %}
+
+{# 
+  Custom list template for Option Definitions.
+  Overrides content block to add toggle button for hiding/showing standard options.
+  Based on NetBox's dcim/device/interfaces.html pattern.
+#}
+
+{% block content %}
+    <div class="tab-pane show active" id="object-list" role="tabpanel" aria-labelledby="object-list-tab">
+      {% if filter_form %}
+        {% applied_filters model filter_form request.GET %}
+      {% endif %}
+
+      {# Custom table controls with "Hide/Show Standard" dropdown #}
+      {% include 'netbox_dhcp_kea_plugin/inc/optiondefinition_table_controls.html' with table_modal="ObjectTable_config" %}
+
+      <form method="post" class="form form-horizontal">
+        {% csrf_token %}
+        <input type="hidden" name="return_url" value="{% if return_url %}{{ return_url }}{% else %}{{ request.path }}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}{% endif %}" />
+
+        <div class="card">
+          <div class="htmx-container table-responsive" id="object_list">
+            {% include 'htmx/table.html' %}
+          </div>
+        </div>
+
+        <div class="btn-list d-print-none">
+          {% block bulk_buttons %}
+            <div class="bulk-action-buttons">
+              {% action_buttons actions model multi=True %}
+            </div>
+          {% endblock %}
+        </div>
+      </form>
+    </div>
+
+    {% if filter_form %}
+      <div class="tab-pane show" id="filters-form" role="tabpanel" aria-labelledby="filters-form-tab">
+        {% include 'inc/filter_list.html' %}
+      </div>
+    {% endif %}
+{% endblock content %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const STORAGE_KEY = 'netbox_optiondefinition_toggles';
+
+    // Load saved states from localStorage
+    function loadStates() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    // Save state to localStorage
+    function saveState(key, value) {
+        const states = loadStates();
+        states[key] = value;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(states));
+    }
+
+    // Apply visibility to rows based on current state
+    function applyRowVisibility() {
+        const table = document.querySelector('table');
+        if (!table) return;
+        
+        const savedStates = loadStates();
+        
+        // Apply standard options visibility
+        const hideStandard = savedStates.hasOwnProperty('toggle-standard') ? savedStates['toggle-standard'] : true;
+        table.querySelectorAll('tr[data-standard="standard"]').forEach(row => {
+            row.classList.toggle('d-none', hideStandard);
+        });
+        
+        // Apply vendor options visibility
+        const hideVendor = savedStates.hasOwnProperty('toggle-vendor') ? savedStates['toggle-vendor'] : false;
+        table.querySelectorAll('tr[data-vendor="vendor"]').forEach(row => {
+            row.classList.toggle('d-none', hideVendor);
+        });
+    }
+
+    // Toggle handler factory
+    function setupToggle(buttonClass, dataAttr, dataValue, showText, hideText, defaultHide) {
+        const button = document.querySelector('button.' + buttonClass);
+        if (!button) return;
+
+        const storageKey = buttonClass;
+        const savedStates = loadStates();
+        // Use saved state if exists, otherwise use default
+        const initialHide = savedStates.hasOwnProperty(storageKey) ? savedStates[storageKey] : defaultHide;
+
+        function updateButton(state) {
+            button.setAttribute('data-state', state);
+            button.textContent = state === 'hide' ? showText : hideText;
+        }
+
+        button.addEventListener('click', function() {
+            const newState = button.getAttribute('data-state') === 'hide' ? 'show' : 'hide';
+            const isHidden = newState === 'hide';
+            updateButton(newState);
+            saveState(storageKey, isHidden);
+            applyRowVisibility();
+        });
+
+        // Initialize button state
+        updateButton(initialHide ? 'hide' : 'show');
+    }
+
+    // Setup toggles
+    setupToggle('toggle-standard', 'data-standard', 'standard', '{% trans "Show Standard" %}', '{% trans "Hide Standard" %}', true);
+    setupToggle('toggle-vendor', 'data-vendor', 'vendor', '{% trans "Show Vendor" %}', '{% trans "Hide Vendor" %}', false);
+    
+    // Apply initial visibility
+    applyRowVisibility();
+    
+    // Re-apply visibility after HTMX content swaps
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'object_list') {
+            applyRowVisibility();
+        }
+    });
+});
+</script>
+{% endblock %}

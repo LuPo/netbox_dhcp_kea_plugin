@@ -1,0 +1,126 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">Option Data</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th scope="row">Distinctive Name</th>
+                        <td>{{ object.distinctive_name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Definition</th>
+                        <td>
+                            <a href="{{ object.definition.get_absolute_url }}">{{ object.definition.name }}</a>
+                            <span class="text-muted">(Code: {{ object.definition.code }}, Type: {{ object.definition.get_option_type_display }})</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Vendor Option Space</th>
+                        <td>
+                            {% if object.vendor_option_space %}
+                            <a href="{{ object.vendor_option_space.get_absolute_url }}">{{ object.vendor_option_space.name }}</a>
+                            {% else %}
+                            {{ object.get_option_space_display }} (standard)
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Delivery Type</th>
+                        <td>{{ object.get_delivery_type_display }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Data {% if not object.csv_format %}(Hex){% endif %}</th>
+                        <td><code>{{ object.data }}</code></td>
+                    </tr>
+                    {% if not object.csv_format %}
+                    <tr>
+                        <th scope="row">ASCII Data</th>
+                        <td><code>{{ object.ascii_data }}</code></td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th scope="row">Always Send</th>
+                        <td>{% if object.always_send %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">CSV Format</th>
+                        <td>{% if object.csv_format %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_left_page object %}
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Configuration</h5>
+            <div class="card-body">
+                {% if object.delivery_type == 'standard' %}
+                <p class="text-muted">This option data generates the following KEA <code>option-data</code> entry:</p>
+                <pre><code>{
+    "space": "{{ object.option_space }}",
+    "name": "{{ object.name }}",
+    "code": {{ object.code }},
+    "data": "{{ object.data }}"{% if object.always_send %},
+    "always-send": true{% endif %}{% if not object.csv_format %},
+    "csv-format": false{% endif %}
+
+}</code></pre>
+                {% elif object.delivery_type == 'option43' %}
+                <p class="text-muted">This option is delivered via <strong>Option 43</strong> (Vendor-Encapsulated-Options):</p>
+                <pre><code>// Option 43 must encapsulate the vendor space:
+// (defined in option-def)
+{
+    "name": "vendor-encapsulated-options",
+    "code": 43,
+    "type": "empty",
+    "encapsulate": "{{ object.vendor_option_space.name }}"
+}
+
+// Option data in the vendor space:
+{
+    "space": "{{ object.vendor_option_space.name }}",
+    "name": "{{ object.name }}",
+    "code": {{ object.code }},
+    "data": "{{ object.data }}"{% if object.always_send %},
+    "always-send": true{% endif %}{% if not object.csv_format %},
+    "csv-format": false{% endif %}
+
+}</code></pre>
+                {% else %}
+                <p class="text-muted">This option is delivered via <strong>Option 125</strong> (VIVSO):</p>
+                <pre><code>// Enable VIVSO with the enterprise ID:
+{
+    "name": "vivso-suboptions",
+    "data": "{{ object.vendor_option_space.enterprise_id }}"
+}
+
+// Option data in the vendor space:
+{
+    "space": "vendor-{{ object.vendor_option_space.enterprise_id }}",
+    "name": "{{ object.name }}",
+    "code": {{ object.code }},
+    "data": "{{ object.data }}"{% if object.always_send %},
+    "always-send": true{% endif %}{% if not object.csv_format %},
+    "csv-format": false{% endif %}
+
+}</code></pre>
+                {% endif %}
+            </div>
+        </div>
+        {% include 'inc/panels/custom_fields.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+{% endblock %}

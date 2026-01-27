@@ -1,0 +1,103 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">Client Class</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th scope="row">Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Test Expression</th>
+                        <td><code>{{ object.test_expression }}</code></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Local Definitions</th>
+                        <td>{% if object.local_definitions %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    {% if object.next_server %}
+                    <tr>
+                        <th scope="row">Next Server</th>
+                        <td>{{ object.next_server }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.server_hostname %}
+                    <tr>
+                        <th scope="row">Server Hostname</th>
+                        <td>{{ object.server_hostname }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.boot_file_name %}
+                    <tr>
+                        <th scope="row">Boot File Name</th>
+                        <td>{{ object.boot_file_name }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_left_page object %}
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header d-flex justify-content-between align-items-center">
+                KEA Configuration Preview
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-data-format">Show ASCII</button>
+            </h5>
+            <div class="card-body">
+                <pre id="kea-config-hex"><code>{{ kea_config_hex }}</code></pre>
+                <pre id="kea-config-ascii" class="d-none"><code>{{ kea_config_ascii }}</code></pre>
+            </div>
+        </div>
+        {% include 'inc/panels/custom_fields.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <h5 class="card-header">Option Data</h5>
+            <div class="card-body table-responsive">
+                {% include 'netbox_dhcp_kea_plugin/inc/option_data_table.html' with option_data_list=object.option_data.all empty_message="No option data assigned to this client class." %}
+            </div>
+        </div>
+        {% plugin_full_width_page object %}
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('toggle-data-format');
+    const hexConfig = document.getElementById('kea-config-hex');
+    const asciiConfig = document.getElementById('kea-config-ascii');
+
+    if (toggleBtn && hexConfig && asciiConfig) {
+        toggleBtn.addEventListener('click', function() {
+            if (hexConfig.classList.contains('d-none')) {
+                hexConfig.classList.remove('d-none');
+                asciiConfig.classList.add('d-none');
+                toggleBtn.textContent = 'Show ASCII';
+            } else {
+                hexConfig.classList.add('d-none');
+                asciiConfig.classList.remove('d-none');
+                toggleBtn.textContent = 'Show HEX';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

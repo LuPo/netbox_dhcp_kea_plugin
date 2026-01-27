@@ -1,0 +1,128 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">Vendor Option Space</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th scope="row">Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Enterprise ID</th>
+                        <td>{{ object.enterprise_id|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Manufacturer</th>
+                        <td>
+                            {% if object.manufacturer %}
+                            <a href="{{ object.manufacturer.get_absolute_url }}">{{ object.manufacturer.name }}</a>
+                            {% else %}
+                            {{ object.manufacturer|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_left_page object %}
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Option 43 Configuration</h5>
+            <div class="card-body">
+                <p class="text-muted">To use this vendor space with Option 43:</p>
+                <pre><code>// In option-def, define option 43 to encapsulate this space:
+{
+    "name": "vendor-encapsulated-options",
+    "code": 43,
+    "type": "empty",
+    "encapsulate": "{{ object.name }}"
+}
+
+// Then set option-data for options in this space:
+{
+    "space": "{{ object.name }}",
+    "name": "your-option-name",
+    "code": 1,
+    "data": "your-value"
+}</code></pre>
+            </div>
+        </div>
+        {% if object.enterprise_id %}
+        <div class="card mt-3">
+            <h5 class="card-header">KEA VIVSO (Option 125) Configuration</h5>
+            <div class="card-body">
+                <p class="text-muted">To use this space with VIVSO (Option 125):</p>
+                <pre><code>{
+    "name": "vivso-suboptions",
+    "data": "{{ object.enterprise_id }}"
+},
+{
+    "space": "vendor-{{ object.enterprise_id }}",
+    "name": "your-option-name",
+    "code": 1,
+    "data": "your-value"
+}</code></pre>
+            </div>
+        </div>
+        {% endif %}
+        {% include 'inc/panels/custom_fields.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <h5 class="card-header">Option Definitions</h5>
+            <div class="card-body table-responsive">
+                {% if object.option_definitions.exists %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Code</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for definition in object.option_definitions.all %}
+                        <tr>
+                            <td><a href="{{ definition.get_absolute_url }}">{{ definition.name }}</a></td>
+                            <td>{{ definition.code }}</td>
+                            <td>{{ definition.get_option_type_display }}</td>
+                            <td>{{ definition.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No option definitions for this vendor space. <a href="{% url 'plugins:netbox_dhcp_kea_plugin:optiondefinition_add' %}">Add one</a></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <h5 class="card-header">Option Data</h5>
+            <div class="card-body table-responsive">
+                {% include 'netbox_dhcp_kea_plugin/inc/option_data_table.html' with option_data_list=object.option_data_instances.all empty_message="No option data for this vendor space." %}
+            </div>
+        </div>
+        {% plugin_full_width_page object %}
+    </div>
+</div>
+{% endblock %}

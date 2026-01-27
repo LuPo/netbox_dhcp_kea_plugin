@@ -1,0 +1,34 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load builtins.tags %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card mb-3">
+            <h2 class="card-header d-flex justify-content-between">
+                <code>/api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{{ object.pk }}/kea-config/</code>
+                <div>
+                    <a href="?export=kea-config" class="btn btn-sm btn-primary" role="button">
+                        <i class="mdi mdi-download" aria-hidden="true"></i> Download
+                    </a>
+                    {% copy_content "kea-config" %}
+                </div>
+            </h2>
+            <pre class="card-body"><code class="language-json" id="kea-config">{{ kea_config_json }}</code></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    hljs.highlightAll();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+# See PEP 518 for the spec of this file
+# https://www.python.org/dev/peps/pep-0518/
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-dhcp-kea-plugin"
+version = "0.2.0"
+authors = [
+    {name = "Łukasz Polański", email = "wookasz@gmail.com"},
+]
+description = "NetBox plugin for KEA DHCP configuration"
+readme = "README.md"
+keywords = ["KEA", "DHCP"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+requires-python = ">=3.13.0"
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.1.1",
+    "pytest-cov>=4.1.0",
+    "pre-commit==3.7.0",
+]
+dev = [
+    "ruff",
+    "check-manifest==0.49",
+    "pip>=24.0",
+    "django-stubs[compatible-mypy]",
+    "mypy",
+]
+
+[project.urls]
+Documentation = "https://github.com/LuPo/netbox-dhcp-kea-plugin/blob/main/README.md"
+Source = "https://github.com/LuPo/netbox-dhcp-kea-plugin"
+Tracker = "https://github.com/LuPo/netbox-dhcp-kea-plugin/issues"
+
+[tool.setuptools.package-data]
+netbox_dhcp_kea_plugin = ["templates/**"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "netbox.settings"
+# Reuse the test database between runs (much faster!)
+addopts = "--reuse-db --cov=netbox_dhcp_kea_plugin --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["netbox_dhcp_kea_plugin"]
+branch = true
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+precision = 2
+fail_under = 0
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+python_version = "3.13"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.django-stubs]
+django_settings_module = "netbox.settings"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["netbox_dhcp_kea_plugin"]

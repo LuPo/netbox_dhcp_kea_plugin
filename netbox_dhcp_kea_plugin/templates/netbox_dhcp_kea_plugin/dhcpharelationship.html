@@ -1,0 +1,123 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">HA Relationship</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Mode</th>
+                        <td>{{ object.get_mode_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Valid Configuration</th>
+                        <td>
+                            {% if object.is_valid_configuration %}
+                            <span class="badge bg-success">Valid</span>
+                            {% else %}
+                            <span class="badge bg-danger">Invalid</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Timing Parameters</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Heartbeat Delay</th>
+                        <td>{{ object.heartbeat_delay }} ms</td>
+                    </tr>
+                    <tr>
+                        <th>Max Response Delay</th>
+                        <td>{{ object.max_response_delay }} ms</td>
+                    </tr>
+                    <tr>
+                        <th>Max ACK Delay</th>
+                        <td>{{ object.max_ack_delay }} ms</td>
+                    </tr>
+                    <tr>
+                        <th>Max Unacked Clients</th>
+                        <td>{{ object.max_unacked_clients }}</td>
+                    </tr>
+                    <tr>
+                        <th>Max Rejected Lease Updates</th>
+                        <td>{{ object.max_rejected_lease_updates }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Multi-Threading Settings</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Enable Multi-Threading</th>
+                        <td>{% if object.enable_multi_threading %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th>HTTP Dedicated Listener</th>
+                        <td>{% if object.http_dedicated_listener %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th>HTTP Listener Threads</th>
+                        <td>{{ object.http_listener_threads }}</td>
+                    </tr>
+                    <tr>
+                        <th>HTTP Client Threads</th>
+                        <td>{{ object.http_client_threads }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">HA Servers</h5>
+            <div class="card-body">
+                {% if object.servers.exists %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Server</th>
+                            <th>Role</th>
+                            <th>URL</th>
+                            <th>Auto Failover</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in object.servers.all %}
+                        <tr>
+                            <td><a href="{{ server.get_absolute_url }}">{{ server.name }}</a></td>
+                            <td>{{ server.get_ha_role_display }}</td>
+                            <td>{{ server.ha_url }}</td>
+                            <td>{% if server.ha_auto_failover %}Yes{% else %}No{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No servers configured for this HA relationship</p>
+                {% endif %}
+                <p class="text-muted mt-2">
+                    <small>To add a server to this HA relationship, edit the server and set its HA Relationship field.</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

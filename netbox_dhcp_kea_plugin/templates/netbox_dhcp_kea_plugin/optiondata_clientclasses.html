@@ -1,0 +1,37 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card">
+            <h5 class="card-header">Client Classes Using This Option</h5>
+            <div class="card-body">
+                {% if object.client_classes.exists %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Test Expression</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client_class in object.client_classes.all %}
+                        <tr>
+                            <td><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></td>
+                            <td><code>{{ client_class.test_expression|truncatechars:60 }}</code></td>
+                            <td>{{ client_class.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted">This option data is not used in any client classes.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

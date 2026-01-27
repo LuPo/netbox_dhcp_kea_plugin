@@ -1,0 +1,184 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block extra_controls %}
+{% if object.ha_relationship and not object.is_ha_primary %}
+<span class="badge bg-info" style="color: #ffffff;">
+    <i class="mdi mdi-sync"></i> HA Standby - Configs on Primary
+</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">DHCP Server</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>IP Address</th>
+                        <td>
+                            {% if object.ip_address %}
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                            {% if object.ip_address.assigned_object %}
+                            <br><small class="text-muted">
+                                Assigned to:
+                                <a href="{{ object.ip_address.assigned_object.parent_object.get_absolute_url }}">{{ object.ip_address.assigned_object.parent_object }}</a>
+                                ({{ object.ip_address.assigned_object }})
+                            </small>
+                            {% endif %}
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Active</th>
+                        <td>{% if object.is_active %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th>Application Service</th>
+                        <td>
+                            {% if object.service %}
+                            <a href="{{ object.service.get_absolute_url }}">{{ object.service.name }}</a>
+                            <small class="text-muted">on {{ object.service.parent_object }}</small>
+                            {% else %}
+                            <span class="text-muted">Not created (IP not assigned to interface)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>HA Relationship</th>
+                        <td>
+                            {% if object.ha_relationship %}
+                            <a href="{{ object.ha_relationship.get_absolute_url }}">{{ object.ha_relationship.name }}</a>
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>HA Role</th>
+                        <td>
+                            {% if object.ha_role %}
+                            {{ object.get_ha_role_display }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if object.ha_relationship %}
+                    <tr>
+                        <th>HA URL</th>
+                        <td>{{ object.ha_url|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>HA Auto Failover</th>
+                        <td>{% if object.ha_auto_failover %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Configuration Summary</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Subnets</th>
+                        <td>{{ subnet_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Client Classes</th>
+                        <td>{{ client_class_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Global Options</th>
+                        <td>{{ global_option_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Option Definitions</th>
+                        <td>{{ option_def_count }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        {% if not object.is_ha_primary and object.ha_relationship %}
+        <div class="card">
+            <h5 class="card-header">HA Standby Information</h5>
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    <i class="mdi mdi-information-outline"></i>
+                    This server is part of an HA relationship as a standby/backup. DHCP configurations (prefix configs, client classes, and global options)
+                    are managed on the primary server and automatically synced during KEA config generation.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if object.is_ha_primary %}
+        <div class="card">
+            <h5 class="card-header">Global Option Data</h5>
+            <div class="card-body">
+                {% if object.option_data.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for opt in object.option_data.all %}
+                        <tr>
+                            <td><a href="{{ opt.get_absolute_url }}">{{ opt.name }}</a></td>
+                            <td>{{ opt.data|truncatewords:10 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <span class="text-muted">No global options configured</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Client Classes</h5>
+            <div class="card-body">
+                {% if object.client_classes.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Test Expression</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in object.client_classes.all %}
+                        <tr>
+                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td><code>{{ cc.test_expression|truncatechars:50 }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <span class="text-muted">No client classes configured</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

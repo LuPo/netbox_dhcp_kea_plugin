@@ -1,0 +1,75 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-12">
+        <div class="card">
+            <h5 class="card-header">Assigned Prefixes</h5>
+            <div class="card-body">
+                {% if prefix_configs %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Prefix</th>
+                            <th>VRF</th>
+                            <th>Valid Lifetime</th>
+                            <th>Max Lifetime</th>
+                            <th>Router IP</th>
+                            <th>Options</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for config in prefix_configs %}
+                        <tr>
+                            <td>
+                                <a href="{{ config.prefix.get_absolute_url }}">{{ config.prefix.prefix }}</a>
+                                {% if config.prefix.description %}
+                                <br><small class="text-muted">{{ config.prefix.description }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if config.prefix.vrf %}
+                                <a href="{{ config.prefix.vrf.get_absolute_url }}">{{ config.prefix.vrf.name }}</a>
+                                {% else %}
+                                <span class="text-muted">Global</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ config.valid_lifetime }}s</td>
+                            <td>{{ config.max_lifetime }}s</td>
+                            <td>{{ config.get_router_ip|default:"-" }}</td>
+                            <td>{{ config.option_data.count }}</td>
+                            <td class="text-end text-nowrap">
+                                <a href="{{ config.get_absolute_url }}" class="btn btn-sm btn-outline-primary" title="View">
+                                    <i class="mdi mdi-eye"></i>
+                                </a>
+                                {% if perms.netbox_dhcp_kea_plugin.change_prefixdhcpconfig %}
+                                <span class="btn-group">
+                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_edit' pk=config.pk %}" class="btn btn-sm btn-warning" title="Edit">
+                                        <i class="mdi mdi-pencil"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <span class="visually-hidden">Toggle Dropdown</span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_changelog' pk=config.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
+                                    </ul>
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No prefixes assigned to this DHCP server.</p>
+                {% endif %}
+                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_add' %}?server={{ object.pk }}" class="btn btn-sm btn-primary">
+                    <i class="mdi mdi-plus-thick"></i> Assign Prefix
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

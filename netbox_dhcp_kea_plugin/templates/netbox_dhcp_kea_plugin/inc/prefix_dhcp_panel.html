@@ -1,0 +1,44 @@
+{% load helpers %}
+
+<div class="card">
+    <h5 class="card-header">DHCP Configuration</h5>
+    <div class="card-body">
+        <table class="table table-hover attr-table">
+            <tr>
+                <th>Server</th>
+                <td><a href="{{ dhcp_config.server.get_absolute_url }}">{{ dhcp_config.server }}</a></td>
+            </tr>
+            {% for option in dhcp_config.option_data.all %}
+            <tr>
+                <th><a href="{{ option.get_absolute_url }}">{{ option.distinctive_name }}</a></th>
+                <td><span class="text-muted">{{ option.name }}:</span> {{ option.data }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <th>Option Data</th>
+                <td class="text-muted">None configured</td>
+            </tr>
+            {% endfor %}
+            {% if dhcp_config.client_classes.exists %}
+            <tr>
+                <th>Client Classes</th>
+                <td>
+                    <ul class="list-unstyled mb-0">
+                        {% for client_class in dhcp_config.client_classes.all %}
+                        <li><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+            {% endif %}
+        </table>
+        <div class="text-end">
+            <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig' pk=dhcp_config.pk %}" class="btn btn-sm btn-primary me-1">
+                <i class="mdi mdi-eye"></i> View
+            </a>
+            <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_edit' pk=dhcp_config.pk %}" class="btn btn-sm btn-warning">
+                <i class="mdi mdi-pencil"></i> Edit
+            </a>
+        </div>
+    </div>
+</div>

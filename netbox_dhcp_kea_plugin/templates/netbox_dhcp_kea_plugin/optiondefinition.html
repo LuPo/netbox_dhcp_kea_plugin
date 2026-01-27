@@ -1,0 +1,145 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+
+{% block extra_controls %}
+{% if object.is_standard %}
+<span class="badge bg-info" style="color: #ffffff;">
+    <i class="mdi mdi-lock"></i> Standard Option (Read-Only)
+</span>
+{% endif %}
+{% endblock %}
+
+{% block buttons %}
+{% if not object.is_standard %}
+{{ block.super }}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if object.is_standard %}
+<div class="alert alert-info">
+    <i class="mdi mdi-information-outline"></i>
+    This is a standard DHCP option defined in RFC specifications. Standard options are read-only and cannot be modified or deleted.
+</div>
+{% endif %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">Option Definition</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th scope="row">Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Code</th>
+                        <td>{{ object.code }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Type</th>
+                        <td>{{ object.get_option_type_display }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Option Space</th>
+                        <td>
+                            {% if object.vendor_option_space %}
+                            <a href="{{ object.vendor_option_space.get_absolute_url }}">{{ object.vendor_option_space.name }}</a>
+                            {% else %}
+                            {{ object.get_option_space_display }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Is Array</th>
+                        <td>{% if object.is_array %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Standard Option</th>
+                        <td>
+                            {% if object.is_standard %}Yes (RFC){% else %}No (Custom){% endif %}
+                        </td>
+                    </tr>
+                    {% if object.encapsulate %}
+                    <tr>
+                        <th scope="row">Encapsulates</th>
+                        <td>{{ object.encapsulate }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.record_types %}
+                    <tr>
+                        <th scope="row">Record Types</th>
+                        <td><code>{{ object.record_types }}</code></td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th scope="row">Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% include 'inc/panels/tags.html' %}
+        {% plugin_left_page object %}
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Configuration</h5>
+            <div class="card-body">
+                {% if object.is_standard %}
+                <p class="text-muted">Standard DHCP options are built into KEA and do not need <code>option-def</code> entries. You can use this option directly in <code>option-data</code> by name or code.</p>
+                {% else %}
+                <p class="text-muted">This option definition will generate the following KEA <code>option-def</code> entry:</p>
+                <pre><code>{
+    "space": "{{ object.space_name }}",
+    "name": "{{ object.name }}",
+    "code": {{ object.code }},
+    "type": "{{ object.option_type }}"{% if object.is_array %},
+    "array": true{% endif %}{% if object.encapsulate %},
+    "encapsulate": "{{ object.encapsulate }}"{% endif %}{% if object.record_types %},
+    "record-types": "{{ object.record_types }}"{% endif %}
+
+}</code></pre>
+                {% endif %}
+            </div>
+        </div>
+        {% include 'inc/panels/custom_fields.html' %}
+        {% plugin_right_page object %}
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <h5 class="card-header">Option Data Using This Definition</h5>
+            <div class="card-body table-responsive">
+                {% if object.option_data_instances.exists %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Data</th>
+                            <th>Always Send</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for data in object.option_data_instances.all %}
+                        <tr>
+                            <td><a href="{{ data.get_absolute_url }}">{{ data.name }}</a></td>
+                            <td><code>{{ data.data|truncatechars:50 }}</code></td>
+                            <td>{% if data.always_send %}Yes{% else %}No{% endif %}</td>
+                            <td>{{ data.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No option data instances using this definition.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% plugin_full_width_page object %}
+    </div>
+</div>
+{% endblock %}
