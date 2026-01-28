@@ -12,6 +12,11 @@ urlpatterns = (
         views.VendorOptionSpaceImportView.as_view(),
         name="vendoroptionspace_bulk_import",
     ),
+    path(
+        "vendor-option-spaces/delete/",
+        views.VendorOptionSpaceBulkDeleteView.as_view(),
+        name="vendoroptionspace_bulk_delete",
+    ),
     path("vendor-option-spaces/<int:pk>/", views.VendorOptionSpaceView.as_view(), name="vendoroptionspace"),
     path(
         "vendor-option-spaces/<int:pk>/edit/", views.VendorOptionSpaceEditView.as_view(), name="vendoroptionspace_edit"
@@ -31,6 +36,11 @@ urlpatterns = (
     path("option-definitions/", views.OptionDefinitionListView.as_view(), name="optiondefinition_list"),
     path("option-definitions/add/", views.OptionDefinitionEditView.as_view(), name="optiondefinition_add"),
     path("option-definitions/import/", views.OptionDefinitionImportView.as_view(), name="optiondefinition_bulk_import"),
+    path(
+        "option-definitions/delete/",
+        views.OptionDefinitionBulkDeleteView.as_view(),
+        name="optiondefinition_bulk_delete",
+    ),
     path("option-definitions/<int:pk>/", views.OptionDefinitionView.as_view(), name="optiondefinition"),
     path("option-definitions/<int:pk>/edit/", views.OptionDefinitionEditView.as_view(), name="optiondefinition_edit"),
     path(
@@ -48,6 +58,7 @@ urlpatterns = (
     path("option-data/", views.OptionDataListView.as_view(), name="optiondata_list"),
     path("option-data/add/", views.OptionDataEditView.as_view(), name="optiondata_add"),
     path("option-data/import/", views.OptionDataImportView.as_view(), name="optiondata_bulk_import"),
+    path("option-data/delete/", views.OptionDataBulkDeleteView.as_view(), name="optiondata_bulk_delete"),
     path("option-data/<int:pk>/", views.OptionDataView.as_view(), name="optiondata"),
     path("option-data/<int:pk>/edit/", views.OptionDataEditView.as_view(), name="optiondata_edit"),
     path("option-data/<int:pk>/delete/", views.OptionDataDeleteView.as_view(), name="optiondata_delete"),
@@ -66,6 +77,7 @@ urlpatterns = (
     path("dhcp-servers/", views.DHCPServerListView.as_view(), name="dhcpserver_list"),
     path("dhcp-servers/add/", views.DHCPServerEditView.as_view(), name="dhcpserver_add"),
     path("dhcp-servers/import/", views.DHCPServerImportView.as_view(), name="dhcpserver_bulk_import"),
+    path("dhcp-servers/delete/", views.DHCPServerBulkDeleteView.as_view(), name="dhcpserver_bulk_delete"),
     path("dhcp-servers/<int:pk>/", views.DHCPServerView.as_view(), name="dhcpserver"),
     path("dhcp-servers/<int:pk>/edit/", views.DHCPServerEditView.as_view(), name="dhcpserver_edit"),
     path("dhcp-servers/<int:pk>/delete/", views.DHCPServerDeleteView.as_view(), name="dhcpserver_delete"),
@@ -89,6 +101,7 @@ urlpatterns = (
     path("client-classes/", views.ClientClassListView.as_view(), name="clientclass_list"),
     path("client-classes/add/", views.ClientClassEditView.as_view(), name="clientclass_add"),
     path("client-classes/import/", views.ClientClassImportView.as_view(), name="clientclass_bulk_import"),
+    path("client-classes/delete/", views.ClientClassBulkDeleteView.as_view(), name="clientclass_bulk_delete"),
     path("client-classes/<int:pk>/", views.ClientClassView.as_view(), name="clientclass"),
     path("client-classes/<int:pk>/edit/", views.ClientClassEditView.as_view(), name="clientclass_edit"),
     path("client-classes/<int:pk>/delete/", views.ClientClassDeleteView.as_view(), name="clientclass_delete"),
@@ -107,6 +120,7 @@ urlpatterns = (
     path("prefix-configs/", views.PrefixDHCPConfigListView.as_view(), name="prefixdhcpconfig_list"),
     path("prefix-configs/add/", views.PrefixDHCPConfigEditView.as_view(), name="prefixdhcpconfig_add"),
     path("prefix-configs/import/", views.PrefixDHCPConfigImportView.as_view(), name="prefixdhcpconfig_bulk_import"),
+    path("prefix-configs/delete/", views.PrefixDHCPConfigBulkDeleteView.as_view(), name="prefixdhcpconfig_bulk_delete"),
     path("prefix-configs/<int:pk>/", views.PrefixDHCPConfigView.as_view(), name="prefixdhcpconfig"),
     path("prefix-configs/<int:pk>/edit/", views.PrefixDHCPConfigEditView.as_view(), name="prefixdhcpconfig_edit"),
     path("prefix-configs/<int:pk>/delete/", views.PrefixDHCPConfigDeleteView.as_view(), name="prefixdhcpconfig_delete"),
@@ -116,11 +130,21 @@ urlpatterns = (
         name="prefixdhcpconfig_changelog",
         kwargs={"model": models.PrefixDHCPConfig},
     ),
+    path(
+        "prefix-configs/<int:pk>/reservations/",
+        views.PrefixDHCPConfigReservationsView.as_view(),
+        name="prefixdhcpconfig_reservations",
+    ),
     # DHCPHARelationship
     path("ha-relationships/", views.DHCPHARelationshipListView.as_view(), name="dhcpharelationship_list"),
     path("ha-relationships/add/", views.DHCPHARelationshipEditView.as_view(), name="dhcpharelationship_add"),
     path(
         "ha-relationships/import/", views.DHCPHARelationshipImportView.as_view(), name="dhcpharelationship_bulk_import"
+    ),
+    path(
+        "ha-relationships/delete/",
+        views.DHCPHARelationshipBulkDeleteView.as_view(),
+        name="dhcpharelationship_bulk_delete",
     ),
     path("ha-relationships/<int:pk>/", views.DHCPHARelationshipView.as_view(), name="dhcpharelationship"),
     path("ha-relationships/<int:pk>/edit/", views.DHCPHARelationshipEditView.as_view(), name="dhcpharelationship_edit"),

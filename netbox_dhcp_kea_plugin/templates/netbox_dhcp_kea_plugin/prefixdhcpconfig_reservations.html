@@ -1,0 +1,82 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">
+                DHCP Reservations
+                <span class="badge bg-secondary">{{ reservation_count }}</span>
+            </h5>
+            <div class="card-body">
+                {% if reservations %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Hostname</th>
+                            <th>IP Address</th>
+                            <th>MAC Address</th>
+                            <th>Device/VM</th>
+                            <th>Interface</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kea_res, meta in reservations %}
+                        <tr>
+                            <td><code>{{ kea_res.hostname }}</code></td>
+                            <td>
+                                <a href="{{ meta.ip.get_absolute_url }}">{{ meta.ip.address.ip }}</a>
+                            </td>
+                            <td>
+                                {% if meta.interface.mac_address %}
+                                <code>{{ meta.interface.mac_address|lower }}</code>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ meta.parent_object.get_absolute_url }}">{{ meta.parent_object.name }}</a>
+                            </td>
+                            <td>
+                                <a href="{{ meta.interface.get_absolute_url }}">{{ meta.interface.name }}</a>
+                            </td>
+                            <td>
+                                {% if meta.is_primary %}
+                                <span class="badge bg-primary">Primary</span>
+                                {% endif %}
+                                {% if meta.is_oob %}
+                                <span class="badge bg-info">OOB</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted">
+                    <p>No reservations found in this prefix.</p>
+                    <p class="small">
+                        Reservations are automatically discovered from IP addresses that:
+                        <ul>
+                            <li>Are assigned to an interface (device or virtual machine)</li>
+                            <li>Are marked as Primary IP or Out-of-Band IP</li>
+                            <li>Are not FHRP group addresses</li>
+                        </ul>
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Reservations Configuration</h5>
+            <div class="card-body">
+                <pre><code class="language-json">{{ kea_reservations_json }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

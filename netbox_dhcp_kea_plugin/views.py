@@ -1,6 +1,7 @@
 import json
 
 from django.contrib import messages
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count
 from django.shortcuts import redirect, render
 from netbox.views import generic
@@ -28,6 +29,12 @@ class VendorOptionSpaceEditView(generic.ObjectEditView):
 
 class VendorOptionSpaceDeleteView(generic.ObjectDeleteView):
     queryset = models.VendorOptionSpace.objects.all()
+
+
+class VendorOptionSpaceBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.VendorOptionSpace.objects.all()
+    filterset = filtersets.VendorOptionSpaceFilterSet
+    table = tables.VendorOptionSpaceTable
 
 
 class VendorOptionSpaceImportView(generic.BulkImportView):
@@ -88,6 +95,12 @@ class OptionDefinitionDeleteView(generic.ObjectDeleteView):
         return super().dispatch(request, *args, **kwargs)
 
 
+class OptionDefinitionBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.OptionDefinition.objects.filter(is_standard=False)
+    filterset = filtersets.OptionDefinitionFilterSet
+    table = tables.OptionDefinitionTable
+
+
 class OptionDefinitionImportView(generic.BulkImportView):
     queryset = models.OptionDefinition.objects.all()
     model_form = forms.OptionDefinitionImportForm
@@ -119,6 +132,12 @@ class OptionDataEditView(generic.ObjectEditView):
 
 class OptionDataDeleteView(generic.ObjectDeleteView):
     queryset = models.OptionData.objects.all()
+
+
+class OptionDataBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.OptionData.objects.all()
+    filterset = filtersets.OptionDataFilterSet
+    table = tables.OptionDataTable
 
 
 class OptionDataImportView(generic.BulkImportView):
@@ -178,6 +197,12 @@ class DHCPServerEditView(generic.ObjectEditView):
 
 class DHCPServerDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPServer.objects.all()
+
+
+class DHCPServerBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DHCPServer.objects.all()
+    filterset = filtersets.DHCPServerFilterSet
+    table = tables.DHCPServerTable
 
 
 class DHCPServerImportView(generic.BulkImportView):
@@ -272,6 +297,12 @@ class ClientClassDeleteView(generic.ObjectDeleteView):
     queryset = models.ClientClass.objects.all()
 
 
+class ClientClassBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.ClientClass.objects.all()
+    filterset = filtersets.ClientClassFilterSet
+    table = tables.ClientClassTable
+
+
 class ClientClassImportView(generic.BulkImportView):
     queryset = models.ClientClass.objects.all()
     model_form = forms.ClientClassImportForm
@@ -361,6 +392,12 @@ class PrefixDHCPConfigDeleteView(generic.ObjectDeleteView):
     queryset = models.PrefixDHCPConfig.objects.all()
 
 
+class PrefixDHCPConfigBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.PrefixDHCPConfig.objects.all()
+    filterset = filtersets.PrefixDHCPConfigFilterSet
+    table = tables.PrefixDHCPConfigTable
+
+
 class PrefixDHCPConfigImportView(generic.BulkImportView):
     queryset = models.PrefixDHCPConfig.objects.all()
     model_form = forms.PrefixDHCPConfigImportForm
@@ -387,6 +424,150 @@ class DHCPHARelationshipDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPHARelationship.objects.all()
 
 
+class DHCPHARelationshipBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DHCPHARelationship.objects.all()
+    filterset = filtersets.DHCPHARelationshipFilterSet
+    table = tables.DHCPHARelationshipTable
+
+
 class DHCPHARelationshipImportView(generic.BulkImportView):
     queryset = models.DHCPHARelationship.objects.all()
     model_form = forms.DHCPHARelationshipImportForm
+
+
+def get_reservation_count(obj):
+    """Calculate the number of DHCP reservations for a PrefixDHCPConfig."""
+    try:
+        fhrp_ct = ContentType.objects.get(app_label="ipam", model="fhrpgroup")
+        fhrp_ct_id = fhrp_ct.id
+    except ContentType.DoesNotExist:
+        fhrp_ct_id = None
+
+    count = 0
+    for ip in obj.prefix.get_child_ips():
+        if not ip.assigned_object_type:
+            continue
+        if fhrp_ct_id and ip.assigned_object_type_id == fhrp_ct_id:
+            continue
+        if ip.is_primary_ip or ip.is_oob_ip:
+            if ip.assigned_object and getattr(ip.assigned_object, "parent_object", None):
+                count += 1
+    return count
+
+
+@register_model_view(models.PrefixDHCPConfig, name="reservations", path="reservations")
+class PrefixDHCPConfigReservationsView(generic.ObjectView):
+    queryset = models.PrefixDHCPConfig.objects.select_related("prefix")
+    template_name = "netbox_dhcp_kea_plugin/prefixdhcpconfig_reservations.html"
+    tab = ViewTab(
+        label="Reservations",
+        badge=get_reservation_count,
+        permission="netbox_dhcp_kea_plugin.view_prefixdhcpconfig",
+    )
+
+    def get_reservations(self, prefix):
+        """Get IP addresses that can be used as DHCP reservations in KEA format.
+
+        Returns IPs that:
+        - Have an assigned object (interface)
+        - Are not FHRP groups
+        - Are either primary IP or OOB IP
+
+        Returns a list of tuples: (kea_reservation_dict, metadata_dict)
+        """
+        reservations = []
+
+        # Get child IPs from the prefix
+        child_ips = prefix.get_child_ips()
+
+        # Get the FHRP group content type to filter it out
+        try:
+            fhrp_ct = ContentType.objects.get(app_label="ipam", model="fhrpgroup")
+        except ContentType.DoesNotExist:
+            fhrp_ct = None
+
+        for ip in child_ips:
+            # Skip IPs without assigned objects
+            if not ip.assigned_object_type:
+                continue
+
+            # Skip FHRP groups
+            if fhrp_ct and ip.assigned_object_type_id == fhrp_ct.id:
+                continue
+
+            # Only include primary IPs or OOB IPs
+            if not (ip.is_primary_ip or ip.is_oob_ip):
+                continue
+
+            # Get the assigned interface and parent object (device/VM)
+            assigned_object = ip.assigned_object
+            if not assigned_object:
+                continue
+
+            parent_object = getattr(assigned_object, "parent_object", None)
+            if not parent_object:
+                continue
+
+            # Build the hostname similar to the Jinja template logic
+            interface_name = assigned_object.name
+            if ip.is_oob_ip and not ip.is_primary_ip:
+                # Clean interface name for OOB IPs
+                dev_interface = interface_name.replace("/", "-").replace(" ", "").replace(".", "-")
+                host_id = f"{parent_object.name}_{dev_interface}"
+            else:
+                host_id = parent_object.name
+
+            # Get MAC address if available
+            mac_address = getattr(assigned_object, "mac_address", None)
+
+            # Build KEA reservation dict
+            kea_reservation = {
+                "ip-address": str(ip.address.ip),
+            }
+
+            # Add MAC address if available
+            if mac_address:
+                kea_reservation["hw-address"] = str(mac_address).lower()
+
+            # Determine hostname from dns_name or use host_id
+            if ip.dns_name:
+                hostname = ip.dns_name.partition(".")[0]
+                kea_reservation["hostname"] = hostname
+            else:
+                kea_reservation["hostname"] = host_id
+
+            # Note: option-data will be added later when OptionData can reference IPAddress
+
+            # Metadata for display purposes
+            metadata = {
+                "ip": ip,
+                "host_id": host_id,
+                "parent_object": parent_object,
+                "interface": assigned_object,
+                "is_primary": ip.is_primary_ip,
+                "is_oob": ip.is_oob_ip,
+            }
+
+            reservations.append((kea_reservation, metadata))
+
+        return reservations
+
+    def get(self, request, pk):
+        config = self.get_object(pk=pk)
+        reservations = self.get_reservations(config.prefix)
+
+        # Build the KEA reservations list for JSON display
+        kea_reservations = [r[0] for r in reservations]
+        kea_reservations_json = json.dumps(kea_reservations, indent=2)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": config,
+                "reservations": reservations,
+                "reservation_count": len(reservations),
+                "kea_reservations_json": kea_reservations_json,
+                "tab": self.tab,
+            },
+        )
