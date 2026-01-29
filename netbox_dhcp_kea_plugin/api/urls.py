@@ -1,3 +1,4 @@
+from django.urls import path
 from netbox.api.routers import NetBoxRouter
 
 from . import views
@@ -13,4 +14,8 @@ router.register("client-classes", views.ClientClassViewSet)
 router.register("prefix-dhcp-configs", views.PrefixDHCPConfigViewSet)
 router.register("ha-relationships", views.DHCPHARelationshipViewSet)
 
-urlpatterns = router.urls
+urlpatterns = router.urls + [
+    # Lookup DHCP relay config by prefix
+    # GET /api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=10.0.0.0/24
+    path("relay-config/", views.PrefixRelayConfigView.as_view(), name="relay-config"),
+]
