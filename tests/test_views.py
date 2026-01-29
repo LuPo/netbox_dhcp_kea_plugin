@@ -50,7 +50,7 @@ class TestPrefixDHCPConfigReservationsView:
 
         assert "reservations" in response.context
         assert "reservation_count" in response.context
-        assert "kea_reservations_json" in response.context
+        assert "kea_reservations" in response.context
 
     def test_reservations_view_empty_prefix(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that view handles prefix with no reservable IPs."""
@@ -266,10 +266,8 @@ class TestPrefixDHCPConfigReservationsView:
         # Should have no reservations since FHRP IPs are excluded
         assert response.context["reservation_count"] == 0
 
-    def test_reservations_kea_json_format(self, db, client, prefix_dhcp_config_factory, admin_user):
-        """Test that KEA JSON is properly formatted."""
-        import json
-
+    def test_reservations_kea_format(self, db, client, prefix_dhcp_config_factory, admin_user):
+        """Test that KEA reservations are properly formatted."""
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
         from ipam.models import IPAddress, Prefix
 
@@ -313,9 +311,8 @@ class TestPrefixDHCPConfigReservationsView:
         )
         response = client.get(url)
 
-        # Parse the JSON to verify it's valid
-        kea_json = response.context["kea_reservations_json"]
-        reservations = json.loads(kea_json)
+        # Verify the KEA reservations list
+        reservations = response.context["kea_reservations"]
 
         assert isinstance(reservations, list)
         assert len(reservations) == 1

@@ -1,7 +1,6 @@
 import json
 
 from django.contrib import messages
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count
 from django.shortcuts import redirect, render
 from netbox.views import generic
@@ -437,22 +436,7 @@ class DHCPHARelationshipImportView(generic.BulkImportView):
 
 def get_reservation_count(obj):
     """Calculate the number of DHCP reservations for a PrefixDHCPConfig."""
-    try:
-        fhrp_ct = ContentType.objects.get(app_label="ipam", model="fhrpgroup")
-        fhrp_ct_id = fhrp_ct.id
-    except ContentType.DoesNotExist:
-        fhrp_ct_id = None
-
-    count = 0
-    for ip in obj.prefix.get_child_ips():
-        if not ip.assigned_object_type:
-            continue
-        if fhrp_ct_id and ip.assigned_object_type_id == fhrp_ct_id:
-            continue
-        if ip.is_primary_ip or ip.is_oob_ip:
-            if ip.assigned_object and getattr(ip.assigned_object, "parent_object", None):
-                count += 1
-    return count
+    return len(obj.get_reservations())
 
 
 @register_model_view(models.PrefixDHCPConfig, name="reservations", path="reservations")
@@ -465,100 +449,9 @@ class PrefixDHCPConfigReservationsView(generic.ObjectView):
         permission="netbox_dhcp_kea_plugin.view_prefixdhcpconfig",
     )
 
-    def get_reservations(self, prefix):
-        """Get IP addresses that can be used as DHCP reservations in KEA format.
-
-        Returns IPs that:
-        - Have an assigned object (interface)
-        - Are not FHRP groups
-        - Are either primary IP or OOB IP
-
-        Returns a list of tuples: (kea_reservation_dict, metadata_dict)
-        """
-        reservations = []
-
-        # Get child IPs from the prefix
-        child_ips = prefix.get_child_ips()
-
-        # Get the FHRP group content type to filter it out
-        try:
-            fhrp_ct = ContentType.objects.get(app_label="ipam", model="fhrpgroup")
-        except ContentType.DoesNotExist:
-            fhrp_ct = None
-
-        for ip in child_ips:
-            # Skip IPs without assigned objects
-            if not ip.assigned_object_type:
-                continue
-
-            # Skip FHRP groups
-            if fhrp_ct and ip.assigned_object_type_id == fhrp_ct.id:
-                continue
-
-            # Only include primary IPs or OOB IPs
-            if not (ip.is_primary_ip or ip.is_oob_ip):
-                continue
-
-            # Get the assigned interface and parent object (device/VM)
-            assigned_object = ip.assigned_object
-            if not assigned_object:
-                continue
-
-            parent_object = getattr(assigned_object, "parent_object", None)
-            if not parent_object:
-                continue
-
-            # Build the hostname similar to the Jinja template logic
-            interface_name = assigned_object.name
-            if ip.is_oob_ip and not ip.is_primary_ip:
-                # Clean interface name for OOB IPs
-                dev_interface = interface_name.replace("/", "-").replace(" ", "").replace(".", "-")
-                host_id = f"{parent_object.name}_{dev_interface}"
-            else:
-                host_id = parent_object.name
-
-            # Get MAC address if available
-            mac_address = getattr(assigned_object, "mac_address", None)
-
-            # Build KEA reservation dict
-            kea_reservation = {
-                "ip-address": str(ip.address.ip),
-            }
-
-            # Add MAC address if available
-            if mac_address:
-                kea_reservation["hw-address"] = str(mac_address).lower()
-
-            # Determine hostname from dns_name or use host_id
-            if ip.dns_name:
-                hostname = ip.dns_name.partition(".")[0]
-                kea_reservation["hostname"] = hostname
-            else:
-                kea_reservation["hostname"] = host_id
-
-            # Note: option-data will be added later when OptionData can reference IPAddress
-
-            # Metadata for display purposes
-            metadata = {
-                "ip": ip,
-                "host_id": host_id,
-                "parent_object": parent_object,
-                "interface": assigned_object,
-                "is_primary": ip.is_primary_ip,
-                "is_oob": ip.is_oob_ip,
-            }
-
-            reservations.append((kea_reservation, metadata))
-
-        return reservations
-
     def get(self, request, pk):
         config = self.get_object(pk=pk)
-        reservations = self.get_reservations(config.prefix)
-
-        # Build the KEA reservations list for JSON display
-        kea_reservations = [r[0] for r in reservations]
-        kea_reservations_json = json.dumps(kea_reservations, indent=2)
+        reservations = config.get_reservations()
 
         return render(
             request,
@@ -567,7 +460,7 @@ class PrefixDHCPConfigReservationsView(generic.ObjectView):
                 "object": config,
                 "reservations": reservations,
                 "reservation_count": len(reservations),
-                "kea_reservations_json": kea_reservations_json,
+                "kea_reservations": config.get_kea_reservations(),
                 "tab": self.tab,
             },
         )

@@ -1,5 +1,6 @@
 {% extends 'generic/object.html' %}
 {% load helpers %}
+{% load i18n %}
 
 {% block content %}
 <div class="row">
@@ -74,7 +75,7 @@
         <div class="card">
             <h5 class="card-header">KEA Reservations Configuration</h5>
             <div class="card-body">
-                <pre><code class="language-json">{{ kea_reservations_json }}</code></pre>
+                <pre><code class="language-json">{{ kea_reservations|json }}</code></pre>
             </div>
         </div>
     </div>

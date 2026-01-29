@@ -1121,6 +1121,99 @@ class PrefixDHCPConfig(NetBoxModel):
 
         return pools
 
+    def get_reservations(self):
+        """Get IP addresses that can be used as DHCP reservations with metadata.
+
+        Returns IPs that:
+        - Have an assigned object (interface)
+        - Are not FHRP groups
+        - Are either primary IP or OOB IP
+
+        Returns a list of tuples: (kea_reservation_dict, metadata_dict)
+        """
+        reservations = []
+
+        # Get child IPs from the prefix
+        child_ips = self.prefix.get_child_ips()
+
+        # Get the FHRP group content type to filter it out
+        try:
+            fhrp_ct = ContentType.objects.get(app_label="ipam", model="fhrpgroup")
+        except ContentType.DoesNotExist:
+            fhrp_ct = None
+
+        for ip in child_ips:
+            # Skip IPs without assigned objects
+            if not ip.assigned_object_type:
+                continue
+
+            # Skip FHRP groups
+            if fhrp_ct and ip.assigned_object_type_id == fhrp_ct.id:
+                continue
+
+            # Only include primary IPs or OOB IPs
+            if not (ip.is_primary_ip or ip.is_oob_ip):
+                continue
+
+            # Get the assigned interface and parent object (device/VM)
+            assigned_object = ip.assigned_object
+            if not assigned_object:
+                continue
+
+            parent_object = getattr(assigned_object, "parent_object", None)
+            if not parent_object:
+                continue
+
+            # Build the hostname similar to the Jinja template logic
+            interface_name = assigned_object.name
+            if ip.is_oob_ip and not ip.is_primary_ip:
+                # Clean interface name for OOB IPs
+                dev_interface = interface_name.replace("/", "-").replace(" ", "").replace(".", "-")
+                host_id = f"{parent_object.name}_{dev_interface}"
+            else:
+                host_id = parent_object.name
+
+            # Get MAC address if available
+            mac_address = getattr(assigned_object, "mac_address", None)
+
+            # Build KEA reservation dict
+            kea_reservation = {
+                "ip-address": str(ip.address.ip),
+            }
+
+            # Add MAC address if available
+            if mac_address:
+                kea_reservation["hw-address"] = str(mac_address).lower()
+
+            # Determine hostname from dns_name or use host_id
+            if ip.dns_name:
+                hostname = ip.dns_name.partition(".")[0]
+                kea_reservation["hostname"] = hostname
+            else:
+                kea_reservation["hostname"] = host_id
+
+            # Metadata for display purposes
+            metadata = {
+                "ip": ip,
+                "host_id": host_id,
+                "parent_object": parent_object,
+                "interface": assigned_object,
+                "is_primary": ip.is_primary_ip,
+                "is_oob": ip.is_oob_ip,
+            }
+
+            reservations.append((kea_reservation, metadata))
+
+        return reservations
+
+    def get_kea_reservations(self):
+        """Get DHCP reservations in KEA format only (without metadata).
+
+        Returns a list of KEA reservation dictionaries suitable for
+        including in the KEA configuration.
+        """
+        return [r[0] for r in self.get_reservations()]
+
     def to_kea_dict(self):
         """Return a dictionary representation for KEA subnet configuration"""
         prefix = self.prefix.prefix
@@ -1154,6 +1247,11 @@ class PrefixDHCPConfig(NetBoxModel):
         client_class_names = [cc.name for cc in self.client_classes.all()]
         if client_class_names:
             result["require-client-classes"] = client_class_names
+
+        # Add reservations from assigned IP addresses
+        reservations = self.get_kea_reservations()
+        if reservations:
+            result["reservations"] = reservations
 
         return result
 

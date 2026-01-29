@@ -374,3 +374,309 @@ class TestDHCPServerKeaOutput:
         # This test would require more complex setup with database models
         # For now, we just document the expected behavior
         pass
+
+
+class TestPrefixDHCPConfigReservations:
+    """Test PrefixDHCPConfig reservation methods."""
+
+    def test_get_reservations_returns_empty_list_when_no_ips(self):
+        """Test get_reservations returns empty list when prefix has no child IPs."""
+        from unittest.mock import MagicMock, PropertyMock
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+        mock_prefix.get_child_ips.return_value = []
+        config.prefix = mock_prefix
+
+        result = config.get_reservations()
+
+        assert result == []
+
+    def test_get_reservations_skips_ips_without_assigned_object(self):
+        """Test get_reservations skips IPs without assigned_object_type."""
+        from unittest.mock import MagicMock
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = None
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        result = config.get_reservations()
+
+        assert result == []
+
+    def test_get_reservations_skips_non_primary_non_oob_ips(self):
+        """Test get_reservations skips IPs that are not primary or OOB."""
+        from unittest.mock import MagicMock
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999  # Not FHRP
+        mock_ip.is_primary_ip = False
+        mock_ip.is_oob_ip = False
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        result = config.get_reservations()
+
+        assert result == []
+
+    def test_get_reservations_includes_primary_ip(self):
+        """Test get_reservations includes IPs marked as primary."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_interface = MagicMock()
+        mock_interface.name = "eth0"
+        mock_interface.mac_address = "aa:bb:cc:dd:ee:ff"
+
+        mock_device = MagicMock()
+        mock_device.name = "test-device"
+        mock_interface.parent_object = mock_device
+
+        mock_ip_address = MagicMock()
+        mock_ip_address.ip = "192.168.1.10"
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999  # Not FHRP
+        mock_ip.is_primary_ip = True
+        mock_ip.is_oob_ip = False
+        mock_ip.assigned_object = mock_interface
+        mock_ip.address = mock_ip_address
+        mock_ip.dns_name = ""
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+            mock_ct.objects.get.side_effect = Exception("Not found")
+
+            result = config.get_reservations()
+
+        assert len(result) == 1
+        kea_res, metadata = result[0]
+        assert kea_res["ip-address"] == "192.168.1.10"
+        assert kea_res["hw-address"] == "aa:bb:cc:dd:ee:ff"
+        assert kea_res["hostname"] == "test-device"
+        assert metadata["is_primary"] is True
+
+    def test_get_reservations_includes_oob_ip_with_interface_name(self):
+        """Test get_reservations includes OOB IPs with interface name in hostname."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_interface = MagicMock()
+        mock_interface.name = "mgmt0/1"
+        mock_interface.mac_address = "11:22:33:44:55:66"
+
+        mock_device = MagicMock()
+        mock_device.name = "oob-device"
+        mock_interface.parent_object = mock_device
+
+        mock_ip_address = MagicMock()
+        mock_ip_address.ip = "10.0.0.5"
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999  # Not FHRP
+        mock_ip.is_primary_ip = False
+        mock_ip.is_oob_ip = True
+        mock_ip.assigned_object = mock_interface
+        mock_ip.address = mock_ip_address
+        mock_ip.dns_name = ""
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+            mock_ct.objects.get.side_effect = Exception("Not found")
+
+            result = config.get_reservations()
+
+        assert len(result) == 1
+        kea_res, metadata = result[0]
+        assert kea_res["ip-address"] == "10.0.0.5"
+        # Interface name should be cleaned: / -> -, . -> -
+        assert kea_res["hostname"] == "oob-device_mgmt0-1"
+        assert metadata["is_oob"] is True
+
+    def test_get_reservations_uses_dns_name_for_hostname(self):
+        """Test get_reservations uses first part of dns_name for hostname."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_interface = MagicMock()
+        mock_interface.name = "eth0"
+        mock_interface.mac_address = "aa:bb:cc:dd:ee:ff"
+
+        mock_device = MagicMock()
+        mock_device.name = "long-device-name"
+        mock_interface.parent_object = mock_device
+
+        mock_ip_address = MagicMock()
+        mock_ip_address.ip = "192.168.1.20"
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999
+        mock_ip.is_primary_ip = True
+        mock_ip.is_oob_ip = False
+        mock_ip.assigned_object = mock_interface
+        mock_ip.address = mock_ip_address
+        mock_ip.dns_name = "short.subdomain.example.com"
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+            mock_ct.objects.get.side_effect = Exception("Not found")
+
+            result = config.get_reservations()
+
+        assert len(result) == 1
+        kea_res, _ = result[0]
+        assert kea_res["hostname"] == "short"
+
+    def test_get_kea_reservations_returns_only_kea_dicts(self):
+        """Test get_kea_reservations returns only KEA dicts without metadata."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        mock_prefix = MagicMock()
+
+        mock_interface = MagicMock()
+        mock_interface.name = "eth0"
+        mock_interface.mac_address = "aa:bb:cc:dd:ee:ff"
+
+        mock_device = MagicMock()
+        mock_device.name = "test-device"
+        mock_interface.parent_object = mock_device
+
+        mock_ip_address = MagicMock()
+        mock_ip_address.ip = "192.168.1.30"
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999
+        mock_ip.is_primary_ip = True
+        mock_ip.is_oob_ip = False
+        mock_ip.assigned_object = mock_interface
+        mock_ip.address = mock_ip_address
+        mock_ip.dns_name = ""
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+        config.prefix = mock_prefix
+
+        with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+            mock_ct.objects.get.side_effect = Exception("Not found")
+
+            result = config.get_kea_reservations()
+
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+        assert "ip-address" in result[0]
+        # Should not contain metadata
+        assert "is_primary" not in result[0]
+
+    def test_to_kea_dict_includes_reservations(self):
+        """Test to_kea_dict includes reservations in output."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        config.valid_lifetime = 3600
+        config.max_lifetime = 7200
+
+        mock_prefix = MagicMock()
+        mock_prefix.prefix = MagicMock()
+        mock_prefix.prefix.__str__ = MagicMock(return_value="192.168.1.0/24")
+        mock_prefix.prefix.version = 4
+        config.prefix = mock_prefix
+
+        # Mock get_pools to return empty
+        with patch.object(config, "get_pools", return_value=[]):
+            # Mock option_data to return empty queryset
+            mock_option_data = MagicMock()
+            mock_option_data.all.return_value = []
+            config.option_data = mock_option_data
+
+            # Mock client_classes to return empty queryset
+            mock_client_classes = MagicMock()
+            mock_client_classes.all.return_value = []
+            config.client_classes = mock_client_classes
+
+            # Mock get_router_ip to return None
+            with patch.object(config, "get_router_ip", return_value=None):
+                # Mock get_kea_reservations to return reservations
+                mock_reservations = [
+                    {"ip-address": "192.168.1.10", "hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"},
+                    {"ip-address": "192.168.1.20", "hw-address": "11:22:33:44:55:66", "hostname": "host2"},
+                ]
+                with patch.object(config, "get_kea_reservations", return_value=mock_reservations):
+                    result = config.to_kea_dict()
+
+        assert "reservations" in result
+        assert len(result["reservations"]) == 2
+        assert result["reservations"][0]["ip-address"] == "192.168.1.10"
+        assert result["reservations"][1]["hostname"] == "host2"
+
+    def test_to_kea_dict_omits_reservations_when_empty(self):
+        """Test to_kea_dict omits reservations key when no reservations exist."""
+        from unittest.mock import MagicMock, patch
+
+        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+
+        config = PrefixDHCPConfig()
+        config.valid_lifetime = 3600
+        config.max_lifetime = 7200
+
+        mock_prefix = MagicMock()
+        mock_prefix.prefix = MagicMock()
+        mock_prefix.prefix.__str__ = MagicMock(return_value="192.168.1.0/24")
+        mock_prefix.prefix.version = 4
+        config.prefix = mock_prefix
+
+        with patch.object(config, "get_pools", return_value=[]):
+            mock_option_data = MagicMock()
+            mock_option_data.all.return_value = []
+            config.option_data = mock_option_data
+
+            mock_client_classes = MagicMock()
+            mock_client_classes.all.return_value = []
+            config.client_classes = mock_client_classes
+
+            with patch.object(config, "get_router_ip", return_value=None):
+                with patch.object(config, "get_kea_reservations", return_value=[]):
+                    result = config.to_kea_dict()
+
+        assert "reservations" not in result
