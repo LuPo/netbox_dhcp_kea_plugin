@@ -17,6 +17,16 @@ class DHCPKEAConfig(PluginConfig):
     default_settings = {
         "top_level_menu": True,
         "menu_name": "DHCP KEA",
+        "demo_data": {
+            "enabled": False,
+            "vendor_option_spaces": 3,
+            "option_definitions_per_space": 5,
+            "option_data": 10,
+            "client_classes": 5,
+            "dhcp_servers": 3,
+            "ha_relationships": 1,
+            "prefix_configs": 5,
+        },
     }
 
 
