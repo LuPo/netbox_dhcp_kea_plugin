@@ -1,0 +1,1387 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://LuPo.github.io/netbox-dhcp-kea-plugin/">
+      
+      
+      
+        <link rel="next" href="contributing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>NetBox DHCP-KEA Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="preference" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#netbox-dhcp-kea-plugin" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="NetBox DHCP-KEA Plugin" class="md-header__button md-logo" aria-label="NetBox DHCP-KEA Plugin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetBox DHCP-KEA Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    LuPo/netbox-dhcp-kea-plugin
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="NetBox DHCP-KEA Plugin" class="md-nav__button md-logo" aria-label="NetBox DHCP-KEA Plugin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetBox DHCP-KEA Plugin
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    LuPo/netbox-dhcp-kea-plugin
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#netbox-dhcp-kea-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetBox DHCP-KEA Plugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="NetBox DHCP-KEA Plugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-availability-ha-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Availability (HA) Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dhcp-relay-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DHCP Relay Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-netbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with NetBox
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using pip
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-netbox-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using netbox-docker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dhcp-relay-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DHCP Relay Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DHCP Relay Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#method-1-query-prefix-api-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 1: Query Prefix API Directly
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-2-lookup-by-prefix-cidr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 2: Lookup by Prefix CIDR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-3-from-prefixdhcpconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 3: From PrefixDHCPConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-relay-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Relay Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kea-configuration-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        KEA Configuration Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rest-api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#demo-data-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Demo Data Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#screenshots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Screenshots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#netbox-dhcp-kea-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetBox DHCP-KEA Plugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="NetBox DHCP-KEA Plugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-availability-ha-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Availability (HA) Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dhcp-relay-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DHCP Relay Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-netbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with NetBox
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-pip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using pip
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-netbox-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using netbox-docker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dhcp-relay-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DHCP Relay Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DHCP Relay Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#method-1-query-prefix-api-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 1: Query Prefix API Directly
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-2-lookup-by-prefix-cidr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 2: Lookup by Prefix CIDR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-3-from-prefixdhcpconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 3: From PrefixDHCPConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-relay-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Relay Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kea-configuration-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        KEA Configuration Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rest-api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#demo-data-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Demo Data Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#screenshots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Screenshots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Home</h1>
+
+<h2 id="netbox-dhcp-kea-plugin">NetBox DHCP-KEA Plugin<a class="headerlink" href="#netbox-dhcp-kea-plugin" title="Permanent link">&para;</a></h2>
+<p>A NetBox plugin for managing ISC KEA DHCP server configurations. This plugin extends NetBox with comprehensive DHCP infrastructure management, including server configuration, option definitions, client classification, High Availability relationships, and DHCP relay information for network devices.</p>
+<ul>
+<li>Free software: GPL-3.0-only</li>
+<li>Documentation: https://LuPo.github.io/netbox-dhcp-kea-plugin/</li>
+</ul>
+<h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
+<p>This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configuration by:</p>
+<ul>
+<li>Linking NetBox Prefixes to DHCP server configurations</li>
+<li>Managing DHCP options (standard and vendor-specific)</li>
+<li>Configuring client classification with KEA test expressions</li>
+<li>Supporting High Availability (HA) deployments</li>
+<li>Providing DHCP relay target information for network device configuration</li>
+<li>Generating KEA-compatible configuration output</li>
+</ul>
+<h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h3>
+<h4 id="core-models">Core Models<a class="headerlink" href="#core-models" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>DHCP Servers</strong>: Manage ISC KEA DHCP server instances linked to NetBox IP addresses</li>
+<li><strong>Vendor Option Spaces</strong>: Define vendor-specific option spaces with enterprise IDs</li>
+<li><strong>Option Definitions</strong>: Create custom DHCP option definitions (KEA <code>option-def</code>)</li>
+<li><strong>Option Data</strong>: Configure DHCP option values (KEA <code>option-data</code>)</li>
+<li><strong>Client Classes</strong>: Configure client classification rules with KEA test expressions</li>
+<li><strong>Prefix DHCP Config</strong>: Link NetBox Prefixes to DHCP configurations with pools and options</li>
+<li><strong>HA Relationships</strong>: Configure High Availability relationships between DHCP servers</li>
+</ul>
+<h4 id="high-availability-ha-support">High Availability (HA) Support<a class="headerlink" href="#high-availability-ha-support" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Configure HA relationships with multiple modes: hot-standby, load-balancing, passive-backup</li>
+<li>Define server roles within HA clusters (primary, secondary, standby, backup)</li>
+<li>Automatic configuration sync from primary to all HA peers</li>
+<li>HA-aware KEA config generation ensures consistent configurations across all peers</li>
+<li>Protection against orphaned configs (cannot delete/demote primary with existing configs)</li>
+<li>Easy config migration when switching primary servers</li>
+<li>UI intelligently hides config management options for non-primary servers</li>
+</ul>
+<h4 id="dhcp-relay-support">DHCP Relay Support<a class="headerlink" href="#dhcp-relay-support" title="Permanent link">&para;</a></h4>
+<p>The plugin provides DHCP relay target information for configuring <code>ip helper-address</code> on Layer 3 network devices:</p>
+<ul>
+<li><strong>Integrated with Prefix API</strong>: Query <code>/api/ipam/prefixes/{id}/</code> to get relay targets directly</li>
+<li><strong>Dedicated lookup endpoint</strong>: Query by prefix CIDR with VRF support</li>
+<li><strong>HA-aware</strong>: Returns all server IPs in an HA relationship for redundant relay configuration</li>
+</ul>
+<h4 id="integration-with-netbox">Integration with NetBox<a class="headerlink" href="#integration-with-netbox" title="Permanent link">&para;</a></h4>
+<ul>
+<li>DHCP configuration tab on Prefix detail pages</li>
+<li>Direct integration with NetBox's Prefix API (adds <code>dhcp_config</code> field)</li>
+<li>Full REST API support for all models</li>
+<li>Tag support on all models</li>
+<li>Change logging and audit trail</li>
+<li>Bulk import/export capabilities</li>
+</ul>
+<h3 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>NetBox Version</th>
+<th>Plugin Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4.5</td>
+<td>0.2.0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h3>
+<h4 id="using-pip">Using pip<a class="headerlink" href="#using-pip" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/LuPo/netbox-dhcp-kea-plugin
+</code></pre></div>
+<h4 id="using-netbox-docker">Using netbox-docker<a class="headerlink" href="#using-netbox-docker" title="Permanent link">&para;</a></h4>
+<p>Add to your <code>plugin_requirements.txt</code>:</p>
+<div class="highlight"><pre><span></span><code>git+https://github.com/LuPo/netbox-dhcp-kea-plugin
+</code></pre></div>
+<p>See <a href="https://github.com/netbox-community/netbox-docker/wiki/Using-Netbox-Plugins">netbox-docker plugin instructions</a> for details.</p>
+<h4 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h4>
+<p>Enable the plugin in your NetBox configuration (<code>configuration.py</code> or <code>plugins.py</code> for netbox-docker):</p>
+<div class="highlight"><pre><span></span><code><span class="n">PLUGINS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;netbox_dhcp_kea_plugin&#39;</span>
+<span class="p">]</span>
+
+<span class="n">PLUGINS_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;netbox_dhcp_kea_plugin&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s1">&#39;top_level_menu&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>      <span class="c1"># Use top-level menu (default: True)</span>
+        <span class="s1">&#39;menu_name&#39;</span><span class="p">:</span> <span class="s1">&#39;DHCP KEA&#39;</span><span class="p">,</span>     <span class="c1"># Menu label (default: &#39;DHCP KEA&#39;)</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Run migrations:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>manage.py<span class="w"> </span>migrate
+</code></pre></div>
+<h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
+<h4 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h4>
+<ol>
+<li><strong>Create DHCP Servers</strong>: Navigate to DHCP KEA &gt; DHCP Servers and add your KEA server instances</li>
+<li><strong>Configure HA</strong> (optional): Set up HA relationships and assign server roles</li>
+<li><strong>Define Options</strong>: Create option definitions for vendor-specific options, or use standard DHCP options</li>
+<li><strong>Create Option Data</strong>: Define option values to apply to client classes or prefixes</li>
+<li><strong>Set Up Client Classes</strong>: Configure client classification rules with KEA test expressions</li>
+<li><strong>Configure Prefixes</strong>: Link NetBox Prefixes to DHCP servers with pools and options</li>
+</ol>
+<h4 id="dhcp-relay-configuration">DHCP Relay Configuration<a class="headerlink" href="#dhcp-relay-configuration" title="Permanent link">&para;</a></h4>
+<p>When configuring DHCP relay on Layer 3 switches/routers, you need the DHCP server IP addresses to use as helper addresses. This plugin provides multiple ways to retrieve this information:</p>
+<h5 id="method-1-query-prefix-api-directly">Method 1: Query Prefix API Directly<a class="headerlink" href="#method-1-query-prefix-api-directly" title="Permanent link">&para;</a></h5>
+<p>The plugin extends NetBox's Prefix API to include DHCP relay information:</p>
+<div class="highlight"><pre><span></span><code>GET<span class="w"> </span>/api/ipam/prefixes/<span class="o">{</span>id<span class="o">}</span>/
+</code></pre></div>
+<p>Response includes:
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">123</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;prefix&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.0.100.0/24&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;vrf&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">    </span><span class="err">...</span>
+<span class="w">    </span><span class="nt">&quot;dhcp_config&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;kea-dhcp-primary&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://192.168.1.10:8000/&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;relay_targets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;192.168.1.10&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;192.168.1.11&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<h5 id="method-2-lookup-by-prefix-cidr">Method 2: Lookup by Prefix CIDR<a class="headerlink" href="#method-2-lookup-by-prefix-cidr" title="Permanent link">&para;</a></h5>
+<p>Query the dedicated relay config endpoint:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Global VRF</span>
+GET<span class="w"> </span>/api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix<span class="o">=</span><span class="m">10</span>.0.100.0/24
+
+<span class="c1"># Specific VRF</span>
+GET<span class="w"> </span>/api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix<span class="o">=</span><span class="m">10</span>.0.100.0/24<span class="p">&amp;</span><span class="nv">vrf</span><span class="o">=</span>CustomerA
+</code></pre></div>
+<p>Response:
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;prefix&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;10.0.100.0/24&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;dhcp_config&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;kea-dhcp-primary&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://192.168.1.10:8000/&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;relay_targets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;192.168.1.10&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;192.168.1.11&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<h5 id="method-3-from-prefixdhcpconfig">Method 3: From PrefixDHCPConfig<a class="headerlink" href="#method-3-from-prefixdhcpconfig" title="Permanent link">&para;</a></h5>
+<div class="highlight"><pre><span></span><code>GET<span class="w"> </span>/api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/<span class="o">{</span>id<span class="o">}</span>/relay-config/
+</code></pre></div>
+<h5 id="using-relay-targets">Using Relay Targets<a class="headerlink" href="#using-relay-targets" title="Permanent link">&para;</a></h5>
+<p>The <code>relay_targets</code> array contains all DHCP server IPs that should receive relayed requests. For HA configurations, this includes all servers in the relationship.</p>
+<p><strong>Cisco IOS/IOS-XE:</strong>
+<div class="highlight"><pre><span></span><code>interface Vlan100
+  ip helper-address 192.168.1.10
+  ip helper-address 192.168.1.11
+</code></pre></div></p>
+<p><strong>Juniper Junos:</strong>
+<div class="highlight"><pre><span></span><code>set forwarding-options dhcp-relay server-group DHCP-SERVERS 192.168.1.10
+set forwarding-options dhcp-relay server-group DHCP-SERVERS 192.168.1.11
+set forwarding-options dhcp-relay group RELAYS active-server-group DHCP-SERVERS
+set forwarding-options dhcp-relay group RELAYS interface vlan.100
+</code></pre></div></p>
+<p><strong>Arista EOS:</strong>
+<div class="highlight"><pre><span></span><code>interface Vlan100
+  ip helper-address 192.168.1.10
+  ip helper-address 192.168.1.11
+</code></pre></div></p>
+<h4 id="kea-configuration-generation">KEA Configuration Generation<a class="headerlink" href="#kea-configuration-generation" title="Permanent link">&para;</a></h4>
+<p>Generate KEA-compatible configuration for a DHCP server:</p>
+<div class="highlight"><pre><span></span><code>GET<span class="w"> </span>/api/plugins/netbox-dhcp-kea-plugin/dhcp-servers/<span class="o">{</span>id<span class="o">}</span>/kea-config/
+</code></pre></div>
+<p>This returns a complete <code>Dhcp4</code> configuration dictionary including:
+- Global options
+- Client class definitions
+- Subnet configurations with pools
+- HA configuration (if applicable)</p>
+<h4 id="rest-api-endpoints">REST API Endpoints<a class="headerlink" href="#rest-api-endpoints" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/dhcp-servers/</code></td>
+<td>DHCP server management</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/dhcp-servers/{id}/kea-config/</code></td>
+<td>Generate KEA config</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/vendor-option-spaces/</code></td>
+<td>Vendor option spaces</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/option-definitions/</code></td>
+<td>Option definitions</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/option-data/</code></td>
+<td>Option data/values</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/client-classes/</code></td>
+<td>Client classifications</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/</code></td>
+<td>Prefix DHCP configurations</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/{id}/relay-config/</code></td>
+<td>Relay config for prefix</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/ha-relationships/</code></td>
+<td>HA relationships</td>
+</tr>
+<tr>
+<td><code>/api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=X</code></td>
+<td>Lookup relay config by prefix</td>
+</tr>
+</tbody>
+</table>
+<h3 id="demo-data-generation">Demo Data Generation<a class="headerlink" href="#demo-data-generation" title="Permanent link">&para;</a></h3>
+<p>The plugin includes a management command to generate demo data for testing:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Generate demo data</span>
+python<span class="w"> </span>manage.py<span class="w"> </span>generate_kea_demo_data<span class="w"> </span>--force
+
+<span class="c1"># Clear and regenerate</span>
+python<span class="w"> </span>manage.py<span class="w"> </span>generate_kea_demo_data<span class="w"> </span>--clear<span class="w"> </span>--force
+
+<span class="c1"># Preview without creating</span>
+python<span class="w"> </span>manage.py<span class="w"> </span>generate_kea_demo_data<span class="w"> </span>--dry-run
+
+<span class="c1"># Remove all demo data</span>
+python<span class="w"> </span>manage.py<span class="w"> </span>generate_kea_demo_data<span class="w"> </span>--purge-demo-data
+</code></pre></div>
+<p>Configure demo data generation in <code>PLUGINS_CONFIG</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="n">PLUGINS_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;netbox_dhcp_kea_plugin&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s1">&#39;demo_data&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>  <span class="c1"># Required unless using --force</span>
+            <span class="s1">&#39;vendor_option_spaces&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s1">&#39;option_definitions_per_space&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+            <span class="s1">&#39;option_data&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+            <span class="s1">&#39;client_classes&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+            <span class="s1">&#39;dhcp_servers&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s1">&#39;ha_relationships&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s1">&#39;prefix_configs&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="screenshots">Screenshots<a class="headerlink" href="#screenshots" title="Permanent link">&para;</a></h3>
+<p><em>Coming soon</em></p>
+<h3 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h3>
+<p>Contributions are welcome! Please feel free to submit a Pull Request.</p>
+<h3 id="credits">Credits<a class="headerlink" href="#credits" title="Permanent link">&para;</a></h3>
+<p>This package was created with <a href="https://github.com/audreyr/cookiecutter">Cookiecutter</a> and the <a href="https://github.com/netbox-community/cookiecutter-netbox-plugin"><code>netbox-community/cookiecutter-netbox-plugin</code></a> project template.</p>
+<p>Based on the NetBox plugin tutorial:
+- <a href="https://github.com/netbox-community/netbox-plugin-demo">Demo repository</a>
+- <a href="https://github.com/netbox-community/netbox-plugin-tutorial">Tutorial</a></p>
+<h3 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h3>
+<p>GPL-3.0-only</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/netbox-community/cookiecutter-netbox-plugin" target="_blank" rel="noopener" title="Tweet" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M459.4 151.7c.3 4.5.3 9.1.3 13.6 0 138.7-105.6 298.6-298.6 298.6-59.5 0-114.7-17.2-161.1-47.1 8.4 1 16.6 1.3 25.3 1.3 49.1 0 94.2-16.6 130.3-44.8-46.1-1-84.8-31.2-98.1-72.8 6.5 1 13 1.6 19.8 1.6 9.4 0 18.8-1.3 27.6-3.6-48.1-9.7-84.1-52-84.1-103v-1.3c14 7.8 30.2 12.7 47.4 13.3-28.3-18.8-46.8-51-46.8-87.4 0-19.5 5.2-37.4 14.3-53C87.4 130.8 165 172.4 252.1 176.9c-1.6-7.8-2.6-15.9-2.6-24C249.5 95.1 296.3 48 354.4 48c30.2 0 57.5 12.7 76.7 33.1 23.7-4.5 46.5-13.3 66.6-25.3-7.8 24.4-24.4 44.8-46.1 57.8 21.1-2.3 41.6-8.1 60.4-16.2-14.3 20.8-32.2 39.3-52.6 54.3"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/netbox-community/cookiecutter-netbox-plugin" target="_blank" rel="noopener" title="Facebook" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256c0 120 82.7 220.8 194.2 248.5V334.2h-52.8V256h52.8v-33.7c0-87.1 39.4-127.5 125-127.5 16.2 0 44.2 3.2 55.7 6.4V172c-6-.6-16.5-1-29.6-1-42 0-58.2 15.9-58.2 57.2V256h83.6l-14.4 78.2H287v175.9C413.8 494.8 512 386.9 512 256"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" target="_blank" rel="noopener" title="Github" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:wookasz@gmail.com" target="_blank" rel="noopener" title="" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m20 8-8 5-8-5V6l8 5 8-5m0-2H4c-1.11 0-2 .89-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.indexes", "navigation.instant", "navigation.tabs.sticky"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
