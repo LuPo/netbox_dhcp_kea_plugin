@@ -1,4 +1,4 @@
-{% extends 'generic/object.html' %}
+{% extends "generic/object.html" %}
 {% load helpers %}
 {% load render_table from django_tables2 %}
 
@@ -25,9 +25,9 @@
                         <th>Valid Configuration</th>
                         <td>
                             {% if object.is_valid_configuration %}
-                            <span class="badge bg-success">Valid</span>
+                            <span class="badge bg-success text-white">Valid</span>
                             {% else %}
-                            <span class="badge bg-danger">Invalid</span>
+                            <span class="badge bg-danger text-white">Invalid</span>
                             {% endif %}
                         </td>
                     </tr>
