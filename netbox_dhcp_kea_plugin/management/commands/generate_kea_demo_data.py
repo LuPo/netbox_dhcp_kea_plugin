@@ -936,8 +936,8 @@ class Command(BaseCommand):
             },
         ]
 
-        created_servers = []
-        for i, template in enumerate(server_templates[:count]):
+        created_servers = []  # List of (server, role) tuples
+        for template in server_templates[:count]:
             if dry_run:
                 self.stdout.write(
                     f"  [DRY-RUN] Would create: {template['name']} with VM and IP 198.51.100.{template['ip_offset']}"
@@ -1009,9 +1009,6 @@ class Command(BaseCommand):
                     },
                 )
 
-                # Store the intended role for later HA assignment (None means standalone/no HA)
-                server._intended_ha_role = template["role"]
-
                 # Add client classes to the server (via ClientClass.servers reverse relation)
                 if created:
                     self.tag_object(server, demo_tag)
@@ -1020,7 +1017,8 @@ class Command(BaseCommand):
                         for client_class in classes_to_add:
                             client_class.servers.add(server)
 
-                created_servers.append(server)
+                # Store server with its intended role (None means standalone/no HA)
+                created_servers.append((server, template["role"]))
                 status = "Created" if created else "Already exists"
                 self.stdout.write(f"  {status}: {server.name} ({ip_address.address})")
             except Exception as e:
@@ -1028,35 +1026,35 @@ class Command(BaseCommand):
 
         return created_servers
 
-    def assign_servers_to_ha(self, servers, ha_relationships, dry_run=False):
+    def assign_servers_to_ha(self, servers_with_roles, ha_relationships, dry_run=False):
         """Assign DHCP servers to HA relationships.
 
-        Servers with _intended_ha_role=None are standalone and not assigned to HA.
+        Args:
+            servers_with_roles: List of (server, role) tuples. Role=None means standalone.
+            ha_relationships: List of HA relationships to assign servers to.
+            dry_run: If True, only print what would be done.
         """
-        if not servers or not ha_relationships:
+        if not servers_with_roles or not ha_relationships:
             return
 
         self.stdout.write("\nAssigning DHCP servers to HA relationships...")
 
         # Filter out standalone servers (role=None)
-        ha_servers = [s for s in servers if getattr(s, "_intended_ha_role", None) is not None]
-        standalone_servers = [s for s in servers if getattr(s, "_intended_ha_role", None) is None]
+        ha_servers = [(s, r) for s, r in servers_with_roles if r is not None]
+        standalone_servers = [(s, r) for s, r in servers_with_roles if r is None]
 
         if standalone_servers:
-            for server in standalone_servers:
+            for server, _ in standalone_servers:
                 self.stdout.write(f"  Skipping {server.name} - standalone server (no HA)")
 
         # Assign first two HA servers to the first HA relationship
         ha_relationship = ha_relationships[0]
-        for i, server in enumerate(ha_servers[:2]):
+        for server, role in ha_servers[:2]:
             if dry_run:
-                role = getattr(server, "_intended_ha_role", "primary" if i == 0 else "standby")
                 self.stdout.write(f"  [DRY-RUN] Would assign {server.name} to {ha_relationship.name} as {role}")
                 continue
 
             try:
-                # Store role before refresh_from_db (which would lose the dynamic attribute)
-                role = getattr(server, "_intended_ha_role", "primary" if i == 0 else "standby")
                 # Refresh server from DB to ensure ip_address is properly loaded
                 server.refresh_from_db()
                 server.ha_relationship = ha_relationship
@@ -1068,13 +1066,16 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  Failed to assign {server.name} to HA: {e}"))
 
     def create_prefix_configs(
-        self, count, prefixes, servers, option_data_list, client_classes, demo_tag, dry_run=False
+        self, count, prefixes, servers_with_roles, option_data_list, client_classes, demo_tag, dry_run=False
     ):
         """Create prefix DHCP configurations.
 
         Only assigns prefixes to primary servers (ha_role='primary' or not in HA).
         This mirrors the constraint enforced in the GUI where non-primary servers
         are automatically redirected to their primary.
+
+        Args:
+            servers_with_roles: List of (server, role) tuples from create_dhcp_servers.
         """
         self.stdout.write(f"\nCreating {count} PrefixDHCPConfig objects...")
 
@@ -1082,9 +1083,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no suitable prefixes available"))
             return []
 
-        if not servers:
+        if not servers_with_roles:
             self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no DHCP servers available"))
             return []
+
+        # Extract just the servers from tuples
+        servers = [s for s, _ in servers_with_roles]
 
         # Filter to only primary servers (ha_role='primary' or not in HA relationship)
         primary_servers = [s for s in servers if s.is_ha_primary()]
