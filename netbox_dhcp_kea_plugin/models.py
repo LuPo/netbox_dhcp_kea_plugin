@@ -1173,12 +1173,27 @@ class PrefixDHCPConfig(NetBoxModel):
             else:
                 host_id = parent_object.name
 
-            # Get MAC address if available
-            mac_address = getattr(assigned_object, "mac_address", None)
+            # Get MAC address if available (check primary_mac_address first, then mac_address for compatibility)
+            mac_address = None
+            primary_mac = getattr(assigned_object, "primary_mac_address", None)
+            if primary_mac:
+                mac_address = getattr(primary_mac, "mac_address", None)
+            if not mac_address:
+                # Fallback for older NetBox versions or VMInterface
+                mac_address = getattr(assigned_object, "mac_address", None)
 
             # Build KEA reservation dict
+            # Handle both netaddr.IPNetwork objects and string addresses
+            ip_addr = ip.address
+            if hasattr(ip_addr, "ip"):
+                # netaddr.IPNetwork object - extract the IP without prefix
+                ip_str = str(ip_addr.ip)
+            else:
+                # String or other format - strip any prefix notation
+                ip_str = str(ip_addr).split("/")[0]
+
             kea_reservation = {
-                "ip-address": str(ip.address.ip),
+                "ip-address": ip_str,
             }
 
             # Add MAC address if available

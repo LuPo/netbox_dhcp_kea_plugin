@@ -143,8 +143,13 @@ class Command(BaseCommand):
         DHCPHARelationship.objects.filter(tags=demo_tag).delete()
         self.stdout.write(f"  - Deleted {count} DHCPHARelationship objects")
 
-        count = ClientClass.objects.filter(tags=demo_tag).count()
-        ClientClass.objects.filter(tags=demo_tag).delete()
+        # Clear M2M relations on ClientClass before deleting
+        demo_client_classes = ClientClass.objects.filter(tags=demo_tag)
+        count = demo_client_classes.count()
+        for cc in list(demo_client_classes):  # Convert to list to avoid queryset caching issues
+            cc.option_data.clear()
+            cc.servers.clear()
+            cc.delete()  # Delete each one individually
         self.stdout.write(f"  - Deleted {count} ClientClass objects")
 
         count = OptionData.objects.filter(tags=demo_tag).count()

@@ -69,7 +69,9 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_includes_primary_ip(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that reservations include IPs marked as primary."""
-        from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
+        import netaddr
+        from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
+        from django.contrib.contenttypes.models import ContentType
         from ipam.models import IPAddress, Prefix
 
         # Create a prefix
@@ -92,12 +94,19 @@ class TestPrefixDHCPConfigReservationsView:
             device=device,
             name="eth0",
             type="1000base-t",
-            mac_address="AA:BB:CC:DD:EE:FF",
         )
+        # Create MAC address and assign to interface
+        mac = MACAddress.objects.create(
+            mac_address="AA:BB:CC:DD:EE:FF",
+            assigned_object_type=ContentType.objects.get_for_model(Interface),
+            assigned_object_id=interface.pk,
+        )
+        interface.primary_mac_address = mac
+        interface.save()
 
         # Create IP in the prefix and assign to interface
         ip = IPAddress.objects.create(
-            address="192.168.100.10/24",
+            address=netaddr.IPNetwork("192.168.100.10/24"),
             assigned_object=interface,
             dns_name="test-host.example.com",
         )
@@ -130,7 +139,9 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_includes_oob_ip(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that reservations include IPs marked as OOB."""
-        from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
+        import netaddr
+        from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
+        from django.contrib.contenttypes.models import ContentType
         from ipam.models import IPAddress, Prefix
 
         # Create a prefix
@@ -153,12 +164,19 @@ class TestPrefixDHCPConfigReservationsView:
             device=device,
             name="mgmt0",
             type="1000base-t",
-            mac_address="11:22:33:44:55:66",
         )
+        # Create MAC address and assign to interface
+        mac = MACAddress.objects.create(
+            mac_address="11:22:33:44:55:66",
+            assigned_object_type=ContentType.objects.get_for_model(Interface),
+            assigned_object_id=interface.pk,
+        )
+        interface.primary_mac_address = mac
+        interface.save()
 
         # Create IP in the prefix and assign to interface
         ip = IPAddress.objects.create(
-            address="192.168.200.20/24",
+            address=netaddr.IPNetwork("192.168.200.20/24"),
             assigned_object=interface,
         )
 
@@ -188,6 +206,7 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_excludes_non_primary_non_oob(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that IPs not marked as primary or OOB are excluded."""
+        import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
         from ipam.models import IPAddress, Prefix
 
@@ -214,8 +233,8 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create IP in the prefix and assign to interface, but NOT as primary or OOB
-        IPAddress.objects.create(
-            address="192.168.50.30/24",
+        ip = IPAddress.objects.create(
+            address=netaddr.IPNetwork("192.168.80.50/24"),
             assigned_object=interface,
         )
 
@@ -235,6 +254,7 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_excludes_fhrp_groups(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that FHRP group IPs are excluded from reservations."""
+        import netaddr
         from ipam.models import FHRPGroup, IPAddress, Prefix
 
         # Create a prefix
@@ -247,8 +267,8 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create IP assigned to FHRP group
-        IPAddress.objects.create(
-            address="192.168.60.1/24",
+        ip = IPAddress.objects.create(
+            address=netaddr.IPNetwork("192.168.60.1/24"),
             assigned_object=fhrp_group,
         )
 
@@ -268,7 +288,9 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_kea_format(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that KEA reservations are properly formatted."""
-        from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
+        import netaddr
+        from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
+        from django.contrib.contenttypes.models import ContentType
         from ipam.models import IPAddress, Prefix
 
         # Create a prefix
@@ -291,11 +313,18 @@ class TestPrefixDHCPConfigReservationsView:
             device=device,
             name="eth0",
             type="1000base-t",
-            mac_address="DE:AD:BE:EF:CA:FE",
         )
+        # Create MAC address and assign to interface
+        mac = MACAddress.objects.create(
+            mac_address="DE:AD:BE:EF:CA:FE",
+            assigned_object_type=ContentType.objects.get_for_model(Interface),
+            assigned_object_id=interface.pk,
+        )
+        interface.primary_mac_address = mac
+        interface.save()
 
         ip = IPAddress.objects.create(
-            address="192.168.70.100/24",
+            address=netaddr.IPNetwork("192.168.70.100/24"),
             assigned_object=interface,
             dns_name="json-host.test.local",
         )
@@ -322,6 +351,7 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_without_mac_address(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that reservations work without MAC address."""
+        import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
         from ipam.models import IPAddress, Prefix
 
@@ -348,8 +378,9 @@ class TestPrefixDHCPConfigReservationsView:
             # No MAC address
         )
 
+        # Create IP assigned to interface and set as primary
         ip = IPAddress.objects.create(
-            address="192.168.80.50/24",
+            address=netaddr.IPNetwork("192.168.80.50/24"),
             assigned_object=interface,
         )
         device.primary_ip4 = ip
@@ -375,6 +406,7 @@ class TestPrefixDHCPConfigReservationsView:
 
     def test_reservations_hostname_from_dns_name(self, db, client, prefix_dhcp_config_factory, admin_user):
         """Test that hostname is extracted from dns_name when available."""
+        import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
         from ipam.models import IPAddress, Prefix
 
@@ -399,9 +431,10 @@ class TestPrefixDHCPConfigReservationsView:
             name="eth0",
             type="1000base-t",
         )
+        # No MAC address for this test
 
         ip = IPAddress.objects.create(
-            address="192.168.90.10/24",
+            address=netaddr.IPNetwork("192.168.90.10/24"),
             assigned_object=interface,
             dns_name="short-name.subdomain.example.com",
         )
@@ -482,7 +515,6 @@ def admin_user(db):
         defaults={
             "email": "admin@test.com",
             "is_superuser": True,
-            "is_staff": True,
             "is_active": True,
         },
     )

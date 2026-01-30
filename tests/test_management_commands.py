@@ -248,9 +248,9 @@ class TestGenerateKeaDemoDataCommand:
         assert client_class.tags.filter(slug=DEMO_TAG_SLUG).count() == 0
 
         out = StringIO()
-        call_command("generate_kea_demo_data", "--clear", stdout=out)
+        call_command("generate_kea_demo_data", "--purge-demo-data", stdout=out)
 
-        assert "Clearing demo-generated plugin data" in out.getvalue()
+        assert "Purging demo-tagged data only" in out.getvalue()
 
         # User-created client class should still exist (not tagged)
         assert ClientClass.objects.filter(name="TestClass").exists()
@@ -634,7 +634,7 @@ class TestGenerateKeaDemoDataDHCPServers:
     def test_creates_servers_with_vms_and_ips(self, db, settings):
         """Test that servers are created with associated VMs, interfaces, and IPs."""
         from ipam.models import IPAddress
-        from virtualization.models import Cluster, ClusterType, VirtualMachine, VMInterface
+        from virtualization.models import VirtualMachine, VMInterface
 
         settings.PLUGINS_CONFIG = {
             "netbox_dhcp_kea_plugin": {
