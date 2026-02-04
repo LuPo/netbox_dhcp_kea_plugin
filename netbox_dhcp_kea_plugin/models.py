@@ -1302,8 +1302,8 @@ class PrefixDHCPConfig(NetBoxModel):
         if option_data_list:
             result["option-data"] = option_data_list
 
-        # Add client-classes if any
-        client_class_names = [cc.name for cc in self.client_classes.all()]
+        # Add client-classes if any (only those with only_in_additional_list=True)
+        client_class_names = [cc.name for cc in self.client_classes.filter(only_in_additional_list=True)]
         if client_class_names:
             result["evaluate-additional-classes"] = client_class_names
 
