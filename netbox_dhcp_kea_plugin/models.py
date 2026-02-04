@@ -946,9 +946,12 @@ class ClientClass(NetBoxModel):
             # Use ascii_data or raw data based on format
             if ascii_format:
                 opt_dict["data"] = opt.ascii_data
-                opt_dict["csv-format"] = True
             else:
                 opt_dict["data"] = opt.data
+
+            # Use the actual csv_format value from the database
+            # Only include csv-format in output if it's False (KEA default is True)
+            if not opt.csv_format:
                 opt_dict["csv-format"] = False
 
             if opt.always_send:

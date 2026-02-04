@@ -201,6 +201,14 @@ class OptionDataImportForm(NetBoxModelImportForm):
             "tags",
         )
 
+    def clean_csv_format(self):
+        """Set csv_format to True if not provided (matching model default)"""
+        csv_format = self.cleaned_data.get("csv_format")
+        # If csv_format is not explicitly set to False, default to True
+        if csv_format is None or csv_format == "":
+            return True
+        return csv_format
+
 
 class DHCPServerImportForm(NetBoxModelImportForm):
     ip_address = CSVModelChoiceField(
@@ -399,6 +407,20 @@ class OptionDataForm(NetBoxModelForm):
             "description",
             "tags",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ensure csv_format defaults to True (matching model default)
+        if not self.instance.pk:
+            self.fields["csv_format"].initial = True
+
+    def clean_csv_format(self):
+        """Set csv_format to True if not provided (matching model default)"""
+        csv_format = self.cleaned_data.get("csv_format")
+        # If csv_format is not explicitly set to False, default to True
+        if csv_format is None or csv_format == "":
+            return True
+        return csv_format
 
 
 class DHCPServerForm(NetBoxModelForm):
