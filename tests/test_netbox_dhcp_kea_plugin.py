@@ -302,9 +302,11 @@ class TestDHCPServer:
             "Normal class should not have only-in-additional-list flag"
         )
 
-        # Both classes should appear in subnet's evaluate-additional-classes
+        # Only classes with only_in_additional_list=True should appear in subnet's evaluate-additional-classes
         subnets = dhcp4.get("subnet4", [])
         assert len(subnets) == 1
         eval_classes = subnets[0].get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"
-        assert "NormalClass" in eval_classes, "Normal class should also appear in subnet's evaluate-additional-classes"
+        assert "NormalClass" not in eval_classes, (
+            "Normal class should NOT appear in subnet's evaluate-additional-classes (only_in_additional_list=False)"
+        )
