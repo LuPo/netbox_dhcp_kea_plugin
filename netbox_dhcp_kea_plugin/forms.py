@@ -249,6 +249,7 @@ class ClientClassImportForm(NetBoxModelImportForm):
             "name",
             "test_expression",
             "description",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
@@ -511,7 +512,7 @@ class ClientClassForm(NetBoxModelForm):
             "description",
             "servers",
             "option_data",
-            "local_definitions",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
@@ -533,7 +534,12 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
         required=False,
         help_text="Option data for this subnet",
     )
-    client_classes = DynamicModelMultipleChoiceField(queryset=ClientClass.objects.all(), required=False)
+    client_classes = DynamicModelMultipleChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        query_params={"only_in_additional_list": True},
+        help_text="Client classes to evaluate additionally for this subnet (only classes with 'Only in additional list' enabled)",
+    )
     routers_option_offset = forms.IntegerField(
         required=False,
         min_value=0,
@@ -702,6 +708,17 @@ class OptionDataFilterForm(NetBoxModelFilterSetForm):
 class ClientClassFilterForm(NetBoxModelFilterSetForm):
     model = ClientClass
     name = forms.CharField(required=False)
+    only_in_additional_list = forms.NullBooleanField(
+        required=False,
+        label="Only in Additional List",
+        widget=forms.Select(
+            choices=[
+                ("", "---------"),
+                ("true", "Yes"),
+                ("false", "No"),
+            ]
+        ),
+    )
 
 
 class PrefixDHCPConfigFilterForm(NetBoxModelFilterSetForm):

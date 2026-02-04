@@ -1,14 +1,13 @@
-{% extends 'generic/object.html' %}
+{% extends "generic/object.html" %}
 {% load helpers %}
 {% load i18n %}
 
 {% block content %}
 <div class="row">
-    <div class="col col-md-6">
+    <div class="col col-md-8">
         <div class="card">
             <h5 class="card-header">
                 DHCP Reservations
-                <span class="badge bg-secondary">{{ reservation_count }}</span>
             </h5>
             <div class="card-body">
                 {% if reservations %}
@@ -26,13 +25,13 @@
                     <tbody>
                         {% for kea_res, meta in reservations %}
                         <tr>
-                            <td><code>{{ kea_res.hostname }}</code></td>
+                            <td>{{ kea_res.hostname }}</td>
                             <td>
                                 <a href="{{ meta.ip.get_absolute_url }}">{{ meta.ip.address.ip }}</a>
                             </td>
                             <td>
                                 {% if meta.interface.mac_address %}
-                                <code>{{ meta.interface.mac_address|lower }}</code>
+                                {{ meta.interface.mac_address|lower }}
                                 {% else %}
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}
@@ -45,10 +44,9 @@
                             </td>
                             <td>
                                 {% if meta.is_primary %}
-                                <span class="badge bg-primary">Primary</span>
-                                {% endif %}
-                                {% if meta.is_oob %}
-                                <span class="badge bg-info">OOB</span>
+                                Primary
+                                {% elif meta.is_oob %}
+                                OOB
                                 {% endif %}
                             </td>
                         </tr>
@@ -71,7 +69,7 @@
             </div>
         </div>
     </div>
-    <div class="col col-md-6">
+    <div class="col col-md-4">
         <div class="card">
             <h5 class="card-header">KEA Reservations Configuration</h5>
             <div class="card-body">

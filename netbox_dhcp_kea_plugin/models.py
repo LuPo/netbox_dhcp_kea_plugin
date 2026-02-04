@@ -211,6 +211,36 @@ class DHCPServer(NetBoxModel):
             return primary_server
         return None
 
+    def get_unused_only_in_additional_list_classes(self):
+        """Get client classes with only_in_additional_list=True that are not used in any subnet.
+
+        For HA standby/secondary servers, this always returns an empty list since they inherit
+        prefix configs from the primary server.
+
+        Returns:
+            list: List of ClientClass instances that have only_in_additional_list=True
+                  but are not referenced in any subnet's evaluate-additional-classes.
+        """
+        # Skip validation for non-primary HA servers - they inherit configs from primary
+        if not self.is_ha_primary():
+            return []
+
+        # Get all classes with only_in_additional_list=True assigned to this server
+        only_in_list_classes = self.client_classes.filter(only_in_additional_list=True)
+
+        if not only_in_list_classes.exists():
+            return []
+
+        # Get all classes referenced in subnets (use effective prefix configs for HA)
+        used_class_ids = set()
+        for prefix_config in self.get_effective_prefix_configs():
+            for cc in prefix_config.client_classes.all():
+                used_class_ids.add(cc.id)
+
+        # Find classes that are not used
+        unused_classes = [cc for cc in only_in_list_classes if cc.id not in used_class_ids]
+        return unused_classes
+
     def is_ha_primary(self):
         """Check if this server is the primary in its HA relationship.
 
@@ -330,31 +360,20 @@ class DHCPServer(NetBoxModel):
         if global_option_data:
             dhcp4["option-data"] = global_option_data
 
-        # Collect definitions that are included locally in client classes (local_definitions=True)
-        # These should NOT be included in the global option-def
-        local_definitions = set()
-        for cc in effective_client_classes.filter(local_definitions=True):
-            for definition in cc.get_option_definitions():
-                local_definitions.add(definition.pk)
-        for prefix_config in effective_prefix_configs:
-            for cc in prefix_config.client_classes.filter(local_definitions=True):
-                for definition in cc.get_option_definitions():
-                    local_definitions.add(definition.pk)
-
         # Collect ALL option definitions needed (vendor + standard custom)
         option_defs = []
         seen_definitions = set()
 
         # From vendor spaces
         for vs in vendor_spaces:
-            for definition in vs.option_definitions.exclude(pk__in=local_definitions):
+            for definition in vs.option_definitions.all():
                 if definition.pk not in seen_definitions:
                     seen_definitions.add(definition.pk)
                     option_defs.append(definition.to_kea_dict())
 
         # From option data that uses custom (non-standard) definitions in dhcp4/dhcp6 space
         for opt in all_option_data:
-            if opt.definition and opt.definition.pk not in local_definitions:
+            if opt.definition:
                 definition = opt.definition
                 # Include if it's a custom definition (not standard) and not already added
                 if not definition.is_standard and definition.pk not in seen_definitions:
@@ -365,6 +384,8 @@ class DHCPServer(NetBoxModel):
             dhcp4["option-def"] = option_defs
 
         # Collect all client-classes from prefix configs and server-level (using effective)
+        # All classes are included in global client-classes array
+        # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
         all_client_classes = set()
         for prefix_config in effective_prefix_configs:
             for cc in prefix_config.client_classes.all():
@@ -776,7 +797,8 @@ class ClientClass(NetBoxModel):
 
     name = models.CharField(max_length=100, unique=True)
     test_expression = models.TextField(
-        help_text="KEA test expression for client classification (e.g., \"option[60].text == 'MS-UC-Client'\")"
+        blank=True,
+        help_text="KEA test expression for client classification (e.g., \"option[60].text == 'MS-UC-Client'\"). Leave empty for unconditional classes that always match when evaluated.",
     )
     description = models.CharField(max_length=200, blank=True)
     servers = models.ManyToManyField(
@@ -791,9 +813,10 @@ class ClientClass(NetBoxModel):
         related_name="client_classes",
         help_text="Option data to send to clients matching this class",
     )
-    local_definitions = models.BooleanField(
+
+    only_in_additional_list = models.BooleanField(
         default=False,
-        help_text="Include option definitions locally in this class config (otherwise they go to global option-def)",
+        help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes, not for every packet. The class is still defined in the server's global client-classes, but KEA won't auto-evaluate it.",
     )
     # Additional KEA client-class fields
     next_server = models.GenericIPAddressField(
@@ -852,7 +875,6 @@ class ClientClass(NetBoxModel):
 
         Returns list of option definition dicts when:
         - has_option43_data(): includes vendor-encapsulated-options definition
-        - local_definitions=True: additionally includes actual option definitions
 
         Args:
             ascii_format: Not used here, but kept for consistency with get_kea_option_data
@@ -873,24 +895,6 @@ class ClientClass(NetBoxModel):
                         "encapsulate": vendor_space.name,
                     }
                 )
-
-        # Add actual option definitions if local_definitions is enabled
-        if self.local_definitions:
-            for definition in self.get_option_definitions():
-                opt_def = {
-                    "name": definition.name,
-                    "code": definition.code,
-                    "type": definition.option_type,
-                }
-                if definition.is_array:
-                    opt_def["array"] = True
-                if definition.encapsulate:
-                    opt_def["encapsulate"] = definition.encapsulate
-                if definition.record_types:
-                    opt_def["record-types"] = definition.record_types
-                if definition.vendor_option_space:
-                    opt_def["space"] = definition.vendor_option_space.name
-                option_defs.append(opt_def)
 
         return option_defs
 
@@ -967,8 +971,15 @@ class ClientClass(NetBoxModel):
         """
         result = {
             "name": self.name,
-            "test": self.test_expression,
         }
+
+        # Only include test if there's an expression (empty = unconditional class)
+        if self.test_expression:
+            result["test"] = self.test_expression
+
+        # Add only-in-additional-list flag if set
+        if self.only_in_additional_list:
+            result["only-in-additional-list"] = True
 
         # Add option-def if any
         option_defs = self.get_kea_option_defs()
@@ -1173,12 +1184,27 @@ class PrefixDHCPConfig(NetBoxModel):
             else:
                 host_id = parent_object.name
 
-            # Get MAC address if available
-            mac_address = getattr(assigned_object, "mac_address", None)
+            # Get MAC address if available (check primary_mac_address first, then mac_address for compatibility)
+            mac_address = None
+            primary_mac = getattr(assigned_object, "primary_mac_address", None)
+            if primary_mac:
+                mac_address = getattr(primary_mac, "mac_address", None)
+            if not mac_address:
+                # Fallback for older NetBox versions or VMInterface
+                mac_address = getattr(assigned_object, "mac_address", None)
 
             # Build KEA reservation dict
+            # Handle both netaddr.IPNetwork objects and string addresses
+            ip_addr = ip.address
+            if hasattr(ip_addr, "ip"):
+                # netaddr.IPNetwork object - extract the IP without prefix
+                ip_str = str(ip_addr.ip)
+            else:
+                # String or other format - strip any prefix notation
+                ip_str = str(ip_addr).split("/")[0]
+
             kea_reservation = {
-                "ip-address": str(ip.address.ip),
+                "ip-address": ip_str,
             }
 
             # Add MAC address if available
@@ -1243,10 +1269,10 @@ class PrefixDHCPConfig(NetBoxModel):
         if option_data_list:
             result["option-data"] = option_data_list
 
-        # Add client-classes if any
-        client_class_names = [cc.name for cc in self.client_classes.all()]
+        # Add client-classes if any (only those with only_in_additional_list=True)
+        client_class_names = [cc.name for cc in self.client_classes.filter(only_in_additional_list=True)]
         if client_class_names:
-            result["require-client-classes"] = client_class_names
+            result["evaluate-additional-classes"] = client_class_names
 
         # Add reservations from assigned IP addresses
         reservations = self.get_kea_reservations()

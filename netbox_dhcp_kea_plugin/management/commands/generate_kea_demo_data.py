@@ -143,8 +143,13 @@ class Command(BaseCommand):
         DHCPHARelationship.objects.filter(tags=demo_tag).delete()
         self.stdout.write(f"  - Deleted {count} DHCPHARelationship objects")
 
-        count = ClientClass.objects.filter(tags=demo_tag).count()
-        ClientClass.objects.filter(tags=demo_tag).delete()
+        # Clear M2M relations on ClientClass before deleting
+        demo_client_classes = ClientClass.objects.filter(tags=demo_tag)
+        count = demo_client_classes.count()
+        for cc in list(demo_client_classes):  # Convert to list to avoid queryset caching issues
+            cc.option_data.clear()
+            cc.servers.clear()
+            cc.delete()  # Delete each one individually
         self.stdout.write(f"  - Deleted {count} ClientClass objects")
 
         count = OptionData.objects.filter(tags=demo_tag).count()
@@ -298,6 +303,7 @@ class Command(BaseCommand):
         self.stdout.write(f"\nCreating {count} VendorOptionSpace objects...")
 
         vendor_data = [
+            {"name": "hp-printers", "enterprise_id": 11, "description": "HP Printer options (Option 43 and VIVSO)"},
             {"name": "cisco-ucm", "enterprise_id": 9, "description": "Cisco Unified Communications Manager"},
             {"name": "microsoft-uc", "enterprise_id": 311, "description": "Microsoft Unified Communications"},
             {"name": "fortinet-fortigate", "enterprise_id": 12356, "description": "Fortinet FortiGate options"},
@@ -332,25 +338,231 @@ class Command(BaseCommand):
 
     def create_option_definitions(self, vendor_spaces, per_space, demo_tag, dry_run=False):
         """Create option definitions for each vendor space."""
-        total = len(vendor_spaces) * per_space
-        self.stdout.write(f"\nCreating {total} OptionDefinition objects...")
+        self.stdout.write("\nCreating OptionDefinition objects...")
 
-        option_templates = [
-            {"name": "tftp-server", "code": 1, "option_type": "ipv4-address", "description": "TFTP server address"},
-            {"name": "config-file", "code": 2, "option_type": "string", "description": "Configuration file path"},
-            {"name": "firmware-path", "code": 3, "option_type": "string", "description": "Firmware file path"},
-            {"name": "vlan-id", "code": 4, "option_type": "uint16", "description": "VLAN ID assignment"},
-            {"name": "ntp-server", "code": 5, "option_type": "ipv4-address", "description": "NTP server address"},
-            {"name": "syslog-server", "code": 6, "option_type": "ipv4-address", "description": "Syslog server"},
-            {"name": "provisioning-url", "code": 7, "option_type": "string", "description": "Provisioning URL"},
-            {"name": "controller-ip", "code": 8, "option_type": "ipv4-address", "description": "Controller IP"},
-            {"name": "device-mode", "code": 9, "option_type": "uint8", "description": "Device operation mode"},
-            {"name": "backup-server", "code": 10, "option_type": "ipv4-address", "description": "Backup server IP"},
-        ]
+        # Vendor-specific option definitions
+        vendor_option_definitions = {
+            "microsoft-uc": [
+                {
+                    "name": "UCIdentifier",
+                    "code": 1,
+                    "option_type": "string",
+                    "description": "UC client identifier (e.g., MS-UC-Client)",
+                },
+                {
+                    "name": "URLScheme",
+                    "code": 2,
+                    "option_type": "string",
+                    "description": "URL scheme (typically https)",
+                },
+                {
+                    "name": "WebServerFqdn",
+                    "code": 3,
+                    "option_type": "string",
+                    "description": "FQDN of the Lync/SfB Front End pool",
+                },
+                {
+                    "name": "WebServerPort",
+                    "code": 4,
+                    "option_type": "uint16",
+                    "description": "Web server port (standard 443)",
+                },
+                {
+                    "name": "CertProvRelPath",
+                    "code": 5,
+                    "option_type": "string",
+                    "description": "Relative path to the certificate service",
+                },
+            ],
+            "cisco-ucm": [
+                {
+                    "name": "tftp-server",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "TFTP server address for phone configuration",
+                },
+                {
+                    "name": "call-manager",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "Cisco Unified Communications Manager address",
+                },
+                {"name": "firmware-path", "code": 3, "option_type": "string", "description": "Firmware file path"},
+                {"name": "vlan-id", "code": 4, "option_type": "uint16", "description": "Voice VLAN ID assignment"},
+                {"name": "locale", "code": 5, "option_type": "string", "description": "Phone locale setting"},
+            ],
+            "fortinet-fortigate": [
+                {
+                    "name": "fortigate-ip",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "FortiGate management IP",
+                },
+                {
+                    "name": "fortimanager-ip",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "FortiManager IP address",
+                },
+                {"name": "config-url", "code": 3, "option_type": "string", "description": "Configuration file URL"},
+                {"name": "firmware-url", "code": 4, "option_type": "string", "description": "Firmware download URL"},
+                {
+                    "name": "registration-key",
+                    "code": 5,
+                    "option_type": "string",
+                    "description": "Device registration key",
+                },
+            ],
+            "aruba-iap": [
+                {
+                    "name": "aruba-controller",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "Aruba controller IP address",
+                },
+                {
+                    "name": "aruba-master",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "Aruba master controller IP",
+                },
+                {"name": "ap-name", "code": 3, "option_type": "string", "description": "Access point name template"},
+                {"name": "ap-group", "code": 4, "option_type": "string", "description": "AP group assignment"},
+                {"name": "organization", "code": 5, "option_type": "string", "description": "Organization identifier"},
+            ],
+            "polycom-phones": [
+                {
+                    "name": "provisioning-server",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "Polycom provisioning server IP",
+                },
+                {"name": "config-path", "code": 2, "option_type": "string", "description": "Configuration file path"},
+                {
+                    "name": "app-server",
+                    "code": 3,
+                    "option_type": "ipv4-address",
+                    "description": "Application server address",
+                },
+                {
+                    "name": "log-server",
+                    "code": 4,
+                    "option_type": "ipv4-address",
+                    "description": "Syslog server for phone logs",
+                },
+                {"name": "vlan-id", "code": 5, "option_type": "uint16", "description": "Voice VLAN ID"},
+            ],
+            "yealink-phones": [
+                {
+                    "name": "autoprov-server",
+                    "code": 1,
+                    "option_type": "string",
+                    "description": "Auto-provisioning server URL",
+                },
+                {
+                    "name": "config-server",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "Configuration server IP",
+                },
+                {
+                    "name": "firmware-server",
+                    "code": 3,
+                    "option_type": "ipv4-address",
+                    "description": "Firmware server IP",
+                },
+                {
+                    "name": "ntp-server",
+                    "code": 4,
+                    "option_type": "ipv4-address",
+                    "description": "NTP server for phone time sync",
+                },
+                {
+                    "name": "syslog-server",
+                    "code": 5,
+                    "option_type": "ipv4-address",
+                    "description": "Syslog server address",
+                },
+            ],
+            "ubiquiti-unifi": [
+                {
+                    "name": "unifi-controller",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "UniFi controller IP address",
+                },
+                {"name": "inform-url", "code": 2, "option_type": "string", "description": "UniFi inform URL"},
+                {
+                    "name": "ssh-keys",
+                    "code": 3,
+                    "option_type": "string",
+                    "description": "SSH public keys for device access",
+                },
+                {"name": "site-name", "code": 4, "option_type": "string", "description": "UniFi site name"},
+                {"name": "firmware-url", "code": 5, "option_type": "string", "description": "Custom firmware URL"},
+            ],
+            "hp-procurve": [
+                {
+                    "name": "tftp-server",
+                    "code": 1,
+                    "option_type": "ipv4-address",
+                    "description": "TFTP server for switch configs",
+                },
+                {"name": "config-file", "code": 2, "option_type": "string", "description": "Configuration file name"},
+                {"name": "image-file", "code": 3, "option_type": "string", "description": "Software image file name"},
+                {
+                    "name": "manager-ip",
+                    "code": 4,
+                    "option_type": "ipv4-address",
+                    "description": "Management station IP",
+                },
+                {
+                    "name": "snmp-server",
+                    "code": 5,
+                    "option_type": "ipv4-address",
+                    "description": "SNMP trap destination",
+                },
+            ],
+            "hp-printers": [
+                {
+                    "name": "printer-name",
+                    "code": 1,
+                    "option_type": "string",
+                    "description": "Printer device name",
+                },
+                {
+                    "name": "print-server",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "Print server IP address",
+                },
+                {
+                    "name": "config-url",
+                    "code": 3,
+                    "option_type": "string",
+                    "description": "Configuration URL for printer",
+                },
+                {
+                    "name": "firmware-url",
+                    "code": 4,
+                    "option_type": "string",
+                    "description": "Firmware update URL",
+                },
+                {
+                    "name": "snmp-community",
+                    "code": 5,
+                    "option_type": "string",
+                    "description": "SNMP community string",
+                },
+            ],
+        }
 
         created_definitions = []
         for space in vendor_spaces:
-            for template in option_templates[:per_space]:
+            # Get vendor-specific definitions or fall back to empty list
+            definitions = vendor_option_definitions.get(space.name, [])
+
+            for template in definitions[:per_space]:
                 if dry_run:
                     self.stdout.write(f"  [DRY-RUN] Would create: {template['name']} in {space.name}")
                     continue
@@ -361,7 +573,7 @@ class Command(BaseCommand):
                     defaults={
                         "name": template["name"],
                         "option_type": template["option_type"],
-                        "description": f"{template['description']} for {space.name}",
+                        "description": template["description"],
                     },
                 )
                 if created:
@@ -373,42 +585,135 @@ class Command(BaseCommand):
         return created_definitions
 
     def create_option_data(self, count, definitions, vendor_spaces, demo_tag, dry_run=False):
-        """Create option data instances."""
-        self.stdout.write(f"\nCreating {count} OptionData objects...")
+        """Create option data instances - one per definition with realistic values."""
+        self.stdout.write("\nCreating OptionData objects...")
 
-        # Sample data values
-        ip_addresses = ["192.168.1.10", "10.0.0.50", "172.16.0.100", "192.168.100.1"]
-        paths = ["/tftpboot/config.cfg", "/firmware/latest.bin", "/provisioning/device.xml"]
-        urls = ["http://prov.example.com/config", "https://firmware.example.com/update"]
+        # Standard (builtin) DHCP options with realistic values
+        standard_option_values = [
+            {
+                "distinctive_name": "demo-log-servers",
+                "definition_name": "log-servers",
+                "data": "192.168.1.50",
+                "description": "Syslog server for network devices",
+            },
+            {
+                "distinctive_name": "demo-domain-name",
+                "definition_name": "domain-name",
+                "data": "example.com",
+                "description": "Default domain name",
+            },
+            {
+                "distinctive_name": "demo-domain-name-servers",
+                "definition_name": "domain-name-servers",
+                "data": "192.168.1.10,192.168.1.11",
+                "description": "DNS servers",
+            },
+            {
+                "distinctive_name": "demo-ntp-servers",
+                "definition_name": "ntp-servers",
+                "data": "192.168.1.1",
+                "description": "NTP server for time synchronization",
+            },
+            {
+                "distinctive_name": "demo-tftp-server-name",
+                "definition_name": "tftp-server-name",
+                "data": "tftp.example.com",
+                "description": "TFTP server hostname",
+            },
+        ]
+
+        # Vendor-specific realistic data values for each option definition
+        vendor_option_values = {
+            "microsoft-uc": {
+                "UCIdentifier": "MS-UC-Client",
+                "URLScheme": "https",
+                "WebServerFqdn": "lyncpool.contoso.com",
+                "WebServerPort": "443",
+                "CertProvRelPath": "/CertProv/CertProvisioningService.svc",
+            },
+            "cisco-ucm": {
+                "tftp-server": "10.1.1.10",
+                "call-manager": "10.1.1.20",
+                "firmware-path": "/firmware/sip78xx.12-5-1SR3-1.loads",
+                "vlan-id": "100",
+                "locale": "en_US",
+            },
+            "fortinet-fortigate": {
+                "fortigate-ip": "192.168.1.1",
+                "fortimanager-ip": "192.168.1.5",
+                "config-url": "https://fmg.example.com/config",
+                "firmware-url": "https://fmg.example.com/firmware/fortigate.bin",
+                "registration-key": "FGT-REG-KEY-2024",
+            },
+            "aruba-iap": {
+                "aruba-controller": "10.10.10.1",
+                "aruba-master": "10.10.10.2",
+                "ap-name": "AP-%m",
+                "ap-group": "default",
+                "organization": "Example-Corp",
+            },
+            "polycom-phones": {
+                "provisioning-server": "172.16.1.100",
+                "config-path": "/polycom/config/",
+                "app-server": "172.16.1.101",
+                "log-server": "172.16.1.50",
+                "vlan-id": "200",
+            },
+            "yealink-phones": {
+                "autoprov-server": "http://prov.example.com/yealink/",
+                "config-server": "192.168.10.100",
+                "firmware-server": "192.168.10.101",
+                "ntp-server": "192.168.10.1",
+                "syslog-server": "192.168.10.50",
+            },
+            "ubiquiti-unifi": {
+                "unifi-controller": "192.168.1.10",
+                "inform-url": "http://192.168.1.10:8080/inform",
+                "ssh-keys": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
+                "site-name": "default",
+                "firmware-url": "https://dl.ui.com/unifi/firmware/",
+            },
+            "hp-procurve": {
+                "tftp-server": "10.0.0.100",
+                "config-file": "procurve-config.cfg",
+                "image-file": "K_16_10_0011.swi",
+                "manager-ip": "10.0.0.50",
+                "snmp-server": "10.0.0.51",
+            },
+            "hp-printers": {
+                "printer-name": "HP-LaserJet-Office",
+                "print-server": "192.168.100.10",
+                "config-url": "http://printserver.example.com/config",
+                "firmware-url": "http://printserver.example.com/firmware",
+                "snmp-community": "public",
+            },
+        }
 
         created_option_data = []
-        delivery_types = ["standard", "option43", "vivso"]
 
-        for i in range(count):
-            if definitions:
-                definition = random.choice(definitions)
-                space = definition.vendor_option_space
-            else:
-                definition = None
-                space = random.choice(vendor_spaces) if vendor_spaces else None
+        # Create one OptionData per definition
+        for definition in definitions:
+            space = definition.vendor_option_space
+            if not space:
+                continue
 
-            # Generate appropriate data based on option type
-            if definition:
+            # Get the realistic value for this definition
+            space_values = vendor_option_values.get(space.name, {})
+            data = space_values.get(definition.name)
+
+            if not data:
+                # Fallback if no specific value defined
                 if definition.option_type == "ipv4-address":
-                    data = random.choice(ip_addresses)
+                    data = "192.168.1.1"
                 elif definition.option_type in ("uint8", "uint16", "uint32"):
-                    data = str(random.randint(1, 255))
+                    data = "1"
                 else:
-                    data = random.choice(paths + urls)
-                distinctive_name = f"demo-{definition.name}-{i + 1}"
-            else:
-                data = random.choice(ip_addresses + paths)
-                distinctive_name = f"demo-option-data-{i + 1}"
+                    data = "default-value"
 
-            delivery_type = random.choice(delivery_types)
-            # VIVSO requires enterprise_id
-            if delivery_type == "vivso" and (not space or not space.enterprise_id):
-                delivery_type = "option43"
+            distinctive_name = f"demo-{space.name}-{definition.name}"
+
+            # Use option43 for vendor options (most common delivery type)
+            delivery_type = "option43"
 
             if dry_run:
                 self.stdout.write(f"  [DRY-RUN] Would create: {distinctive_name}")
@@ -422,33 +727,118 @@ class Command(BaseCommand):
                         "vendor_option_space": space,
                         "delivery_type": delivery_type,
                         "data": data,
-                        "description": f"Demo option data {i + 1}",
+                        "description": f"{definition.description}",
                     },
                 )
                 if created:
                     self.tag_object(option_data, demo_tag)
                 created_option_data.append(option_data)
                 status = "Created" if created else "Already exists"
-                self.stdout.write(f"  {status}: {distinctive_name}")
+                self.stdout.write(f"  {status}: {distinctive_name} = {data}")
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"  Failed to create {distinctive_name}: {e}"))
+
+            # For hp-printers, also create VIVSO variant
+            if space.name == "hp-printers":
+                distinctive_name_vivso = f"demo-{space.name}-{definition.name}-vivso"
+                if not dry_run:
+                    try:
+                        option_data_vivso, created = OptionData.objects.get_or_create(
+                            distinctive_name=distinctive_name_vivso,
+                            defaults={
+                                "definition": definition,
+                                "vendor_option_space": space,
+                                "delivery_type": "vivso",
+                                "data": data,
+                                "description": f"{definition.description} (VIVSO)",
+                            },
+                        )
+                        if created:
+                            self.tag_object(option_data_vivso, demo_tag)
+                        created_option_data.append(option_data_vivso)
+                        status = "Created" if created else "Already exists"
+                        self.stdout.write(f"  {status}: {distinctive_name_vivso} = {data} (VIVSO)")
+                    except Exception as e:
+                        self.stdout.write(self.style.WARNING(f"  Failed to create {distinctive_name_vivso}: {e}"))
+
+        # Create standard (builtin) option data
+        self.stdout.write("\n  Creating standard DHCP option data...")
+        for std_opt in standard_option_values:
+            if dry_run:
+                self.stdout.write(f"  [DRY-RUN] Would create: {std_opt['distinctive_name']}")
+                continue
+
+            try:
+                # Find the standard option definition
+                std_definition = OptionDefinition.objects.filter(
+                    name=std_opt["definition_name"],
+                    is_standard=True,
+                ).first()
+
+                if not std_definition:
+                    self.stdout.write(
+                        self.style.WARNING(f"  Standard option '{std_opt['definition_name']}' not found, skipping")
+                    )
+                    continue
+
+                option_data, created = OptionData.objects.get_or_create(
+                    distinctive_name=std_opt["distinctive_name"],
+                    defaults={
+                        "definition": std_definition,
+                        "vendor_option_space": None,
+                        "delivery_type": "standard",
+                        "data": std_opt["data"],
+                        "description": std_opt["description"],
+                    },
+                )
+                if created:
+                    self.tag_object(option_data, demo_tag)
+                created_option_data.append(option_data)
+                status = "Created" if created else "Already exists"
+                self.stdout.write(f"  {status}: {std_opt['distinctive_name']} = {std_opt['data']}")
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"  Failed to create {std_opt['distinctive_name']}: {e}"))
 
         return created_option_data
 
     def create_client_classes(self, count, option_data_list, demo_tag, dry_run=False):
-        """Create client classes."""
+        """Create client classes with consistent vendor option space assignments."""
         self.stdout.write(f"\nCreating {count} ClientClass objects...")
 
+        # Map client classes to their corresponding vendor option spaces
+        # Each class gets its vendor-specific options plus some standard options
         class_templates = [
+            {
+                "name": "HP-Printers-Option43",
+                "test_expression": "substring(option[60].text, 0, 2) == 'HP'",
+                "description": "HP printers using Option 43 (vendor-encapsulated-options)",
+                "vendor_space": "hp-printers",
+                "delivery_type": "option43",
+                "standard_options": ["demo-log-servers", "demo-ntp-servers"],
+                "only_in_additional_list": False,
+            },
+            {
+                "name": "HP-Printers-VIVSO",
+                "test_expression": "substring(option[60].text, 0, 2) == 'HP'",
+                "description": "HP printers using Option 125 VIVSO (Vendor-Identifying Vendor-Specific Options)",
+                "vendor_space": "hp-printers",
+                "delivery_type": "vivso",
+                "standard_options": ["demo-domain-name"],
+                "only_in_additional_list": True,
+            },
             {
                 "name": "Cisco-UC-Phones",
                 "test_expression": "option[60].text == 'Cisco UC Phone'",
                 "description": "Cisco Unified Communications IP phones",
+                "vendor_space": "cisco-ucm",
+                "standard_options": ["demo-log-servers", "demo-domain-name", "demo-ntp-servers"],
             },
             {
                 "name": "Microsoft-Lync-Clients",
                 "test_expression": "option[60].text == 'MS-UC-Client'",
                 "description": "Microsoft Lync/Skype for Business clients",
+                "vendor_space": "microsoft-uc",
+                "standard_options": ["demo-domain-name", "demo-domain-name-servers"],
             },
             {
                 "name": "PXE-Boot-Clients",
@@ -456,33 +846,48 @@ class Command(BaseCommand):
                 "description": "PXE boot clients for network installation",
                 "next_server": "192.168.1.10",
                 "boot_file_name": "pxelinux.0",
+                "vendor_space": None,
+                "standard_options": ["demo-tftp-server-name", "demo-domain-name"],
             },
             {
                 "name": "Polycom-Phones",
                 "test_expression": "option[60].text == 'Polycom'",
                 "description": "Polycom VoIP phones",
+                "vendor_space": "polycom-phones",
+                "standard_options": ["demo-log-servers", "demo-ntp-servers", "demo-domain-name"],
             },
             {
                 "name": "Yealink-Phones",
                 "test_expression": "substring(option[60].text, 0, 7) == 'yealink'",
                 "description": "Yealink IP phones",
+                "vendor_space": "yealink-phones",
+                "standard_options": ["demo-log-servers", "demo-ntp-servers"],
             },
             {
-                "name": "VOIP-Devices",
-                "test_expression": "member('Cisco-UC-Phones') or member('Polycom-Phones') or member('Yealink-Phones')",
-                "description": "All VoIP devices",
+                "name": "Aruba-Access-Points",
+                "test_expression": "option[60].text == 'ArubaAP'",
+                "description": "Aruba wireless access points",
+                "vendor_space": "aruba-iap",
+                "standard_options": ["demo-log-servers", "demo-domain-name-servers"],
             },
             {
-                "name": "Network-Printers",
-                "test_expression": "option[60].text == 'HP Printer'",
-                "description": "Network printers",
+                "name": "Fortinet-Devices",
+                "test_expression": "option[60].text == 'FortiGate'",
+                "description": "Fortinet FortiGate devices",
+                "vendor_space": "fortinet-fortigate",
+                "standard_options": ["demo-ntp-servers", "demo-domain-name"],
             },
             {
-                "name": "Access-Points",
-                "test_expression": "option[60].text == 'Aruba AP'",
-                "description": "Wireless access points",
+                "name": "UniFi-Devices",
+                "test_expression": "option[60].text == 'ubnt'",
+                "description": "Ubiquiti UniFi devices",
+                "vendor_space": "ubiquiti-unifi",
+                "standard_options": ["demo-log-servers"],
             },
         ]
+
+        # Build a lookup dict for option data by distinctive_name
+        option_data_by_name = {opt.distinctive_name: opt for opt in option_data_list}
 
         created_classes = []
         for template in class_templates[:count]:
@@ -499,17 +904,37 @@ class Command(BaseCommand):
                         "next_server": template.get("next_server"),
                         "server_hostname": template.get("server_hostname", ""),
                         "boot_file_name": template.get("boot_file_name", ""),
+                        "only_in_additional_list": template.get("only_in_additional_list", False),
                     },
                 )
 
-                # Add some option data to the class
+                # Add option data to the class
                 if created:
                     self.tag_object(client_class, demo_tag)
-                    if option_data_list:
-                        options_to_add = random.sample(
-                            option_data_list, min(random.randint(1, 3), len(option_data_list))
-                        )
+
+                    options_to_add = []
+
+                    # Add vendor-specific options (all options from that vendor space)
+                    vendor_space_name = template.get("vendor_space")
+                    delivery_type = template.get("delivery_type")
+                    if vendor_space_name:
+                        vendor_options = [
+                            opt
+                            for opt in option_data_list
+                            if opt.vendor_option_space
+                            and opt.vendor_option_space.name == vendor_space_name
+                            and (delivery_type is None or opt.delivery_type == delivery_type)
+                        ]
+                        options_to_add.extend(vendor_options)
+
+                    # Add standard options specified in the template
+                    for std_opt_name in template.get("standard_options", []):
+                        if std_opt_name in option_data_by_name:
+                            options_to_add.append(option_data_by_name[std_opt_name])
+
+                    if options_to_add:
                         client_class.option_data.set(options_to_add)
+                        self.stdout.write(f"    Added {len(options_to_add)} option data entries")
 
                 created_classes.append(client_class)
                 status = "Created" if created else "Already exists"
@@ -601,8 +1026,8 @@ class Command(BaseCommand):
             },
         ]
 
-        created_servers = []
-        for i, template in enumerate(server_templates[:count]):
+        created_servers = []  # List of (server, role) tuples
+        for template in server_templates[:count]:
             if dry_run:
                 self.stdout.write(
                     f"  [DRY-RUN] Would create: {template['name']} with VM and IP 198.51.100.{template['ip_offset']}"
@@ -674,9 +1099,6 @@ class Command(BaseCommand):
                     },
                 )
 
-                # Store the intended role for later HA assignment (None means standalone/no HA)
-                server._intended_ha_role = template["role"]
-
                 # Add client classes to the server (via ClientClass.servers reverse relation)
                 if created:
                     self.tag_object(server, demo_tag)
@@ -685,7 +1107,8 @@ class Command(BaseCommand):
                         for client_class in classes_to_add:
                             client_class.servers.add(server)
 
-                created_servers.append(server)
+                # Store server with its intended role (None means standalone/no HA)
+                created_servers.append((server, template["role"]))
                 status = "Created" if created else "Already exists"
                 self.stdout.write(f"  {status}: {server.name} ({ip_address.address})")
             except Exception as e:
@@ -693,35 +1116,35 @@ class Command(BaseCommand):
 
         return created_servers
 
-    def assign_servers_to_ha(self, servers, ha_relationships, dry_run=False):
+    def assign_servers_to_ha(self, servers_with_roles, ha_relationships, dry_run=False):
         """Assign DHCP servers to HA relationships.
 
-        Servers with _intended_ha_role=None are standalone and not assigned to HA.
+        Args:
+            servers_with_roles: List of (server, role) tuples. Role=None means standalone.
+            ha_relationships: List of HA relationships to assign servers to.
+            dry_run: If True, only print what would be done.
         """
-        if not servers or not ha_relationships:
+        if not servers_with_roles or not ha_relationships:
             return
 
         self.stdout.write("\nAssigning DHCP servers to HA relationships...")
 
         # Filter out standalone servers (role=None)
-        ha_servers = [s for s in servers if getattr(s, "_intended_ha_role", None) is not None]
-        standalone_servers = [s for s in servers if getattr(s, "_intended_ha_role", None) is None]
+        ha_servers = [(s, r) for s, r in servers_with_roles if r is not None]
+        standalone_servers = [(s, r) for s, r in servers_with_roles if r is None]
 
         if standalone_servers:
-            for server in standalone_servers:
+            for server, _ in standalone_servers:
                 self.stdout.write(f"  Skipping {server.name} - standalone server (no HA)")
 
         # Assign first two HA servers to the first HA relationship
         ha_relationship = ha_relationships[0]
-        for i, server in enumerate(ha_servers[:2]):
+        for server, role in ha_servers[:2]:
             if dry_run:
-                role = getattr(server, "_intended_ha_role", "primary" if i == 0 else "standby")
                 self.stdout.write(f"  [DRY-RUN] Would assign {server.name} to {ha_relationship.name} as {role}")
                 continue
 
             try:
-                # Store role before refresh_from_db (which would lose the dynamic attribute)
-                role = getattr(server, "_intended_ha_role", "primary" if i == 0 else "standby")
                 # Refresh server from DB to ensure ip_address is properly loaded
                 server.refresh_from_db()
                 server.ha_relationship = ha_relationship
@@ -733,13 +1156,16 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  Failed to assign {server.name} to HA: {e}"))
 
     def create_prefix_configs(
-        self, count, prefixes, servers, option_data_list, client_classes, demo_tag, dry_run=False
+        self, count, prefixes, servers_with_roles, option_data_list, client_classes, demo_tag, dry_run=False
     ):
         """Create prefix DHCP configurations.
 
         Only assigns prefixes to primary servers (ha_role='primary' or not in HA).
         This mirrors the constraint enforced in the GUI where non-primary servers
         are automatically redirected to their primary.
+
+        Args:
+            servers_with_roles: List of (server, role) tuples from create_dhcp_servers.
         """
         self.stdout.write(f"\nCreating {count} PrefixDHCPConfig objects...")
 
@@ -747,9 +1173,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no suitable prefixes available"))
             return []
 
-        if not servers:
+        if not servers_with_roles:
             self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no DHCP servers available"))
             return []
+
+        # Extract just the servers from tuples
+        servers = [s for s, _ in servers_with_roles]
 
         # Filter to only primary servers (ha_role='primary' or not in HA relationship)
         primary_servers = [s for s in servers if s.is_ha_primary()]

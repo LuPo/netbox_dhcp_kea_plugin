@@ -9,7 +9,6 @@ Run with:
 """
 
 
-
 class TestVendorOptionSpace:
     """Tests for VendorOptionSpace model."""
 
@@ -130,7 +129,6 @@ class TestClientClass:
     def test_create_client_class(self, client_class):
         """Test creating a ClientClass."""
         assert client_class.name == "TestClass"
-        assert client_class.local_definitions is False
 
     def test_has_option43_data_false(self, client_class):
         """Test has_option43_data() returns False when no option43 data."""
@@ -182,20 +180,41 @@ class TestClientClass:
         assert veo_data is not None
         assert veo_data["code"] == 43
 
-    def test_to_kea_dict_local_definitions(self, client_class_local_defs, option_data):
-        """Test ClientClass.to_kea_dict() includes local definitions when local_definitions=True."""
-        client_class_local_defs.option_data.add(option_data)
-        kea_dict = client_class_local_defs.to_kea_dict()
+    def test_to_kea_dict_empty_test_expression(self, db):
+        """Test ClientClass.to_kea_dict() omits test field when test_expression is empty."""
+        from netbox_dhcp_kea_plugin.models import ClientClass
 
-        # Should have option-def with both vendor-encapsulated-options AND the option definition
-        assert "option-def" in kea_dict
-        assert len(kea_dict["option-def"]) >= 2
+        client_class = ClientClass.objects.create(
+            name="UnconditionalClass",
+            test_expression="",  # Empty = unconditional class
+            description="Always matches when evaluated",
+        )
+        kea_dict = client_class.to_kea_dict()
 
-        # Check for the actual option definition
-        opt_def = next((d for d in kea_dict["option-def"] if d["name"] == "test-option"), None)
-        assert opt_def is not None
-        assert opt_def["code"] == 1
-        assert opt_def["type"] == "string"
+        assert kea_dict["name"] == "UnconditionalClass"
+        assert "test" not in kea_dict  # Should NOT have test field
+
+    def test_to_kea_dict_only_in_additional_list(self, db):
+        """Test ClientClass.to_kea_dict() includes only-in-additional-list flag when set."""
+        from netbox_dhcp_kea_plugin.models import ClientClass
+
+        client_class = ClientClass.objects.create(
+            name="SubnetScopedClass",
+            test_expression="option[60].hex == 'scoped'",
+            description="Only evaluated in specific subnets",
+            only_in_additional_list=True,
+        )
+        kea_dict = client_class.to_kea_dict()
+
+        assert kea_dict["name"] == "SubnetScopedClass"
+        assert kea_dict["test"] == "option[60].hex == 'scoped'"
+        assert kea_dict["only-in-additional-list"] is True
+
+    def test_to_kea_dict_only_in_additional_list_false(self, client_class):
+        """Test ClientClass.to_kea_dict() omits only-in-additional-list when False."""
+        kea_dict = client_class.to_kea_dict()
+
+        assert "only-in-additional-list" not in kea_dict
 
     def test_to_kea_json(self, client_class, option_data):
         """Test to_kea_json() returns valid JSON."""
@@ -228,35 +247,66 @@ class TestDHCPServer:
         assert "Dhcp4" in kea_dict
         assert "interfaces-config" in kea_dict["Dhcp4"]
 
-    def test_to_kea_dict_excludes_local_definitions(self, dhcp_server, client_class_local_defs, option_data):
-        """Test DHCPServer.to_kea_dict() excludes definitions from classes with local_definitions=True."""
-        # Add option_data to client_class with local_definitions
-        client_class_local_defs.option_data.add(option_data)
+    def test_to_kea_dict_includes_only_in_additional_list_classes(self, dhcp_server, prefix_factory, db):
+        """Test DHCPServer.to_kea_dict() includes all classes in global client-classes, with only-in-additional-list flag set appropriately."""
+        from netbox_dhcp_kea_plugin.models import ClientClass, PrefixDHCPConfig
 
-        # Add client_class to dhcp_server
-        dhcp_server.client_classes.add(client_class_local_defs)
+        prefix = prefix_factory()
+
+        # Create a class with only_in_additional_list=True
+        scoped_class = ClientClass.objects.create(
+            name="ScopedClass",
+            test_expression="option[60].hex == 'scoped'",
+            description="Should appear in global client-classes with only-in-additional-list flag",
+            only_in_additional_list=True,
+        )
+
+        # Create a normal class
+        normal_class = ClientClass.objects.create(
+            name="NormalClass",
+            test_expression="option[60].hex == 'normal'",
+            description="Should appear in global client-classes without flag",
+            only_in_additional_list=False,
+        )
+
+        # Create a prefix config and add both classes to it
+        prefix_config = PrefixDHCPConfig.objects.create(
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+        )
+        prefix_config.client_classes.add(scoped_class)
+        prefix_config.client_classes.add(normal_class)
 
         kea_dict = dhcp_server.to_kea_dict()
         dhcp4 = kea_dict["Dhcp4"]
 
-        # The option definition should NOT be in global option-def
-        # because it's included locally in the client class
-        global_option_defs = dhcp4.get("option-def", [])
-        local_def = next((d for d in global_option_defs if d["name"] == "test-option"), None)
-        assert local_def is None, "Local definition should not appear in global option-def"
+        client_classes = dhcp4.get("client-classes", [])
+        class_names = [cc["name"] for cc in client_classes]
 
-    def test_to_kea_dict_includes_global_definitions(self, dhcp_server, client_class, option_data):
-        """Test DHCPServer.to_kea_dict() includes definitions from classes without local_definitions."""
-        # Add option_data to client_class without local_definitions
-        client_class.option_data.add(option_data)
+        # Both classes should be included in global client-classes
+        assert "NormalClass" in class_names, "Normal class should appear in global client-classes"
+        assert "ScopedClass" in class_names, "Scoped class should also appear in global client-classes"
 
-        # Add client_class to dhcp_server
-        dhcp_server.client_classes.add(client_class)
+        # Check that scoped class has the only-in-additional-list flag
+        scoped_class_config = next((cc for cc in client_classes if cc["name"] == "ScopedClass"), None)
+        assert scoped_class_config is not None
+        assert scoped_class_config.get("only-in-additional-list") is True, (
+            "Scoped class should have only-in-additional-list=true"
+        )
 
-        kea_dict = dhcp_server.to_kea_dict()
-        dhcp4 = kea_dict["Dhcp4"]
+        # Check that normal class does NOT have the flag
+        normal_class_config = next((cc for cc in client_classes if cc["name"] == "NormalClass"), None)
+        assert normal_class_config is not None
+        assert "only-in-additional-list" not in normal_class_config, (
+            "Normal class should not have only-in-additional-list flag"
+        )
 
-        # The option definition SHOULD be in global option-def
-        global_option_defs = dhcp4.get("option-def", [])
-        global_def = next((d for d in global_option_defs if d["name"] == "test-option"), None)
-        assert global_def is not None, "Global definition should appear in global option-def"
+        # Only classes with only_in_additional_list=True should appear in subnet's evaluate-additional-classes
+        subnets = dhcp4.get("subnet4", [])
+        assert len(subnets) == 1
+        eval_classes = subnets[0].get("evaluate-additional-classes", [])
+        assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"
+        assert "NormalClass" not in eval_classes, (
+            "Normal class should NOT appear in subnet's evaluate-additional-classes (only_in_additional_list=False)"
+        )

@@ -133,20 +133,6 @@ def client_class(db):
         name="TestClass",
         test_expression="option[60].hex == 'test'",
         description="Test client class",
-        local_definitions=False,
-    )
-
-
-@pytest.fixture
-def client_class_local_defs(db):
-    """Create a test ClientClass with local_definitions=True."""
-    from netbox_dhcp_kea_plugin.models import ClientClass
-
-    return ClientClass.objects.create(
-        name="TestClassLocalDefs",
-        test_expression="option[60].hex == 'local'",
-        description="Test client class with local definitions",
-        local_definitions=True,
     )
 
 
@@ -286,7 +272,6 @@ def client_class_factory(db):
             name=class_name,
             test_expression=expression,
             description=f"Test client class {counter[0]}",
-            local_definitions=False,
         )
 
     return create_client_class

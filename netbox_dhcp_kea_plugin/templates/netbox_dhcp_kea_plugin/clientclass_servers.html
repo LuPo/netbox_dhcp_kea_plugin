@@ -25,7 +25,7 @@
                             <td>
                                 <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
                             </td>
-                            <td>{% if server.is_active %}<span class="badge bg-green">Yes</span>{% else %}<span class="badge bg-red">No</span>{% endif %}</td>
+                            <td>{% if server.is_active %}<i class="mdi mdi-check-bold text-success"></i>{% else %}<span class="text-muted">—</span>{% endif %}</td>
                             <td>{{ server.description|placeholder }}</td>
                         </tr>
                         {% endfor %}

@@ -116,6 +116,11 @@ urlpatterns = (
         views.ClientClassServersView.as_view(),
         name="clientclass_servers",
     ),
+    path(
+        "client-classes/<int:pk>/prefixes/",
+        views.ClientClassPrefixesView.as_view(),
+        name="clientclass_prefixes",
+    ),
     # PrefixDHCPConfig
     path("prefix-configs/", views.PrefixDHCPConfigListView.as_view(), name="prefixdhcpconfig_list"),
     path("prefix-configs/add/", views.PrefixDHCPConfigEditView.as_view(), name="prefixdhcpconfig_add"),

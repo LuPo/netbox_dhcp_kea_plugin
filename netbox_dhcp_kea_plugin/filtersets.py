@@ -109,9 +109,13 @@ class OptionDataFilterSet(NetBoxModelFilterSet):
 
 
 class ClientClassFilterSet(NetBoxModelFilterSet):
+    only_in_additional_list = django_filters.BooleanFilter(
+        field_name="only_in_additional_list", label="Only in Additional List"
+    )
+
     class Meta:
         model = ClientClass
-        fields = ["id", "name"]
+        fields = ["id", "name", "only_in_additional_list"]
 
     def search(self, queryset, name, value):
         if not value.strip():

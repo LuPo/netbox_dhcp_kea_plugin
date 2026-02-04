@@ -290,6 +290,7 @@ class ClientClassTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="name")
     id = tables.Column(verbose_name="id")
     test_expression = tables.Column(verbose_name="test_expression")
+    only_in_additional_list = BooleanColumn(verbose_name="Only in Additional List")
     next_server = tables.Column(verbose_name="next_server")
     server_hostname = tables.Column(verbose_name="server_hostname")
     boot_file_name = tables.Column(verbose_name="boot_file_name")
@@ -302,6 +303,7 @@ class ClientClassTable(NetBoxTable):
             "pk",
             "name",
             "test_expression",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
@@ -310,7 +312,7 @@ class ClientClassTable(NetBoxTable):
             "id",
             "actions",
         )
-        default_columns = ("name", "test_expression", "option_data_count", "description")
+        default_columns = ("name", "test_expression", "only_in_additional_list", "description")
 
 
 class PrefixDHCPConfigTable(NetBoxTable):

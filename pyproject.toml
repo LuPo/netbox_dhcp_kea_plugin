@@ -90,6 +90,9 @@ django_settings_module = "netbox.settings"
 [tool.ruff]
 line-length = 120
 target-version = "py313"
+extend-exclude = [
+    "*/templates/*",
+]
 
 [tool.ruff.lint]
 select = [

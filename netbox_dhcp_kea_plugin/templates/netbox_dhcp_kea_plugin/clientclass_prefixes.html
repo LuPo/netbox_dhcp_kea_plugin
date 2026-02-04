@@ -1,0 +1,56 @@
+{% extends 'generic/object.html' %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card">
+            <h5 class="card-header">Assigned Prefixes</h5>
+            <div class="card-body">
+                {% if prefix_configs %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Prefix</th>
+                                <th>DHCP Server</th>
+                                <th>Valid Lifetime</th>
+                                <th>Max Lifetime</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for config in prefix_configs %}
+                            <tr>
+                                <td>
+                                    <a href="{{ config.prefix.get_absolute_url }}">{{ config.prefix }}</a>
+                                    {% if config.prefix.description %}
+                                    <br><small class="text-muted">{{ config.prefix.description }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ config.server.get_absolute_url }}">{{ config.server.name }}</a>
+                                </td>
+                                <td>{{ config.valid_lifetime }}s</td>
+                                <td>{{ config.max_lifetime }}s</td>
+                                <td>
+                                    <a href="{{ config.get_absolute_url }}" class="btn btn-sm btn-primary">
+                                        <i class="mdi mdi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="mdi mdi-information-outline"></i>
+                    This client class is not assigned to any subnet's evaluate-additional-classes.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

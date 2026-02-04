@@ -1,5 +1,7 @@
 # NetBox DHCP-KEA Plugin
 
+> This project was developed using AI-assisted coding tools. It is undergoing review for accuracy, stability, security, and performance. If you encounter any problems, please feel free to open an issue or contribute a pull request!
+
 A NetBox plugin for managing ISC KEA DHCP server configurations. This plugin extends NetBox with comprehensive DHCP infrastructure management, including server configuration, option definitions, client classification, High Availability relationships, and DHCP relay information for network devices.
 
 * Free software: GPL-3.0-only
