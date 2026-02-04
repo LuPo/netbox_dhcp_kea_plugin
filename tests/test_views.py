@@ -204,7 +204,7 @@ class TestPrefixDHCPConfigReservationsView:
         # OOB IP should have interface name appended to hostname
         assert "mgmt0" in kea_res["hostname"] or kea_res["hostname"] == "test-device-oob_mgmt0"
 
-    def test_reservations_excludes_non_primary_non_oob(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_excludes_non_primary_non_oob(self, client, prefix_dhcp_config_factory, admin_user):
         """Test that IPs not marked as primary or OOB are excluded."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
@@ -233,8 +233,9 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create IP in the prefix and assign to interface, but NOT as primary or OOB
-        ip = IPAddress.objects.create(
-            address=netaddr.IPNetwork("192.168.80.50/24"),
+        # Note: IP is created but intentionally not set as primary_ip4 or oob_ip
+        IPAddress.objects.create(
+            address=netaddr.IPNetwork("192.168.50.50/24"),
             assigned_object=interface,
         )
 

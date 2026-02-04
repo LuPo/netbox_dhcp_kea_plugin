@@ -303,6 +303,7 @@ class Command(BaseCommand):
         self.stdout.write(f"\nCreating {count} VendorOptionSpace objects...")
 
         vendor_data = [
+            {"name": "hp-printers", "enterprise_id": 11, "description": "HP Printer options (Option 43 and VIVSO)"},
             {"name": "cisco-ucm", "enterprise_id": 9, "description": "Cisco Unified Communications Manager"},
             {"name": "microsoft-uc", "enterprise_id": 311, "description": "Microsoft Unified Communications"},
             {"name": "fortinet-fortigate", "enterprise_id": 12356, "description": "Fortinet FortiGate options"},
@@ -522,6 +523,38 @@ class Command(BaseCommand):
                     "description": "SNMP trap destination",
                 },
             ],
+            "hp-printers": [
+                {
+                    "name": "printer-name",
+                    "code": 1,
+                    "option_type": "string",
+                    "description": "Printer device name",
+                },
+                {
+                    "name": "print-server",
+                    "code": 2,
+                    "option_type": "ipv4-address",
+                    "description": "Print server IP address",
+                },
+                {
+                    "name": "config-url",
+                    "code": 3,
+                    "option_type": "string",
+                    "description": "Configuration URL for printer",
+                },
+                {
+                    "name": "firmware-url",
+                    "code": 4,
+                    "option_type": "string",
+                    "description": "Firmware update URL",
+                },
+                {
+                    "name": "snmp-community",
+                    "code": 5,
+                    "option_type": "string",
+                    "description": "SNMP community string",
+                },
+            ],
         }
 
         created_definitions = []
@@ -647,6 +680,13 @@ class Command(BaseCommand):
                 "manager-ip": "10.0.0.50",
                 "snmp-server": "10.0.0.51",
             },
+            "hp-printers": {
+                "printer-name": "HP-LaserJet-Office",
+                "print-server": "192.168.100.10",
+                "config-url": "http://printserver.example.com/config",
+                "firmware-url": "http://printserver.example.com/firmware",
+                "snmp-community": "public",
+            },
         }
 
         created_option_data = []
@@ -698,6 +738,29 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"  Failed to create {distinctive_name}: {e}"))
 
+            # For hp-printers, also create VIVSO variant
+            if space.name == "hp-printers":
+                distinctive_name_vivso = f"demo-{space.name}-{definition.name}-vivso"
+                if not dry_run:
+                    try:
+                        option_data_vivso, created = OptionData.objects.get_or_create(
+                            distinctive_name=distinctive_name_vivso,
+                            defaults={
+                                "definition": definition,
+                                "vendor_option_space": space,
+                                "delivery_type": "vivso",
+                                "data": data,
+                                "description": f"{definition.description} (VIVSO)",
+                            },
+                        )
+                        if created:
+                            self.tag_object(option_data_vivso, demo_tag)
+                        created_option_data.append(option_data_vivso)
+                        status = "Created" if created else "Already exists"
+                        self.stdout.write(f"  {status}: {distinctive_name_vivso} = {data} (VIVSO)")
+                    except Exception as e:
+                        self.stdout.write(self.style.WARNING(f"  Failed to create {distinctive_name_vivso}: {e}"))
+
         # Create standard (builtin) option data
         self.stdout.write("\n  Creating standard DHCP option data...")
         for std_opt in standard_option_values:
@@ -745,6 +808,24 @@ class Command(BaseCommand):
         # Map client classes to their corresponding vendor option spaces
         # Each class gets its vendor-specific options plus some standard options
         class_templates = [
+            {
+                "name": "HP-Printers-Option43",
+                "test_expression": "substring(option[60].text, 0, 2) == 'HP'",
+                "description": "HP printers using Option 43 (vendor-encapsulated-options)",
+                "vendor_space": "hp-printers",
+                "delivery_type": "option43",
+                "standard_options": ["demo-log-servers", "demo-ntp-servers"],
+                "only_in_additional_list": False,
+            },
+            {
+                "name": "HP-Printers-VIVSO",
+                "test_expression": "substring(option[60].text, 0, 2) == 'HP'",
+                "description": "HP printers using Option 125 VIVSO (Vendor-Identifying Vendor-Specific Options)",
+                "vendor_space": "hp-printers",
+                "delivery_type": "vivso",
+                "standard_options": ["demo-domain-name"],
+                "only_in_additional_list": True,
+            },
             {
                 "name": "Cisco-UC-Phones",
                 "test_expression": "option[60].text == 'Cisco UC Phone'",
@@ -823,6 +904,7 @@ class Command(BaseCommand):
                         "next_server": template.get("next_server"),
                         "server_hostname": template.get("server_hostname", ""),
                         "boot_file_name": template.get("boot_file_name", ""),
+                        "only_in_additional_list": template.get("only_in_additional_list", False),
                     },
                 )
 
@@ -834,11 +916,14 @@ class Command(BaseCommand):
 
                     # Add vendor-specific options (all options from that vendor space)
                     vendor_space_name = template.get("vendor_space")
+                    delivery_type = template.get("delivery_type")
                     if vendor_space_name:
                         vendor_options = [
                             opt
                             for opt in option_data_list
-                            if opt.vendor_option_space and opt.vendor_option_space.name == vendor_space_name
+                            if opt.vendor_option_space
+                            and opt.vendor_option_space.name == vendor_space_name
+                            and (delivery_type is None or opt.delivery_type == delivery_type)
                         ]
                         options_to_add.extend(vendor_options)
 
