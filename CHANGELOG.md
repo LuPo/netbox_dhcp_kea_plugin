@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.3 (2026-02-28)
+
+### Fixed
+- Client Class server assignment now correctly notifies users when non-primary HA servers are redirected to primary
+- Option data and client classes fields are now hidden when editing non-primary HA servers to prevent confusion
+
+## 0.2.2 (2026-02-04)
+
+### Added
+- **Client Class Improvements**
+  - Added `only_in_additional_list` field to align with KEA 3.0 behavior
+  - Support for `evaluate-additional-classes` subnet-level client class evaluation
+  - Made `test_expression` optional to support unconditional client classes
+  - Removed deprecated `local_definitions` field
+  - UI filtering to show only appropriate client classes in subnet configuration
+  - Warning indicators for unused `only_in_additional_list` classes on server detail pages
+  - Info indicators for unconditional (empty test) client classes
+
+## 0.2.1 (2026-01-30)
+
+### Added
+- **Implement Netbox management command to populate plugin with demo data**
+    - Command: `python manage.py generate_kea_demo_data`
+    - Accepts optional arguments `--clear`, `--force`, `--purge-demo-data`
+    - Enable configuration of number of DHCP servers, prefixes, option data, and client classes to generate via plugin settings
+    - Creates sample DHCP servers, HA relationships, prefixes, option data, and client classes for testing and demonstration purposes
+
 ## 0.2.0 (2026-01-27)
 
 ### Added
