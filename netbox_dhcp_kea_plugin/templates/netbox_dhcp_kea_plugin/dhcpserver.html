@@ -115,6 +115,20 @@
         </div>
     </div>
     <div class="col col-md-6">
+        {% if unused_only_in_additional_list_classes %}
+        <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-alert text-warning"></i> Unused Client Classes
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-warning mb-0">
+                    There are client classes with "Only in additional list" enabled but are not used in any subnet's evaluate-additional-classes.
+                    These classes will be defined in the KEA configuration but never evaluated.
+                    Consider assigning them to subnets via Prefix DHCP Config or removing the "Only in additional list" flag.
+                </div>
+            </div>
+        </div>
+        {% endif %}
         {% if not object.is_ha_primary and object.ha_relationship %}
         <div class="card">
             <h5 class="card-header">HA Standby Information</h5>
@@ -154,7 +168,7 @@
             </div>
         </div>
         <div class="card mt-3">
-            <h5 class="card-header">Client Classes</h5>
+            <h5 class="card-header">Global Client Classes</h5>
             <div class="card-body">
                 {% if object.client_classes.all %}
                 <table class="table table-hover">
@@ -162,13 +176,26 @@
                         <tr>
                             <th>Name</th>
                             <th>Test Expression</th>
+                            <th>Only in Additional List</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for cc in object.client_classes.all %}
                         <tr>
-                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td>
+                                <a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a>
+                                {% if cc.only_in_additional_list and cc in unused_only_in_additional_list_classes %}
+                                <i class="mdi mdi-alert text-warning" title="Not used in any subnet's evaluate-additional-classes"></i>
+                                {% endif %}
+                            </td>
                             <td><code>{{ cc.test_expression|truncatechars:50 }}</code></td>
+                            <td>
+                                {% if cc.only_in_additional_list %}
+                                <i class="mdi mdi-check-bold text-success"></i>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

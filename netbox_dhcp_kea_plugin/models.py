@@ -211,6 +211,36 @@ class DHCPServer(NetBoxModel):
             return primary_server
         return None
 
+    def get_unused_only_in_additional_list_classes(self):
+        """Get client classes with only_in_additional_list=True that are not used in any subnet.
+
+        For HA standby/secondary servers, this always returns an empty list since they inherit
+        prefix configs from the primary server.
+
+        Returns:
+            list: List of ClientClass instances that have only_in_additional_list=True
+                  but are not referenced in any subnet's evaluate-additional-classes.
+        """
+        # Skip validation for non-primary HA servers - they inherit configs from primary
+        if not self.is_ha_primary():
+            return []
+
+        # Get all classes with only_in_additional_list=True assigned to this server
+        only_in_list_classes = self.client_classes.filter(only_in_additional_list=True)
+
+        if not only_in_list_classes.exists():
+            return []
+
+        # Get all classes referenced in subnets (use effective prefix configs for HA)
+        used_class_ids = set()
+        for prefix_config in self.get_effective_prefix_configs():
+            for cc in prefix_config.client_classes.all():
+                used_class_ids.add(cc.id)
+
+        # Find classes that are not used
+        unused_classes = [cc for cc in only_in_list_classes if cc.id not in used_class_ids]
+        return unused_classes
+
     def is_ha_primary(self):
         """Check if this server is the primary in its HA relationship.
 
@@ -365,14 +395,13 @@ class DHCPServer(NetBoxModel):
             dhcp4["option-def"] = option_defs
 
         # Collect all client-classes from prefix configs and server-level (using effective)
-        # Exclude classes with only_in_additional_list=True from prefix configs (they only go in subnet's evaluate-additional-classes)
+        # All classes are included in global client-classes array
+        # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
         all_client_classes = set()
         for prefix_config in effective_prefix_configs:
             for cc in prefix_config.client_classes.all():
-                if not cc.only_in_additional_list:
-                    all_client_classes.add(cc)
+                all_client_classes.add(cc)
         # Add client classes directly linked to this server (using effective)
-        # These should never have only_in_additional_list=True (validated in form/model)
         for cc in effective_client_classes:
             all_client_classes.add(cc)
 
@@ -801,7 +830,7 @@ class ClientClass(NetBoxModel):
     )
     only_in_additional_list = models.BooleanField(
         default=False,
-        help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes. It won't appear in the server's global client-classes.",
+        help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes, not for every packet. The class is still defined in the server's global client-classes, but KEA won't auto-evaluate it.",
     )
     # Additional KEA client-class fields
     next_server = models.GenericIPAddressField(

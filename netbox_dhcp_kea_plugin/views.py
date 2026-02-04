@@ -174,11 +174,16 @@ class DHCPServerView(generic.ObjectView):
         # Get configuration summary counts
         kea_config = instance.to_kea_dict()
         dhcp4 = kea_config.get("Dhcp4", {})
+
+        # Check for unused only_in_additional_list classes
+        unused_classes = instance.get_unused_only_in_additional_list_classes()
+
         return {
             "subnet_count": len(dhcp4.get("subnet4", [])),
             "client_class_count": len(dhcp4.get("client-classes", [])),
             "global_option_count": len(dhcp4.get("option-data", [])),
             "option_def_count": len(dhcp4.get("option-def", [])),
+            "unused_only_in_additional_list_classes": unused_classes,
         }
 
 

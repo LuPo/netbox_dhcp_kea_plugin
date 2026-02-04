@@ -296,8 +296,8 @@ class TestDHCPServer:
         global_def = next((d for d in global_option_defs if d["name"] == "test-option"), None)
         assert global_def is not None, "Global definition should appear in global option-def"
 
-    def test_to_kea_dict_excludes_only_in_additional_list_classes_from_prefix(self, dhcp_server, prefix_factory, db):
-        """Test DHCPServer.to_kea_dict() excludes classes with only_in_additional_list=True from global client-classes when assigned via prefix configs."""
+    def test_to_kea_dict_includes_only_in_additional_list_classes(self, dhcp_server, prefix_factory, db):
+        """Test DHCPServer.to_kea_dict() includes all classes in global client-classes, with only-in-additional-list flag set appropriately."""
         from netbox_dhcp_kea_plugin.models import ClientClass, PrefixDHCPConfig
 
         prefix = prefix_factory()
@@ -306,7 +306,7 @@ class TestDHCPServer:
         scoped_class = ClientClass.objects.create(
             name="ScopedClass",
             test_expression="option[60].hex == 'scoped'",
-            description="Should not appear in global client-classes",
+            description="Should appear in global client-classes with only-in-additional-list flag",
             only_in_additional_list=True,
         )
 
@@ -314,7 +314,7 @@ class TestDHCPServer:
         normal_class = ClientClass.objects.create(
             name="NormalClass",
             test_expression="option[60].hex == 'normal'",
-            description="Should appear in global client-classes",
+            description="Should appear in global client-classes without flag",
             only_in_additional_list=False,
         )
 
@@ -333,13 +333,25 @@ class TestDHCPServer:
         client_classes = dhcp4.get("client-classes", [])
         class_names = [cc["name"] for cc in client_classes]
 
-        # Normal class should be included in global client-classes
+        # Both classes should be included in global client-classes
         assert "NormalClass" in class_names, "Normal class should appear in global client-classes"
+        assert "ScopedClass" in class_names, "Scoped class should also appear in global client-classes"
 
-        # Scoped class should NOT be included in global client-classes
-        assert "ScopedClass" not in class_names, "Scoped class should NOT appear in global client-classes"
+        # Check that scoped class has the only-in-additional-list flag
+        scoped_class_config = next((cc for cc in client_classes if cc["name"] == "ScopedClass"), None)
+        assert scoped_class_config is not None
+        assert scoped_class_config.get("only-in-additional-list") is True, (
+            "Scoped class should have only-in-additional-list=true"
+        )
 
-        # But scoped class should appear in subnet's evaluate-additional-classes
+        # Check that normal class does NOT have the flag
+        normal_class_config = next((cc for cc in client_classes if cc["name"] == "NormalClass"), None)
+        assert normal_class_config is not None
+        assert "only-in-additional-list" not in normal_class_config, (
+            "Normal class should not have only-in-additional-list flag"
+        )
+
+        # Both classes should appear in subnet's evaluate-additional-classes
         subnets = dhcp4.get("subnet4", [])
         assert len(subnets) == 1
         eval_classes = subnets[0].get("evaluate-additional-classes", [])
