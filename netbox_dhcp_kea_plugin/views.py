@@ -178,12 +178,16 @@ class DHCPServerView(generic.ObjectView):
         # Check for unused only_in_additional_list classes
         unused_classes = instance.get_unused_only_in_additional_list_classes()
 
+        # Check for unconditional classes (empty test) that are globally evaluated
+        unconditional_global_classes = instance.client_classes.filter(test_expression="", only_in_additional_list=False)
+
         return {
             "subnet_count": len(dhcp4.get("subnet4", [])),
             "client_class_count": len(dhcp4.get("client-classes", [])),
             "global_option_count": len(dhcp4.get("option-data", [])),
             "option_def_count": len(dhcp4.get("option-def", [])),
             "unused_only_in_additional_list_classes": unused_classes,
+            "unconditional_global_classes": unconditional_global_classes,
         }
 
 
@@ -197,6 +201,56 @@ class DHCPServerListView(generic.ObjectListView):
 class DHCPServerEditView(generic.ObjectEditView):
     queryset = models.DHCPServer.objects.all()
     form = forms.DHCPServerForm
+
+    def get(self, request, *args, **kwargs):
+        """Show info message when editing non-primary HA server."""
+        from django.contrib import messages
+
+        response = super().get(request, *args, **kwargs)
+
+        # If editing an existing non-primary HA server, inform the user
+        if kwargs.get("pk"):
+            obj = self.get_object()
+            if obj.ha_relationship and not obj.is_ha_primary():
+                primary_server = obj.ha_relationship.servers.filter(ha_role="primary").first()
+                if primary_server:
+                    messages.info(
+                        request,
+                        f"Note: '{obj.name}' is a {obj.get_ha_role_display()} server in HA. "
+                        f"Option data and client classes are managed on the primary server '{primary_server.name}' "
+                        f"and automatically shared with all HA peers.",
+                    )
+
+        return response
+
+    def post(self, request, *args, **kwargs):
+        """Handle form submission with HA redirect notification."""
+        from django.contrib import messages
+
+        response = super().post(request, *args, **kwargs)
+
+        # Check if the form was valid and if client classes were redirected
+        form = getattr(self, "_form", None)
+        if form is None:
+            # Try to get the form from the response context
+            obj = self.get_object() if kwargs.get("pk") else None
+            form = self.form(request.POST, instance=obj)
+            if form.is_valid():
+                form = form
+
+        if hasattr(form, "_redirected_to_primary") and form._redirected_to_primary:
+            original_name = getattr(form, "_original_server_name", "the selected server")
+            if form.instance and form.instance.ha_relationship:
+                primary_server = form.instance.ha_relationship.servers.filter(ha_role="primary").first()
+                if primary_server:
+                    messages.info(
+                        request,
+                        f"Note: '{original_name}' is not the primary in its HA relationship. "
+                        f"Client classes have been assigned to the primary server '{primary_server.name}' instead. "
+                        f"All HA peers will automatically use these client classes.",
+                    )
+
+        return response
 
 
 class DHCPServerDeleteView(generic.ObjectDeleteView):
@@ -297,34 +351,68 @@ class ClientClassEditView(generic.ObjectEditView):
     form = forms.ClientClassForm
 
     def post(self, request, *args, **kwargs):
-        """Override to display warning message after save."""
+        """Handle form submission with HA redirect notification."""
         from django.contrib import messages
 
-        # Get the object if editing
-        obj = None
+        # Store original state before save (if editing existing)
+        was_enabled = False
         if kwargs.get("pk"):
-            obj = self.queryset.get(pk=kwargs["pk"])
-            was_enabled = obj.only_in_additional_list if obj else False
-        else:
-            was_enabled = False
+            try:
+                original = models.ClientClass.objects.get(pk=kwargs["pk"])
+                was_enabled = original.only_in_additional_list
+            except models.ClientClass.DoesNotExist:
+                pass
 
-        # Call parent post (which handles the form processing and save)
+        # Call parent to handle the form submission
         response = super().post(request, *args, **kwargs)
 
-        # After save, check if we need to show warning
-        # Get the saved object
-        if kwargs.get("pk"):
-            saved_obj = self.queryset.get(pk=kwargs["pk"])
-            is_now_enabled = saved_obj.only_in_additional_list
+        # Try to get the form that was just processed
+        form = getattr(self, "_form", None)
 
-            # Show warning if changing from False to True, or if already True, and no prefixes
+        if form is None:
+            # Try to reconstruct the form to check flags
+            obj = self.get_object() if kwargs.get("pk") else None
+            form = self.form(request.POST, instance=obj)
+            if form.is_valid():
+                # Form was valid, check for redirect flags
+                pass
+
+        # Check if servers were redirected to primary - check both form AND request object
+        redirected_to_primary = False
+        redirected_names = []
+        primary_names = []
+
+        # Try to get flags from form first
+        if form and hasattr(form, "_redirected_to_primary") and form._redirected_to_primary:
+            redirected_to_primary = True
+            redirected_names = getattr(form, "_redirected_server_names", [])
+            primary_names = getattr(form, "_primary_server_names", [])
+
+        # If not on form, try request object (more reliable)
+        if not redirected_to_primary and hasattr(request, "_clientclass_redirected_to_primary"):
+            redirected_to_primary = request._clientclass_redirected_to_primary
+            redirected_names = getattr(request, "_clientclass_redirected_server_names", [])
+            primary_names = getattr(request, "_clientclass_primary_server_names", [])
+
+        if redirected_to_primary and redirected_names and primary_names:
+            redirected_list = ", ".join([f"'{name}'" for name in redirected_names])
+            primary_list = ", ".join([f"'{name}'" for name in primary_names])
+            messages.info(
+                request,
+                f"Note: {redirected_list} {'is' if len(redirected_names) == 1 else 'are'} not primary in HA. "
+                f"This client class has been assigned to the primary server(s) {primary_list} instead. "
+                f"All HA peers will automatically use this client class.",
+            )
+
+        # Check if we need to show warning for only_in_additional_list (only if form saved successfully)
+        if form and hasattr(form, "instance") and form.instance.pk:
+            is_now_enabled = form.instance.only_in_additional_list
             if not was_enabled and is_now_enabled:
-                # Just enabled - show warning if no prefixes
-                prefix_count = saved_obj.prefix_configs.count()
+                prefix_count = form.instance.prefix_configs.count()
                 if prefix_count == 0:
                     messages.warning(
                         request,
-                        f"Warning: '{saved_obj.name}' now has 'Only in additional list' enabled but is not assigned to any "
+                        f"Warning: '{form.instance.name}' now has 'Only in additional list' enabled but is not assigned to any "
                         f"prefixes. The class will be defined in the KEA configuration but never evaluated. "
                         f"No clients will match this class until you assign it to subnets via Prefix DHCP Config.",
                     )

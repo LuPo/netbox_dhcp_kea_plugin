@@ -129,6 +129,19 @@
             </div>
         </div>
         {% endif %}
+        {% if unconditional_global_classes %}
+        <div class="card mt-3">
+            <h5 class="card-header">
+                <i class="mdi mdi-information text-info"></i> Unconditional Global Classes
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    The following client classes have no test expression and will match ALL clients globally.
+                    If this is not intended, consider adding a test expression or enabling "Only in additional list" and assigning to specific subnets.
+                </div>
+            </div>
+        </div>
+        {% endif %}
         {% if not object.is_ha_primary and object.ha_relationship %}
         <div class="card">
             <h5 class="card-header">HA Standby Information</h5>
@@ -187,8 +200,11 @@
                                 {% if cc.only_in_additional_list and cc in unused_only_in_additional_list_classes %}
                                 <i class="mdi mdi-alert text-warning" title="Not used in any subnet's evaluate-additional-classes"></i>
                                 {% endif %}
+                                {% if cc in unconditional_global_classes %}
+                                <i class="mdi mdi-information text-info" title="Unconditional class (no test expression) - will match ALL clients globally"></i>
+                                {% endif %}
                             </td>
-                            <td><code>{{ cc.test_expression|truncatechars:50 }}</code></td>
+                            <td>{{ cc.test_expression|truncatechars:50 }}</td>
                             <td>
                                 {% if cc.only_in_additional_list %}
                                 <i class="mdi mdi-check-bold text-success"></i>
