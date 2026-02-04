@@ -178,12 +178,16 @@ class DHCPServerView(generic.ObjectView):
         # Check for unused only_in_additional_list classes
         unused_classes = instance.get_unused_only_in_additional_list_classes()
 
+        # Check for unconditional classes (empty test) that are globally evaluated
+        unconditional_global_classes = instance.client_classes.filter(test_expression="", only_in_additional_list=False)
+
         return {
             "subnet_count": len(dhcp4.get("subnet4", [])),
             "client_class_count": len(dhcp4.get("client-classes", [])),
             "global_option_count": len(dhcp4.get("option-data", [])),
             "option_def_count": len(dhcp4.get("option-def", [])),
             "unused_only_in_additional_list_classes": unused_classes,
+            "unconditional_global_classes": unconditional_global_classes,
         }
 
 
