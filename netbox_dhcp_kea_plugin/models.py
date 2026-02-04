@@ -365,11 +365,14 @@ class DHCPServer(NetBoxModel):
             dhcp4["option-def"] = option_defs
 
         # Collect all client-classes from prefix configs and server-level (using effective)
+        # Exclude classes with only_in_additional_list=True from prefix configs (they only go in subnet's evaluate-additional-classes)
         all_client_classes = set()
         for prefix_config in effective_prefix_configs:
             for cc in prefix_config.client_classes.all():
-                all_client_classes.add(cc)
+                if not cc.only_in_additional_list:
+                    all_client_classes.add(cc)
         # Add client classes directly linked to this server (using effective)
+        # These should never have only_in_additional_list=True (validated in form/model)
         for cc in effective_client_classes:
             all_client_classes.add(cc)
 
@@ -776,7 +779,8 @@ class ClientClass(NetBoxModel):
 
     name = models.CharField(max_length=100, unique=True)
     test_expression = models.TextField(
-        help_text="KEA test expression for client classification (e.g., \"option[60].text == 'MS-UC-Client'\")"
+        blank=True,
+        help_text="KEA test expression for client classification (e.g., \"option[60].text == 'MS-UC-Client'\"). Leave empty for unconditional classes that always match when evaluated.",
     )
     description = models.CharField(max_length=200, blank=True)
     servers = models.ManyToManyField(
@@ -794,6 +798,10 @@ class ClientClass(NetBoxModel):
     local_definitions = models.BooleanField(
         default=False,
         help_text="Include option definitions locally in this class config (otherwise they go to global option-def)",
+    )
+    only_in_additional_list = models.BooleanField(
+        default=False,
+        help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes. It won't appear in the server's global client-classes.",
     )
     # Additional KEA client-class fields
     next_server = models.GenericIPAddressField(
@@ -967,8 +975,15 @@ class ClientClass(NetBoxModel):
         """
         result = {
             "name": self.name,
-            "test": self.test_expression,
         }
+
+        # Only include test if there's an expression (empty = unconditional class)
+        if self.test_expression:
+            result["test"] = self.test_expression
+
+        # Add only-in-additional-list flag if set
+        if self.only_in_additional_list:
+            result["only-in-additional-list"] = True
 
         # Add option-def if any
         option_defs = self.get_kea_option_defs()
@@ -1261,7 +1276,7 @@ class PrefixDHCPConfig(NetBoxModel):
         # Add client-classes if any
         client_class_names = [cc.name for cc in self.client_classes.all()]
         if client_class_names:
-            result["require-client-classes"] = client_class_names
+            result["evaluate-additional-classes"] = client_class_names
 
         # Add reservations from assigned IP addresses
         reservations = self.get_kea_reservations()

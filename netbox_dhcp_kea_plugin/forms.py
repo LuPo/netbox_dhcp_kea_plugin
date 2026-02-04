@@ -249,6 +249,8 @@ class ClientClassImportForm(NetBoxModelImportForm):
             "name",
             "test_expression",
             "description",
+            "local_definitions",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
@@ -512,6 +514,7 @@ class ClientClassForm(NetBoxModelForm):
             "servers",
             "option_data",
             "local_definitions",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
@@ -523,6 +526,23 @@ class ClientClassForm(NetBoxModelForm):
         option_data = self.cleaned_data.get("option_data")
         validate_unique_option_data_space_code(option_data)
         return option_data
+
+    def clean(self):
+        """Validate that only_in_additional_list classes cannot be assigned to servers."""
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            return cleaned_data
+
+        only_in_additional_list = cleaned_data.get("only_in_additional_list")
+        servers = cleaned_data.get("servers")
+
+        if only_in_additional_list and servers:
+            raise forms.ValidationError(
+                "Classes with 'Only in additional list' enabled cannot be assigned directly to servers. "
+                "They should only be assigned to subnets via Prefix DHCP Config."
+            )
+
+        return cleaned_data
 
 
 class PrefixDHCPConfigForm(NetBoxModelForm):

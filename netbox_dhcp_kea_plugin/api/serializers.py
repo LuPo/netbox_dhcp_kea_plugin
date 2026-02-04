@@ -174,6 +174,8 @@ class ClientClassSerializer(NetBoxModelSerializer):
             "test_expression",
             "description",
             "option_data",
+            "local_definitions",
+            "only_in_additional_list",
             "next_server",
             "server_hostname",
             "boot_file_name",
