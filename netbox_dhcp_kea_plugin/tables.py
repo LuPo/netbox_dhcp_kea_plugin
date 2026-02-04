@@ -290,8 +290,7 @@ class ClientClassTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="name")
     id = tables.Column(verbose_name="id")
     test_expression = tables.Column(verbose_name="test_expression")
-
-    only_in_additional_list = tables.BooleanColumn(verbose_name="Only in Additional List")
+    only_in_additional_list = BooleanColumn(verbose_name="Only in Additional List")
     next_server = tables.Column(verbose_name="next_server")
     server_hostname = tables.Column(verbose_name="server_hostname")
     boot_file_name = tables.Column(verbose_name="boot_file_name")
