@@ -18,6 +18,10 @@
                         <td><code>{{ object.test_expression }}</code></td>
                     </tr>
                     <tr>
+                        <th scope="row">Only in Additional List</th>
+                        <td>{% if object.only_in_additional_list %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    <tr>
                         <th scope="row">Description</th>
                         <td>{{ object.description|placeholder }}</td>
                     </tr>

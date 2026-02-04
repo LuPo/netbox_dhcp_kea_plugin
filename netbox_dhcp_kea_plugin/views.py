@@ -296,6 +296,41 @@ class ClientClassEditView(generic.ObjectEditView):
     queryset = models.ClientClass.objects.all()
     form = forms.ClientClassForm
 
+    def post(self, request, *args, **kwargs):
+        """Override to display warning message after save."""
+        from django.contrib import messages
+
+        # Get the object if editing
+        obj = None
+        if kwargs.get("pk"):
+            obj = self.queryset.get(pk=kwargs["pk"])
+            was_enabled = obj.only_in_additional_list if obj else False
+        else:
+            was_enabled = False
+
+        # Call parent post (which handles the form processing and save)
+        response = super().post(request, *args, **kwargs)
+
+        # After save, check if we need to show warning
+        # Get the saved object
+        if kwargs.get("pk"):
+            saved_obj = self.queryset.get(pk=kwargs["pk"])
+            is_now_enabled = saved_obj.only_in_additional_list
+
+            # Show warning if changing from False to True, or if already True, and no prefixes
+            if not was_enabled and is_now_enabled:
+                # Just enabled - show warning if no prefixes
+                prefix_count = saved_obj.prefix_configs.count()
+                if prefix_count == 0:
+                    messages.warning(
+                        request,
+                        f"Warning: '{saved_obj.name}' now has 'Only in additional list' enabled but is not assigned to any "
+                        f"prefixes. The class will be defined in the KEA configuration but never evaluated. "
+                        f"No clients will match this class until you assign it to subnets via Prefix DHCP Config.",
+                    )
+
+        return response
+
 
 class ClientClassDeleteView(generic.ObjectDeleteView):
     queryset = models.ClientClass.objects.all()
@@ -329,6 +364,32 @@ class ClientClassServersView(generic.ObjectView):
             self.template_name,
             {
                 "object": client_class,
+                "tab": self.tab,
+            },
+        )
+
+
+@register_model_view(models.ClientClass, name="prefixes", path="prefixes")
+class ClientClassPrefixesView(generic.ObjectView):
+    queryset = models.ClientClass.objects.prefetch_related("prefix_configs__prefix", "prefix_configs__server")
+    template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
+    tab = ViewTab(
+        label="Assigned Prefixes",
+        badge=lambda obj: "⚠️" if obj.prefix_configs.count() == 0 else obj.prefix_configs.count(),
+        visible=lambda obj: obj.only_in_additional_list,
+        permission="netbox_dhcp_kea_plugin.view_clientclass",
+    )
+
+    def get(self, request, pk):
+        client_class = self.get_object(pk=pk)
+        prefix_configs = client_class.prefix_configs.select_related("prefix", "server").all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": client_class,
+                "prefix_configs": prefix_configs,
                 "tab": self.tab,
             },
         )
