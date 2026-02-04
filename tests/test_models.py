@@ -140,6 +140,7 @@ class TestClientClassKeaOutput:
         opt.vendor_option_space = MagicMock()
         opt.vendor_option_space.name = "MSUCClient"
         opt.always_send = False
+        opt.csv_format = False
 
         client_class = ClientClass(name="test", test_expression="test")
 
@@ -150,7 +151,7 @@ class TestClientClassKeaOutput:
 
         assert len(result) == 1
         assert result[0]["data"] == "68:74:74:70:73"
-        assert not result[0]["csv-format"]
+        assert result[0]["csv-format"] == False
 
     def test_get_kea_option_data_ascii_format(self):
         """Test get_kea_option_data returns ascii format with csv-format=true."""
@@ -165,6 +166,7 @@ class TestClientClassKeaOutput:
         opt.vendor_option_space = MagicMock()
         opt.vendor_option_space.name = "MSUCClient"
         opt.always_send = False
+        opt.csv_format = True
 
         client_class = ClientClass(name="test", test_expression="test")
 
@@ -175,7 +177,7 @@ class TestClientClassKeaOutput:
 
         assert len(result) == 1
         assert result[0]["data"] == "https"
-        assert result[0]["csv-format"]
+        assert "csv-format" not in result[0]  # csv-format=true is KEA default, not included
 
     def test_get_kea_option_data_prepends_vendor_encapsulated_options(self):
         """Test get_kea_option_data prepends vendor-encapsulated-options when has option43."""
