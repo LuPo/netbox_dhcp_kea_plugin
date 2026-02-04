@@ -360,29 +360,6 @@ class DHCPServer(NetBoxModel):
         if global_option_data:
             dhcp4["option-data"] = global_option_data
 
-        # Collect ALL option definitions needed (vendor + standard custom)
-        option_defs = []
-        seen_definitions = set()
-
-        # From vendor spaces
-        for vs in vendor_spaces:
-            for definition in vs.option_definitions.all():
-                if definition.pk not in seen_definitions:
-                    seen_definitions.add(definition.pk)
-                    option_defs.append(definition.to_kea_dict())
-
-        # From option data that uses custom (non-standard) definitions in dhcp4/dhcp6 space
-        for opt in all_option_data:
-            if opt.definition:
-                definition = opt.definition
-                # Include if it's a custom definition (not standard) and not already added
-                if not definition.is_standard and definition.pk not in seen_definitions:
-                    seen_definitions.add(definition.pk)
-                    option_defs.append(definition.to_kea_dict())
-
-        if option_defs:
-            dhcp4["option-def"] = option_defs
-
         # Collect all client-classes from prefix configs and server-level (using effective)
         # All classes are included in global client-classes array
         # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
@@ -393,6 +370,41 @@ class DHCPServer(NetBoxModel):
         # Add client classes directly linked to this server (using effective)
         for cc in effective_client_classes:
             all_client_classes.add(cc)
+
+        # Collect ALL option definitions needed (vendor + standard custom + client class definitions)
+        option_defs = []
+        seen_definitions = set()  # Track by (code, space) to avoid duplicates
+
+        # From vendor spaces
+        for vs in vendor_spaces:
+            for definition in vs.option_definitions.all():
+                def_key = (definition.code, definition.space_name)
+                if def_key not in seen_definitions:
+                    seen_definitions.add(def_key)
+                    option_defs.append(definition.to_kea_dict())
+
+        # From option data that uses custom (non-standard) definitions in dhcp4/dhcp6 space
+        for opt in all_option_data:
+            if opt.definition:
+                definition = opt.definition
+                # Include if it's a custom definition (not standard) and not already added
+                if not definition.is_standard:
+                    def_key = (definition.code, definition.space_name)
+                    if def_key not in seen_definitions:
+                        seen_definitions.add(def_key)
+                        option_defs.append(definition.to_kea_dict())
+
+        # From client classes - add their option definitions (Option 43 and VIVSO)
+        for cc in all_client_classes:
+            for opt_def_dict in cc.get_kea_option_defs():
+                # Track by (code, space) to avoid duplicates
+                def_key = (opt_def_dict.get("code"), opt_def_dict.get("space"))
+                if def_key not in seen_definitions:
+                    seen_definitions.add(def_key)
+                    option_defs.append(opt_def_dict)
+
+        if option_defs:
+            dhcp4["option-def"] = option_defs
 
         # Add client-classes
         if all_client_classes:
@@ -874,7 +886,8 @@ class ClientClass(NetBoxModel):
         Get option-def list for KEA configuration.
 
         Returns list of option definition dicts when:
-        - has_option43_data(): includes vendor-encapsulated-options definition
+        - has_option43_data(): includes vendor-encapsulated-options definition and custom option definitions in vendor space
+        - has_vivso_data(): includes custom option definitions in vendor-{enterprise_id} space
 
         Args:
             ascii_format: Not used here, but kept for consistency with get_kea_option_data
@@ -884,9 +897,10 @@ class ClientClass(NetBoxModel):
         """
         option_defs = []
 
-        # Always add vendor-encapsulated-options when we have option43 data
+        # Add vendor-encapsulated-options and custom definitions when we have option43 data
         if self.has_option43_data():
             for vendor_space in self.get_option43_vendor_spaces():
+                # Add vendor-encapsulated-options definition
                 option_defs.append(
                     {
                         "name": "vendor-encapsulated-options",
@@ -895,6 +909,44 @@ class ClientClass(NetBoxModel):
                         "encapsulate": vendor_space.name,
                     }
                 )
+
+                # Add custom option definitions in vendor space
+                option43_definitions = OptionDefinition.objects.filter(
+                    option_data_instances__client_classes=self,
+                    option_data_instances__delivery_type="option43",
+                    vendor_option_space=vendor_space,
+                ).distinct()
+
+                for opt_def in option43_definitions:
+                    option_defs.append(
+                        {
+                            "name": opt_def.name,
+                            "code": opt_def.code,
+                            "type": opt_def.option_type,
+                            "space": vendor_space.name,
+                        }
+                    )
+
+        # Add custom option definitions for VIVSO delivery type in vendor-{enterprise_id} space
+        if self.has_vivso_data():
+            for vendor_space in self.get_vivso_vendor_spaces():
+                if vendor_space.enterprise_id:
+                    # Get all option definitions used by VIVSO options in this vendor space
+                    vivso_definitions = OptionDefinition.objects.filter(
+                        option_data_instances__client_classes=self,
+                        option_data_instances__delivery_type="vivso",
+                        vendor_option_space=vendor_space,
+                    ).distinct()
+
+                    for opt_def in vivso_definitions:
+                        option_defs.append(
+                            {
+                                "name": opt_def.name,
+                                "code": opt_def.code,
+                                "type": opt_def.option_type,
+                                "space": f"vendor-{vendor_space.enterprise_id}",
+                            }
+                        )
 
         return option_defs
 
@@ -984,10 +1036,8 @@ class ClientClass(NetBoxModel):
         if self.only_in_additional_list:
             result["only-in-additional-list"] = True
 
-        # Add option-def if any
-        option_defs = self.get_kea_option_defs()
-        if option_defs:
-            result["option-def"] = option_defs
+        # Note: option-def is now added to global Dhcp4.option-def array by DHCPServer.to_kea_dict()
+        # This is required because KEA needs all option definitions in the global scope
 
         # Add option-data if any
         option_data = self.get_kea_option_data(ascii_format=ascii_format)
