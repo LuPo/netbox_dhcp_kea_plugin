@@ -471,6 +471,14 @@ class DHCPServerForm(NetBoxModelForm):
         if self.instance.pk:
             self.initial["client_classes"] = self.instance.client_classes.all()
 
+        # Hide option_data and client_classes fields if this is a non-primary HA server
+        if self.instance.pk and self.instance.ha_relationship and not self.instance.is_ha_primary():
+            # Remove these fields from the form as they should only be managed on the primary
+            if "option_data" in self.fields:
+                del self.fields["option_data"]
+            if "client_classes" in self.fields:
+                del self.fields["client_classes"]
+
     def save(self, *args, **kwargs):
         instance = super().save(*args, **kwargs)
         # Handle client_classes (reverse ManyToMany relation)
@@ -481,13 +489,28 @@ class DHCPServerForm(NetBoxModelForm):
             current_classes = set(instance.client_classes.all())
             selected_set = set(selected_classes)
 
+            # If this server is not primary in HA, redirect to primary
+            actual_server = instance
+            redirected = False
+            if instance.ha_relationship and not instance.is_ha_primary():
+                primary_server = instance.ha_relationship.servers.filter(ha_role="primary").first()
+                if primary_server:
+                    actual_server = primary_server
+                    redirected = True
+
             # Remove server from classes that were deselected
             for cc in current_classes - selected_set:
-                cc.servers.remove(instance)
+                cc.servers.remove(actual_server)
 
             # Add server to newly selected classes
-            for cc in selected_set - current_classes:
-                cc.servers.add(instance)
+            classes_added = selected_set - current_classes
+            for cc in classes_added:
+                cc.servers.add(actual_server)
+
+            # Set flag for messaging only if we redirected AND added classes
+            if redirected and classes_added:
+                self._redirected_to_primary = True
+                self._original_server_name = instance.name
 
         return instance
 
@@ -519,11 +542,69 @@ class ClientClassForm(NetBoxModelForm):
             "tags",
         )
 
+    def __init__(self, *args, **kwargs):
+        # Extract request if passed (NetBox pattern)
+        request = kwargs.pop("request", None)
+
+        super().__init__(*args, **kwargs)
+
+        # Store request for later use in clean methods
+        self.request = request
+
+        # Initialize redirect flags
+        self._redirected_to_primary = False
+        self._redirected_server_names = []
+        self._primary_server_names = []
+
     def clean_option_data(self):
         """Validate that no two option data entries have the same space and code."""
         option_data = self.cleaned_data.get("option_data")
         validate_unique_option_data_space_code(option_data)
         return option_data
+
+    def clean_servers(self):
+        """Handle HA redirect for servers - modify cleaned_data before save."""
+        selected_servers = self.cleaned_data.get("servers", [])
+
+        if not selected_servers:
+            return selected_servers
+
+        # Track redirects for messaging
+        redirected_servers = []
+        primary_servers = []
+
+        # Replace non-primary HA servers with their primaries
+        actual_servers = []
+        for server in selected_servers:
+            if server.ha_relationship and not server.is_ha_primary():
+                # Server is in HA but not primary - redirect to primary
+                primary_server = server.ha_relationship.servers.filter(ha_role="primary").first()
+                if primary_server:
+                    # Only add if not already in the list
+                    if primary_server not in actual_servers:
+                        actual_servers.append(primary_server)
+                    redirected_servers.append(server.name)
+                    if primary_server.name not in primary_servers:
+                        primary_servers.append(primary_server.name)
+            else:
+                # Server is primary or standalone - use as-is
+                if server not in actual_servers:
+                    actual_servers.append(server)
+
+        # Set flags for messaging if any redirects occurred
+        if redirected_servers:
+            self._redirected_to_primary = True
+            self._redirected_server_names = redirected_servers
+            self._primary_server_names = primary_servers
+
+            # ALSO store on request so view can access them reliably
+            if self.request:
+                self.request._clientclass_redirected_to_primary = True
+                self.request._clientclass_redirected_server_names = redirected_servers
+                self.request._clientclass_primary_server_names = primary_servers
+
+        # Return the modified server list
+        return actual_servers
 
 
 class PrefixDHCPConfigForm(NetBoxModelForm):
