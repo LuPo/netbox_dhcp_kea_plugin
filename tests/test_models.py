@@ -157,7 +157,7 @@ class TestClientClassKeaOutput:
 
         assert len(result) == 1
         assert result[0]["data"] == "68:74:74:70:73"
-        assert result[0]["csv-format"] == False
+        assert not result[0]["csv-format"]
 
     def test_get_kea_option_data_ascii_format(self):
         """Test get_kea_option_data returns ascii format with csv-format=true."""

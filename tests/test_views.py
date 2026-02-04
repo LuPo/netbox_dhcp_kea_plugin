@@ -268,7 +268,7 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create IP assigned to FHRP group
-        ip = IPAddress.objects.create(
+        IPAddress.objects.create(
             address=netaddr.IPNetwork("192.168.60.1/24"),
             assigned_object=fhrp_group,
         )

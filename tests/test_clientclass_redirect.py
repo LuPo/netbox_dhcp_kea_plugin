@@ -120,7 +120,7 @@ def test_scenario_1():
     assert actual[0].name == "primary-dhcp", f"Expected primary-dhcp, got {actual[0].name}"
     assert redirected == ["secondary-dhcp"], f"Expected redirect from secondary, got {redirected}"
     assert primaries == ["primary-dhcp"], f"Expected primary in list, got {primaries}"
-    assert flags == True, "Flags should be set"
+    assert flags, "Flags should be set"
 
     print("✓ PASS: Secondary correctly redirected to primary")
     return True
@@ -156,7 +156,7 @@ def test_scenario_2():
     assert actual[0].name == "primary-dhcp", f"Expected primary-dhcp, got {actual[0].name}"
     assert redirected == [], f"Expected no redirects, got {redirected}"
     assert primaries == [], f"Expected no primaries in redirect list, got {primaries}"
-    assert flags == False, "Flags should NOT be set"
+    assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Primary server used as-is, no redirect")
     return True
@@ -188,7 +188,7 @@ def test_scenario_3():
     assert actual[0].name == "standalone-dhcp", f"Expected standalone-dhcp, got {actual[0].name}"
     assert redirected == [], f"Expected no redirects, got {redirected}"
     assert primaries == [], f"Expected no primaries in redirect list, got {primaries}"
-    assert flags == False, "Flags should NOT be set"
+    assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Standalone server used as-is, no redirect")
     return True
@@ -228,7 +228,7 @@ def test_scenario_4():
     assert "secondary-dhcp" not in actual_names, "secondary-dhcp should be redirected"
     assert redirected == ["secondary-dhcp"], f"Expected redirect from secondary, got {redirected}"
     assert primaries == ["primary-dhcp"], f"Expected primary in list, got {primaries}"
-    assert flags == True, "Flags should be set (redirect occurred)"
+    assert flags, "Flags should be set (redirect occurred)"
 
     print("✓ PASS: Secondary redirected, primary and standalone kept")
     return True
@@ -264,7 +264,7 @@ def test_scenario_5():
     assert actual[0].name == "primary-dhcp", f"Expected primary-dhcp, got {actual[0].name}"
     assert redirected == ["secondary-dhcp"], f"Expected redirect from secondary, got {redirected}"
     assert primaries == ["primary-dhcp"], f"Expected primary in list, got {primaries}"
-    assert flags == True, "Flags should be set"
+    assert flags, "Flags should be set"
 
     print("✓ PASS: Duplicate primary prevented, secondary redirected")
     return True
@@ -292,7 +292,7 @@ def test_scenario_6():
     assert actual == [], f"Expected empty list, got {actual}"
     assert redirected == [], f"Expected no redirects, got {redirected}"
     assert primaries == [], f"Expected no primaries, got {primaries}"
-    assert flags == False, "Flags should NOT be set"
+    assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Empty list handled correctly")
     return True

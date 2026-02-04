@@ -583,7 +583,7 @@ class TestHARelationshipToKeaDict:
             ha_url="http://192.168.1.1:8000/",
         )
 
-        server2 = dhcp_server_factory(
+        dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="secondary",
             ha_url="http://192.168.1.2:8000/",
@@ -806,7 +806,7 @@ class TestHARelationshipHelpers:
         )
 
         # Create prefix configs on primary
-        for i in range(3):
+        for _i in range(3):
             prefix = prefix_factory()
             PrefixDHCPConfig.objects.create(
                 prefix=prefix,
