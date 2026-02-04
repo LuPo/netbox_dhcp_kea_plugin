@@ -129,7 +129,6 @@ class TestClientClass:
     def test_create_client_class(self, client_class):
         """Test creating a ClientClass."""
         assert client_class.name == "TestClass"
-        assert client_class.local_definitions is False
 
     def test_has_option43_data_false(self, client_class):
         """Test has_option43_data() returns False when no option43 data."""
@@ -180,21 +179,6 @@ class TestClientClass:
         veo_data = next((d for d in kea_dict["option-data"] if d.get("name") == "vendor-encapsulated-options"), None)
         assert veo_data is not None
         assert veo_data["code"] == 43
-
-    def test_to_kea_dict_local_definitions(self, client_class_local_defs, option_data):
-        """Test ClientClass.to_kea_dict() includes local definitions when local_definitions=True."""
-        client_class_local_defs.option_data.add(option_data)
-        kea_dict = client_class_local_defs.to_kea_dict()
-
-        # Should have option-def with both vendor-encapsulated-options AND the option definition
-        assert "option-def" in kea_dict
-        assert len(kea_dict["option-def"]) >= 2
-
-        # Check for the actual option definition
-        opt_def = next((d for d in kea_dict["option-def"] if d["name"] == "test-option"), None)
-        assert opt_def is not None
-        assert opt_def["code"] == 1
-        assert opt_def["type"] == "string"
 
     def test_to_kea_dict_empty_test_expression(self, db):
         """Test ClientClass.to_kea_dict() omits test field when test_expression is empty."""
@@ -262,39 +246,6 @@ class TestDHCPServer:
         kea_dict = dhcp_server.to_kea_dict()
         assert "Dhcp4" in kea_dict
         assert "interfaces-config" in kea_dict["Dhcp4"]
-
-    def test_to_kea_dict_excludes_local_definitions(self, dhcp_server, client_class_local_defs, option_data):
-        """Test DHCPServer.to_kea_dict() excludes definitions from classes with local_definitions=True."""
-        # Add option_data to client_class with local_definitions
-        client_class_local_defs.option_data.add(option_data)
-
-        # Add client_class to dhcp_server
-        dhcp_server.client_classes.add(client_class_local_defs)
-
-        kea_dict = dhcp_server.to_kea_dict()
-        dhcp4 = kea_dict["Dhcp4"]
-
-        # The option definition should NOT be in global option-def
-        # because it's included locally in the client class
-        global_option_defs = dhcp4.get("option-def", [])
-        local_def = next((d for d in global_option_defs if d["name"] == "test-option"), None)
-        assert local_def is None, "Local definition should not appear in global option-def"
-
-    def test_to_kea_dict_includes_global_definitions(self, dhcp_server, client_class, option_data):
-        """Test DHCPServer.to_kea_dict() includes definitions from classes without local_definitions."""
-        # Add option_data to client_class without local_definitions
-        client_class.option_data.add(option_data)
-
-        # Add client_class to dhcp_server
-        dhcp_server.client_classes.add(client_class)
-
-        kea_dict = dhcp_server.to_kea_dict()
-        dhcp4 = kea_dict["Dhcp4"]
-
-        # The option definition SHOULD be in global option-def
-        global_option_defs = dhcp4.get("option-def", [])
-        global_def = next((d for d in global_option_defs if d["name"] == "test-option"), None)
-        assert global_def is not None, "Global definition should appear in global option-def"
 
     def test_to_kea_dict_includes_only_in_additional_list_classes(self, dhcp_server, prefix_factory, db):
         """Test DHCPServer.to_kea_dict() includes all classes in global client-classes, with only-in-additional-list flag set appropriately."""

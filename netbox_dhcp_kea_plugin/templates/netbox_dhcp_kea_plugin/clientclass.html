@@ -21,10 +21,7 @@
                         <th scope="row">Description</th>
                         <td>{{ object.description|placeholder }}</td>
                     </tr>
-                    <tr>
-                        <th scope="row">Local Definitions</th>
-                        <td>{% if object.local_definitions %}Yes{% else %}No{% endif %}</td>
-                    </tr>
+
                     {% if object.next_server %}
                     <tr>
                         <th scope="row">Next Server</th>

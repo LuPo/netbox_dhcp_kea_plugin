@@ -31,7 +31,7 @@ class TestClientClassKeaOutput:
         """Test get_kea_option_defs returns empty list when no option43 data."""
         from netbox_dhcp_kea_plugin.models import ClientClass
 
-        client_class = ClientClass(name="test", test_expression="test", local_definitions=False)
+        client_class = ClientClass(name="test", test_expression="test")
 
         with patch.object(client_class, "has_option43_data", return_value=False):
             with patch.object(client_class, "get_option_definitions", return_value=[]):
@@ -46,7 +46,7 @@ class TestClientClassKeaOutput:
         vendor_space = MagicMock(spec=VendorOptionSpace)
         vendor_space.name = "MSUCClient"
 
-        client_class = ClientClass(name="test", test_expression="test", local_definitions=False)
+        client_class = ClientClass(name="test", test_expression="test")
 
         # Mock the methods that access option_data
         with patch.object(client_class, "has_option43_data", return_value=True):
@@ -60,40 +60,11 @@ class TestClientClassKeaOutput:
         assert result[0]["type"] == "empty"
         assert result[0]["encapsulate"] == "MSUCClient"
 
-    def test_get_kea_option_defs_includes_definitions_when_local(self):
-        """Test get_kea_option_defs includes definitions when local_definitions=True."""
-        from netbox_dhcp_kea_plugin.models import ClientClass, OptionDefinition
-
-        definition = MagicMock(spec=OptionDefinition)
-        definition.name = "UCIdentifier"
-        definition.code = 1
-        definition.option_type = "string"
-        definition.is_array = False
-        definition.encapsulate = None
-        definition.record_types = None
-        definition.vendor_option_space = MagicMock()
-        definition.vendor_option_space.name = "MSUCClient"
-
-        client_class = ClientClass(name="test", test_expression="test", local_definitions=True)
-
-        with patch.object(client_class, "has_option43_data", return_value=False):
-            with patch.object(client_class, "get_option43_vendor_spaces", return_value=[]):
-                with patch.object(client_class, "get_option_definitions", return_value=[definition]):
-                    result = client_class.get_kea_option_defs()
-
-        assert len(result) == 1
-        assert result[0]["name"] == "UCIdentifier"
-        assert result[0]["code"] == 1
-        assert result[0]["type"] == "string"
-        assert result[0]["space"] == "MSUCClient"
-
     def test_to_kea_dict_basic_structure(self):
         """Test to_kea_dict returns correct basic structure."""
         from netbox_dhcp_kea_plugin.models import ClientClass
 
-        client_class = ClientClass(
-            name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'", local_definitions=False
-        )
+        client_class = ClientClass(name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'")
 
         with patch.object(client_class, "get_kea_option_defs", return_value=[]):
             with patch.object(client_class, "get_kea_option_data", return_value=[]):
@@ -112,9 +83,7 @@ class TestClientClassKeaOutput:
             {"name": "vendor-encapsulated-options", "code": 43, "type": "empty", "encapsulate": "MSUCClient"}
         ]
 
-        client_class = ClientClass(
-            name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'", local_definitions=True
-        )
+        client_class = ClientClass(name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'")
 
         with patch.object(client_class, "get_kea_option_defs", return_value=option_defs):
             with patch.object(client_class, "get_kea_option_data", return_value=[]):
@@ -129,9 +98,7 @@ class TestClientClassKeaOutput:
 
         option_data = [{"name": "vendor-encapsulated-options", "code": 43}]
 
-        client_class = ClientClass(
-            name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'", local_definitions=False
-        )
+        client_class = ClientClass(name="MS-UC-Client", test_expression="option[60].hex == 'MS-UC-Client'")
 
         with patch.object(client_class, "get_kea_option_defs", return_value=[]):
             with patch.object(client_class, "get_kea_option_data", return_value=option_data):
@@ -147,7 +114,6 @@ class TestClientClassKeaOutput:
         client_class = ClientClass(
             name="PXE-Client",
             test_expression="option[60].hex == 'PXEClient'",
-            local_definitions=False,
             next_server="192.168.1.1",
             server_hostname="pxeserver",
             boot_file_name="pxelinux.0",
@@ -363,12 +329,6 @@ class TestClientClassKeaOutput:
 
 class TestDHCPServerKeaOutput:
     """Test DHCPServer KEA configuration output methods."""
-
-    def test_excludes_local_definitions_from_global_option_def(self):
-        """Test that definitions with local_definitions=True are excluded from global option-def."""
-        # This test would require more complex setup with database models
-        # For now, we just document the expected behavior
-        pass
 
 
 class TestPrefixDHCPConfigReservations:

@@ -360,31 +360,20 @@ class DHCPServer(NetBoxModel):
         if global_option_data:
             dhcp4["option-data"] = global_option_data
 
-        # Collect definitions that are included locally in client classes (local_definitions=True)
-        # These should NOT be included in the global option-def
-        local_definitions = set()
-        for cc in effective_client_classes.filter(local_definitions=True):
-            for definition in cc.get_option_definitions():
-                local_definitions.add(definition.pk)
-        for prefix_config in effective_prefix_configs:
-            for cc in prefix_config.client_classes.filter(local_definitions=True):
-                for definition in cc.get_option_definitions():
-                    local_definitions.add(definition.pk)
-
         # Collect ALL option definitions needed (vendor + standard custom)
         option_defs = []
         seen_definitions = set()
 
         # From vendor spaces
         for vs in vendor_spaces:
-            for definition in vs.option_definitions.exclude(pk__in=local_definitions):
+            for definition in vs.option_definitions.all():
                 if definition.pk not in seen_definitions:
                     seen_definitions.add(definition.pk)
                     option_defs.append(definition.to_kea_dict())
 
         # From option data that uses custom (non-standard) definitions in dhcp4/dhcp6 space
         for opt in all_option_data:
-            if opt.definition and opt.definition.pk not in local_definitions:
+            if opt.definition:
                 definition = opt.definition
                 # Include if it's a custom definition (not standard) and not already added
                 if not definition.is_standard and definition.pk not in seen_definitions:
@@ -824,10 +813,7 @@ class ClientClass(NetBoxModel):
         related_name="client_classes",
         help_text="Option data to send to clients matching this class",
     )
-    local_definitions = models.BooleanField(
-        default=False,
-        help_text="Include option definitions locally in this class config (otherwise they go to global option-def)",
-    )
+
     only_in_additional_list = models.BooleanField(
         default=False,
         help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes, not for every packet. The class is still defined in the server's global client-classes, but KEA won't auto-evaluate it.",
@@ -889,7 +875,6 @@ class ClientClass(NetBoxModel):
 
         Returns list of option definition dicts when:
         - has_option43_data(): includes vendor-encapsulated-options definition
-        - local_definitions=True: additionally includes actual option definitions
 
         Args:
             ascii_format: Not used here, but kept for consistency with get_kea_option_data
@@ -910,24 +895,6 @@ class ClientClass(NetBoxModel):
                         "encapsulate": vendor_space.name,
                     }
                 )
-
-        # Add actual option definitions if local_definitions is enabled
-        if self.local_definitions:
-            for definition in self.get_option_definitions():
-                opt_def = {
-                    "name": definition.name,
-                    "code": definition.code,
-                    "type": definition.option_type,
-                }
-                if definition.is_array:
-                    opt_def["array"] = True
-                if definition.encapsulate:
-                    opt_def["encapsulate"] = definition.encapsulate
-                if definition.record_types:
-                    opt_def["record-types"] = definition.record_types
-                if definition.vendor_option_space:
-                    opt_def["space"] = definition.vendor_option_space.name
-                option_defs.append(opt_def)
 
         return option_defs
 

@@ -249,7 +249,6 @@ class ClientClassImportForm(NetBoxModelImportForm):
             "name",
             "test_expression",
             "description",
-            "local_definitions",
             "only_in_additional_list",
             "next_server",
             "server_hostname",
@@ -513,7 +512,6 @@ class ClientClassForm(NetBoxModelForm):
             "description",
             "servers",
             "option_data",
-            "local_definitions",
             "only_in_additional_list",
             "next_server",
             "server_hostname",
@@ -710,17 +708,6 @@ class OptionDataFilterForm(NetBoxModelFilterSetForm):
 class ClientClassFilterForm(NetBoxModelFilterSetForm):
     model = ClientClass
     name = forms.CharField(required=False)
-    local_definitions = forms.NullBooleanField(
-        required=False,
-        label="Local Definitions",
-        widget=forms.Select(
-            choices=[
-                ("", "---------"),
-                ("true", "Yes"),
-                ("false", "No"),
-            ]
-        ),
-    )
     only_in_additional_list = forms.NullBooleanField(
         required=False,
         label="Only in Additional List",
