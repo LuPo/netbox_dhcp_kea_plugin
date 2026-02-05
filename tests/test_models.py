@@ -34,25 +34,31 @@ class TestClientClassKeaOutput:
         client_class = ClientClass(name="test", test_expression="test")
 
         with patch.object(client_class, "has_option43_data", return_value=False):
-            with patch.object(client_class, "get_option_definitions", return_value=[]):
-                result = client_class.get_kea_option_defs()
+            with patch.object(client_class, "has_vivso_data", return_value=False):
+                with patch.object(client_class, "get_option_definitions", return_value=[]):
+                    result = client_class.get_kea_option_defs()
 
         assert result == []
 
     def test_get_kea_option_defs_includes_vendor_encapsulated_options(self):
         """Test get_kea_option_defs includes vendor-encapsulated-options when has option43."""
-        from netbox_dhcp_kea_plugin.models import ClientClass, VendorOptionSpace
+        from netbox_dhcp_kea_plugin.models import ClientClass, OptionDefinition, VendorOptionSpace
 
         vendor_space = MagicMock(spec=VendorOptionSpace)
         vendor_space.name = "MSUCClient"
 
         client_class = ClientClass(name="test", test_expression="test")
 
+        # Mock OptionDefinition.objects.filter to return empty queryset
+        mock_queryset = MagicMock()
+        mock_queryset.distinct.return_value = []
+
         # Mock the methods that access option_data
         with patch.object(client_class, "has_option43_data", return_value=True):
-            with patch.object(client_class, "get_option43_vendor_spaces", return_value=[vendor_space]):
-                with patch.object(client_class, "get_option_definitions", return_value=[]):
-                    result = client_class.get_kea_option_defs()
+            with patch.object(client_class, "has_vivso_data", return_value=False):
+                with patch.object(client_class, "get_option43_vendor_spaces", return_value=[vendor_space]):
+                    with patch.object(OptionDefinition.objects, "filter", return_value=mock_queryset):
+                        result = client_class.get_kea_option_defs()
 
         assert len(result) == 1
         assert result[0]["name"] == "vendor-encapsulated-options"
@@ -75,8 +81,8 @@ class TestClientClassKeaOutput:
         assert "option-def" not in result
         assert "option-data" not in result
 
-    def test_to_kea_dict_includes_option_def(self):
-        """Test to_kea_dict includes option-def when present."""
+    def test_to_kea_dict_excludes_option_def(self):
+        """Test to_kea_dict does NOT include option-def (now in global scope)."""
         from netbox_dhcp_kea_plugin.models import ClientClass
 
         option_defs = [
@@ -89,8 +95,8 @@ class TestClientClassKeaOutput:
             with patch.object(client_class, "get_kea_option_data", return_value=[]):
                 result = client_class.to_kea_dict()
 
-        assert "option-def" in result
-        assert result["option-def"] == option_defs
+        # option-def should NOT be in client class output - it's in global Dhcp4.option-def
+        assert "option-def" not in result
 
     def test_to_kea_dict_includes_option_data(self):
         """Test to_kea_dict includes option-data when present."""
@@ -151,7 +157,7 @@ class TestClientClassKeaOutput:
 
         assert len(result) == 1
         assert result[0]["data"] == "68:74:74:70:73"
-        assert result[0]["csv-format"] == False
+        assert not result[0]["csv-format"]
 
     def test_get_kea_option_data_ascii_format(self):
         """Test get_kea_option_data returns ascii format with csv-format=true."""

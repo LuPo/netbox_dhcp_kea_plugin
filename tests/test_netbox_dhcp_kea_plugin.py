@@ -162,23 +162,43 @@ class TestClientClass:
         assert "option-data" not in kea_dict
 
     def test_to_kea_dict_with_option43(self, client_class, option_data):
-        """Test ClientClass.to_kea_dict() includes vendor-encapsulated-options for option43."""
+        """Test ClientClass.to_kea_dict() includes option-data for option43 (option-def moved to server level)."""
         client_class.option_data.add(option_data)
         kea_dict = client_class.to_kea_dict()
 
-        # Should have option-def with vendor-encapsulated-options
-        assert "option-def" in kea_dict
-        veo_def = next((d for d in kea_dict["option-def"] if d["name"] == "vendor-encapsulated-options"), None)
-        assert veo_def is not None
-        assert veo_def["code"] == 43
-        assert veo_def["type"] == "empty"
-        assert veo_def["encapsulate"] == "TestVendor"
+        # Client class should NOT have option-def (moved to server level per KEA 2.3+ architecture)
+        assert "option-def" not in kea_dict
 
         # Should have option-data with vendor-encapsulated-options entry
         assert "option-data" in kea_dict
         veo_data = next((d for d in kea_dict["option-data"] if d.get("name") == "vendor-encapsulated-options"), None)
         assert veo_data is not None
         assert veo_data["code"] == 43
+
+        # Should also include the actual option data in vendor space
+        actual_data = next((d for d in kea_dict["option-data"] if d.get("name") == "test-option"), None)
+        assert actual_data is not None
+        assert actual_data["data"] == "test-value"
+        assert actual_data["space"] == "TestVendor"
+
+    def test_get_kea_option_defs_with_option43(self, client_class, option_data):
+        """Test ClientClass.get_kea_option_defs() returns option definitions for option43."""
+        client_class.option_data.add(option_data)
+        option_defs = client_class.get_kea_option_defs()
+
+        # Should have vendor-encapsulated-options definition
+        veo_def = next((d for d in option_defs if d["name"] == "vendor-encapsulated-options"), None)
+        assert veo_def is not None
+        assert veo_def["code"] == 43
+        assert veo_def["type"] == "empty"
+        assert veo_def["encapsulate"] == "TestVendor"
+
+        # Should have the custom option definition in vendor space
+        custom_def = next((d for d in option_defs if d.get("name") == "test-option"), None)
+        assert custom_def is not None
+        assert custom_def["code"] == 1
+        assert custom_def["type"] == "string"
+        assert custom_def["space"] == "TestVendor"
 
     def test_to_kea_dict_empty_test_expression(self, db):
         """Test ClientClass.to_kea_dict() omits test field when test_expression is empty."""
@@ -305,7 +325,13 @@ class TestDHCPServer:
         # Only classes with only_in_additional_list=True should appear in subnet's evaluate-additional-classes
         subnets = dhcp4.get("subnet4", [])
         assert len(subnets) == 1
-        eval_classes = subnets[0].get("evaluate-additional-classes", [])
+        subnet = subnets[0]
+
+        # Verify subnet has id field from database primary key
+        assert "id" in subnet, "Subnet should have 'id' field"
+        assert subnet["id"] == prefix_config.pk, "Subnet id should match PrefixDHCPConfig primary key"
+
+        eval_classes = subnet.get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"
         assert "NormalClass" not in eval_classes, (
             "Normal class should NOT appear in subnet's evaluate-additional-classes (only_in_additional_list=False)"
