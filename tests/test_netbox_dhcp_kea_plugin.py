@@ -325,7 +325,13 @@ class TestDHCPServer:
         # Only classes with only_in_additional_list=True should appear in subnet's evaluate-additional-classes
         subnets = dhcp4.get("subnet4", [])
         assert len(subnets) == 1
-        eval_classes = subnets[0].get("evaluate-additional-classes", [])
+        subnet = subnets[0]
+
+        # Verify subnet has id field from database primary key
+        assert "id" in subnet, "Subnet should have 'id' field"
+        assert subnet["id"] == prefix_config.pk, "Subnet id should match PrefixDHCPConfig primary key"
+
+        eval_classes = subnet.get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"
         assert "NormalClass" not in eval_classes, (
             "Normal class should NOT appear in subnet's evaluate-additional-classes (only_in_additional_list=False)"

@@ -1297,6 +1297,7 @@ class PrefixDHCPConfig(NetBoxModel):
         """Return a dictionary representation for KEA subnet configuration"""
         prefix = self.prefix.prefix
         result = {
+            "id": self.pk,
             "subnet": str(prefix),
             "valid-lifetime": self.valid_lifetime,
             "max-valid-lifetime": self.max_lifetime,
