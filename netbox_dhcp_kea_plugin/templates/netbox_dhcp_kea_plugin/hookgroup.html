@@ -1,0 +1,120 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Hook Group</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Library Path</th>
+                        <td>
+                            {% if object.library_path %}
+                            <code>{{ object.library_path }}</code>
+                            {% else %}
+                            <span class="text-muted">(filename only - no path prefix)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Hooks</th>
+                        <td>{{ object.hooks.count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Servers</th>
+                        <td>{{ object.servers.count }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Hooks in this Group</h5>
+            <div class="card-body">
+                {% if object.hooks.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Library Name</th>
+                            <th>Full Path</th>
+                            <th>Standard</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hook in object.hooks.all %}
+                        <tr>
+                            <td><a href="{{ hook.get_absolute_url }}">{{ hook.name }}</a></td>
+                            <td><code>{{ hook.library_name }}</code></td>
+                            <td>
+                                {% if object.library_path %}
+                                <code>{{ object.library_path }}/{{ hook.library_name }}</code>
+                                {% else %}
+                                <code>{{ hook.library_name }}</code>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if hook.is_standard %}
+                                <span class="badge bg-info">Standard</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Custom</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <span class="text-muted">No hooks in this group</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">DHCP Servers</h5>
+            <div class="card-body">
+                {% if object.servers.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>IP Address</th>
+                            <th>Active</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in object.servers.all %}
+                        <tr>
+                            <td><a href="{{ server.get_absolute_url }}">{{ server.name }}</a></td>
+                            <td>
+                                <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
+                            </td>
+                            <td>
+                                {% if server.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <span class="text-muted">No servers assigned</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

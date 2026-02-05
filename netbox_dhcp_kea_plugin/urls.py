@@ -4,6 +4,49 @@ from netbox.views.generic import ObjectChangeLogView
 from . import models, views
 
 urlpatterns = (
+    # Hook URLs
+    path("hooks/", views.HookListView.as_view(), name="hook_list"),
+    path("hooks/add/", views.HookEditView.as_view(), name="hook_add"),
+    path("hooks/import/", views.HookImportView.as_view(), name="hook_bulk_import"),
+    path("hooks/delete/", views.HookBulkDeleteView.as_view(), name="hook_bulk_delete"),
+    path("hooks/<int:pk>/", views.HookView.as_view(), name="hook"),
+    path("hooks/<int:pk>/edit/", views.HookEditView.as_view(), name="hook_edit"),
+    path("hooks/<int:pk>/delete/", views.HookDeleteView.as_view(), name="hook_delete"),
+    path(
+        "hooks/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="hook_changelog",
+        kwargs={"model": models.Hook},
+    ),
+    path(
+        "hooks/<int:pk>/hook-groups/",
+        views.HookHookGroupsView.as_view(),
+        name="hook_hook_groups",
+    ),
+    # HookGroup URLs
+    path("hook-groups/", views.HookGroupListView.as_view(), name="hookgroup_list"),
+    path("hook-groups/add/", views.HookGroupEditView.as_view(), name="hookgroup_add"),
+    path("hook-groups/import/", views.HookGroupImportView.as_view(), name="hookgroup_bulk_import"),
+    path("hook-groups/delete/", views.HookGroupBulkDeleteView.as_view(), name="hookgroup_bulk_delete"),
+    path("hook-groups/<int:pk>/", views.HookGroupView.as_view(), name="hookgroup"),
+    path("hook-groups/<int:pk>/edit/", views.HookGroupEditView.as_view(), name="hookgroup_edit"),
+    path("hook-groups/<int:pk>/delete/", views.HookGroupDeleteView.as_view(), name="hookgroup_delete"),
+    path(
+        "hook-groups/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="hookgroup_changelog",
+        kwargs={"model": models.HookGroup},
+    ),
+    path(
+        "hook-groups/<int:pk>/hooks/",
+        views.HookGroupHooksView.as_view(),
+        name="hookgroup_hooks",
+    ),
+    path(
+        "hook-groups/<int:pk>/servers/",
+        views.HookGroupServersView.as_view(),
+        name="hookgroup_servers",
+    ),
     # VendorOptionSpace
     path("vendor-option-spaces/", views.VendorOptionSpaceListView.as_view(), name="vendoroptionspace_list"),
     path("vendor-option-spaces/add/", views.VendorOptionSpaceEditView.as_view(), name="vendoroptionspace_add"),

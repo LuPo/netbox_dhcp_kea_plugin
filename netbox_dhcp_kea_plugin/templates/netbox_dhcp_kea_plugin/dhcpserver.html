@@ -87,6 +87,18 @@
                         <td>{% if object.ha_auto_failover %}Yes{% else %}No{% endif %}</td>
                     </tr>
                     {% endif %}
+                    <tr>
+                        <th>Hook Groups</th>
+                        <td>
+                            {% if object.hook_groups.all %}
+                            {% for group in object.hook_groups.all %}
+                            <a href="{{ group.get_absolute_url }}" class="badge bg-primary text-decoration-none">{{ group.name }}</a>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>
@@ -109,6 +121,10 @@
                     <tr>
                         <th>Option Definitions</th>
                         <td>{{ option_def_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hook Libraries</th>
+                        <td>{{ hook_count }}</td>
                     </tr>
                 </table>
             </div>

@@ -1,0 +1,57 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card">
+            <h5 class="card-header">Hook Groups using "{{ object.name }}"</h5>
+            <div class="card-body">
+                {% if hook_groups %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Library Path</th>
+                            <th>Full Library Path</th>
+                            <th>Hooks Count</th>
+                            <th>Servers Count</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in hook_groups %}
+                        <tr>
+                            <td><a href="{{ group.get_absolute_url }}">{{ group.name }}</a></td>
+                            <td>
+                                {% if group.library_path %}
+                                <code>{{ group.library_path }}</code>
+                                {% else %}
+                                <span class="text-muted">(none)</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if group.library_path %}
+                                <code>{{ group.library_path }}/{{ object.library_name }}</code>
+                                {% else %}
+                                <code>{{ object.library_name }}</code>
+                                {% endif %}
+                            </td>
+                            <td>{{ group.hooks.count }}</td>
+                            <td>{{ group.servers.count }}</td>
+                            <td>{{ group.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted">
+                    This hook is not assigned to any hook groups.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

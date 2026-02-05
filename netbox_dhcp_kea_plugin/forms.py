@@ -1,6 +1,7 @@
 from dcim.models import Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils.safestring import mark_safe
 from ipam.models import IPAddress, Prefix, ServiceTemplate
 from netbox.forms import (
     NetBoxModelFilterSetForm,
@@ -19,11 +20,45 @@ from .models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
     VendorOptionSpace,
 )
+
+
+class BootstrapCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    """
+    A CheckboxSelectMultiple widget styled for Bootstrap 5.
+    Renders checkboxes with proper form-check and form-check-input classes.
+    """
+
+    def __init__(self, attrs=None, disabled=False):
+        super().__init__(attrs)
+        self.disabled = disabled
+
+    def render(self, name, value, attrs=None, renderer=None):
+        if value is None:
+            value = []
+        if attrs is None:
+            attrs = {}
+        # Check for disabled in both widget attribute and attrs dict
+        is_disabled = self.disabled or attrs.get("disabled", False)
+        html = []
+        for i, (option_value, option_label) in enumerate(self.choices):
+            option_id = f"{attrs.get('id', name)}_{i}"
+            checked = "checked" if str(option_value) in [str(v) for v in value] else ""
+            disabled_attr = "disabled" if is_disabled else ""
+            html.append(
+                f'<div class="form-check">'
+                f'<input class="form-check-input" type="checkbox" name="{name}" '
+                f'value="{option_value}" id="{option_id}" {checked} {disabled_attr}>'
+                f'<label class="form-check-label" for="{option_id}">{option_label}</label>'
+                f"</div>"
+            )
+        return mark_safe("\n".join(html))
 
 
 def validate_unique_option_data_space_code(option_data):
@@ -231,6 +266,11 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Role in the HA relationship: primary, secondary, standby, or backup",
     )
+    ha_url = forms.URLField(
+        required=False,
+        assume_scheme="https",
+        help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
+    )
 
     class Meta:
         model = DHCPServer
@@ -428,6 +468,11 @@ class DHCPServerForm(NetBoxModelForm):
         queryset=IPAddress.objects.all(),
         help_text="IP address of the DHCP server (from NetBox IPAM)",
     )
+    ha_url = forms.URLField(
+        required=False,
+        assume_scheme="https",
+        help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
+    )
     service_template = DynamicModelChoiceField(
         queryset=ServiceTemplate.objects.all(),
         query_params={
@@ -450,6 +495,11 @@ class DHCPServerForm(NetBoxModelForm):
         required=False,
         label="HA Relationship",
         help_text="The HA relationship this server belongs to (optional)",
+    )
+    hook_groups = DynamicModelMultipleChoiceField(
+        queryset=HookGroup.objects.all(),
+        required=False,
+        help_text="Hook groups to apply to this DHCP server",
     )
 
     class Meta:
@@ -480,6 +530,7 @@ class DHCPServerForm(NetBoxModelForm):
                 "tags",
                 name="General",
             ),
+            FieldSet("hook_groups", name="Hook Libraries"),
             FieldSet("ha_relationship", "ha_role", "ha_url", "ha_auto_failover", name="High Availability"),
             FieldSet("ha_basic_auth_user", "ha_basic_auth_password", name="HA Authentication"),
         )
@@ -492,6 +543,7 @@ class DHCPServerForm(NetBoxModelForm):
         # Populate client_classes from reverse relation
         if self.instance.pk:
             self.initial["client_classes"] = self.instance.client_classes.all()
+            self.initial["hook_groups"] = self.instance.hook_groups.all()
 
         # Hide option_data and client_classes fields if this is a non-primary HA server
         if self.instance.pk and self.instance.ha_relationship and not self.instance.is_ha_primary():
@@ -503,6 +555,20 @@ class DHCPServerForm(NetBoxModelForm):
 
     def save(self, *args, **kwargs):
         instance = super().save(*args, **kwargs)
+        # Handle hook_groups (reverse ManyToMany relation from HookGroup)
+        if "hook_groups" in self.cleaned_data:
+            selected_groups = self.cleaned_data["hook_groups"]
+            current_groups = set(instance.hook_groups.all())
+            selected_set = set(selected_groups)
+
+            # Remove server from groups that were deselected
+            for group in current_groups - selected_set:
+                group.servers.remove(instance)
+
+            # Add server to newly selected groups
+            for group in selected_set - current_groups:
+                group.servers.add(instance)
+
         # Handle client_classes (reverse ManyToMany relation)
         if "client_classes" in self.cleaned_data:
             # Get the selected client classes
@@ -908,5 +974,186 @@ class DHCPHARelationshipImportForm(NetBoxModelImportForm):
             "http_listener_threads",
             "http_client_threads",
             "description",
+            "tags",
+        )
+
+
+# Hook Forms
+class HookForm(NetBoxModelForm):
+    allowed_processes = forms.MultipleChoiceField(
+        choices=Hook.PROCESS_CHOICES,
+        widget=BootstrapCheckboxSelectMultiple(),
+        help_text="Select which KEA processes can load this hook library",
+        required=False,  # Required validation handled in clean_allowed_processes()
+    )
+
+    class Meta:
+        model = Hook
+        fields = (
+            "name",
+            "library_name",
+            "description",
+            "allowed_processes",
+            "parameters",
+            "tags",
+        )
+        widgets = {
+            "parameters": forms.Textarea(attrs={"class": "font-monospace", "rows": 5}),
+        }
+        help_texts = {
+            "parameters": 'Hook parameters as JSON object (e.g., {"max-threads": 4})',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Set initial value for allowed_processes from instance
+        if self.instance.pk and self.instance.allowed_processes:
+            self.initial["allowed_processes"] = self.instance.allowed_processes
+
+        # If editing a standard hook, only allow editing parameters and tags
+        if self.instance.pk and self.instance.is_standard:
+            # Make name, library_name, description read-only by disabling them
+            # and marking them as not required (we'll restore values in clean)
+            self.fields["name"].disabled = True
+            self.fields["library_name"].disabled = True
+            self.fields["description"].disabled = True
+            # Disable allowed_processes checkboxes for standard hooks
+            self.fields["allowed_processes"].widget.disabled = True
+            self.fields["allowed_processes"].disabled = True
+
+    @property
+    def fieldsets(self):
+        # Dynamic fieldsets based on whether this is a standard hook
+        if self.instance.pk and self.instance.is_standard:
+            return (
+                FieldSet("name", "library_name", "description", name="Hook Library (Read-Only)"),
+                FieldSet("allowed_processes", name="Allowed Processes (Read-Only)"),
+                FieldSet("parameters", name="Parameters"),
+                FieldSet("tags", name="Tags"),
+            )
+        else:
+            return (
+                FieldSet("name", "library_name", "description", name="Hook Library"),
+                FieldSet("allowed_processes", name="Allowed Processes"),
+                FieldSet("parameters", name="Parameters"),
+                FieldSet("tags", name="Tags"),
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            cleaned_data = self.cleaned_data
+
+        # For standard hooks, preserve the original read-only field values
+        # since disabled fields don't submit data
+        if self.instance.pk and self.instance.is_standard:
+            cleaned_data["name"] = self.instance.name
+            cleaned_data["library_name"] = self.instance.library_name
+            cleaned_data["description"] = self.instance.description
+            cleaned_data["allowed_processes"] = self.instance.allowed_processes
+
+        return cleaned_data
+
+    def clean_allowed_processes(self):
+        """Validate allowed_processes for custom hooks."""
+        # Skip validation for standard hooks (value will be preserved in clean())
+        if self.instance.pk and self.instance.is_standard:
+            return self.instance.allowed_processes
+
+        allowed_processes = self.cleaned_data.get("allowed_processes")
+        # For custom hooks, require at least one process
+        if not allowed_processes:
+            raise ValidationError("At least one process must be selected.")
+        return list(allowed_processes)  # Ensure it's a list for ArrayField
+
+
+class HookFilterForm(NetBoxModelFilterSetForm):
+    model = Hook
+    name = forms.CharField(required=False)
+    is_standard = forms.NullBooleanField(
+        required=False,
+        widget=forms.Select(
+            choices=[
+                ("", "---------"),
+                ("true", "Yes"),
+                ("false", "No"),
+            ]
+        ),
+    )
+    allowed_processes = forms.MultipleChoiceField(
+        choices=Hook.PROCESS_CHOICES,
+        required=False,
+        widget=BootstrapCheckboxSelectMultiple(),
+    )
+
+
+class HookImportForm(NetBoxModelImportForm):
+    class Meta:
+        model = Hook
+        fields = (
+            "name",
+            "library_name",
+            "description",
+            "is_standard",
+            "allowed_processes",
+            "parameters",
+            "tags",
+        )
+
+
+# HookGroup Forms
+class HookGroupForm(NetBoxModelForm):
+    hooks = DynamicModelMultipleChoiceField(
+        queryset=Hook.objects.all(),
+        required=False,
+        help_text="Select hooks to include in this group",
+    )
+    servers = DynamicModelMultipleChoiceField(
+        queryset=DHCPServer.objects.all(),
+        required=False,
+        help_text="Select DHCP servers that will use this hook group",
+    )
+
+    class Meta:
+        model = HookGroup
+        fields = (
+            "name",
+            "description",
+            "library_path",
+            "hooks",
+            "servers",
+            "tags",
+        )
+
+    fieldsets = (
+        FieldSet("name", "description", name="Hook Group"),
+        FieldSet("library_path", name="Library Path"),
+        FieldSet("hooks", name="Hooks"),
+        FieldSet("servers", name="DHCP Servers"),
+        FieldSet("tags", name="Tags"),
+    )
+
+
+class HookGroupFilterForm(NetBoxModelFilterSetForm):
+    model = HookGroup
+    name = forms.CharField(required=False)
+    hooks = DynamicModelMultipleChoiceField(
+        queryset=Hook.objects.all(),
+        required=False,
+    )
+    servers = DynamicModelMultipleChoiceField(
+        queryset=DHCPServer.objects.all(),
+        required=False,
+    )
+
+
+class HookGroupImportForm(NetBoxModelImportForm):
+    class Meta:
+        model = HookGroup
+        fields = (
+            "name",
+            "description",
+            "library_path",
             "tags",
         )

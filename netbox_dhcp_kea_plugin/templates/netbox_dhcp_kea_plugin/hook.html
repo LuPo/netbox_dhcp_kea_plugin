@@ -1,0 +1,89 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Hook Library</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Library Name</th>
+                        <td><code>{{ object.library_name }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Standard Hook</th>
+                        <td>
+                            {% if object.is_standard %}
+                            <span class="badge bg-info">Standard</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Custom</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Allowed Processes</th>
+                        <td>
+                            {% if object.allowed_processes %}
+                            {% for process in object.allowed_processes %}
+                            <span class="badge bg-primary">{{ process }}</span>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">None specified</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Parameters</h5>
+            <div class="card-body">
+                {% if object.parameters %}
+                <pre class="mb-0"><code>{{ object.parameters|json }}</code></pre>
+                {% else %}
+                <span class="text-muted">No parameters configured</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Hook Groups</h5>
+            <div class="card-body">
+                {% if object.hook_groups.all %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Library Path</th>
+                            <th>Servers</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in object.hook_groups.all %}
+                        <tr>
+                            <td><a href="{{ group.get_absolute_url }}">{{ group.name }}</a></td>
+                            <td><code>{{ group.library_path|default:"(filename only)" }}</code></td>
+                            <td>{{ group.servers.count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <span class="text-muted">Not assigned to any hook groups</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

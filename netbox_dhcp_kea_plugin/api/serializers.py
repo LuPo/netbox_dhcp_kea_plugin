@@ -8,6 +8,8 @@ from ..models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
@@ -37,6 +39,63 @@ class NestedOptionDefinitionSerializer(WritableNestedSerializer):
     class Meta:
         model = OptionDefinition
         fields = ["id", "url", "display", "name", "code", "option_type"]
+
+
+class NestedHookSerializer(WritableNestedSerializer):
+    class Meta:
+        model = Hook
+        fields = ["id", "url", "display", "name", "library_name"]
+
+
+class NestedHookGroupSerializer(WritableNestedSerializer):
+    class Meta:
+        model = HookGroup
+        fields = ["id", "url", "display", "name"]
+
+
+class HookSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:hook-detail")
+
+    class Meta:
+        model = Hook
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "library_name",
+            "description",
+            "is_standard",
+            "allowed_processes",
+            "parameters",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+
+class HookGroupSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:hookgroup-detail")
+    hooks = NestedHookSerializer(many=True, read_only=True)
+    servers = NestedDHCPServerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = HookGroup
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "library_path",
+            "hooks",
+            "servers",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
 
 
 class VendorOptionSpaceSerializer(NetBoxModelSerializer):
