@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.4 (2026-02-05)
+
+### Added
+- **Hook Support**
+  - New `Hook` and `HookGroup` models for managing KEA hook libraries
+  - Views and UI for configuring hook libraries on DHCP servers
+
+- **Option Definition Improvements**
+  - Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering
+  - Add `id` field to PrefixDHCPConfig output for better identification
+
+### Changed
+- Updated issue templates for versions and Python compatibility
+- Linted tests with Ruff for code quality improvements
+
+### Fixed
+- Default `csv_format` to `True`; only emit `False` when explicitly set
+
+
 ## 0.2.3 (2026-02-28)
 
 ### Fixed
