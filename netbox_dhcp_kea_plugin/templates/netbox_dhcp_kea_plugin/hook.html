@@ -14,19 +14,19 @@
                     </tr>
                     <tr>
                         <th>Library Name</th>
-                        <td><code>{{ object.library_name }}</code></td>
+                        <td>{{ object.library_name }}</td>
                     </tr>
                     <tr>
                         <th>Description</th>
                         <td>{{ object.description|placeholder }}</td>
                     </tr>
                     <tr>
-                        <th>Standard Hook</th>
+                        <th>Hook Definition</th>
                         <td>
                             {% if object.is_standard %}
-                            <span class="badge bg-info">Standard</span>
+                            Standard
                             {% else %}
-                            <span class="badge bg-secondary">Custom</span>
+                            Custom
                             {% endif %}
                         </td>
                     </tr>
@@ -35,10 +35,8 @@
                         <td>
                             {% if object.allowed_processes %}
                             {% for process in object.allowed_processes %}
-                            <span class="badge bg-primary">{{ process }}</span>
+                            {{ process }}{% if not forloop.last %}, {% endif %}
                             {% endfor %}
-                            {% else %}
-                            <span class="text-muted">None specified</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -73,7 +71,7 @@
                         {% for group in object.hook_groups.all %}
                         <tr>
                             <td><a href="{{ group.get_absolute_url }}">{{ group.name }}</a></td>
-                            <td><code>{{ group.library_path|default:"(filename only)" }}</code></td>
+                            <td>{{ group.library_path|default:"(filename only)" }}</td>
                             <td>{{ group.servers.count }}</td>
                         </tr>
                         {% endfor %}

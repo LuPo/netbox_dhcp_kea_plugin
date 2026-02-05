@@ -20,7 +20,7 @@
                         <th>Library Path</th>
                         <td>
                             {% if object.library_path %}
-                            <code>{{ object.library_path }}</code>
+                            {{ object.library_path }}
                             {% else %}
                             <span class="text-muted">(filename only - no path prefix)</span>
                             {% endif %}
@@ -54,19 +54,19 @@
                         {% for hook in object.hooks.all %}
                         <tr>
                             <td><a href="{{ hook.get_absolute_url }}">{{ hook.name }}</a></td>
-                            <td><code>{{ hook.library_name }}</code></td>
+                            <td>{{ hook.library_name }}</td>
                             <td>
                                 {% if object.library_path %}
-                                <code>{{ object.library_path }}/{{ hook.library_name }}</code>
+                                {{ object.library_path }}/{{ hook.library_name }}
                                 {% else %}
-                                <code>{{ hook.library_name }}</code>
+                                {{ hook.library_name }}
                                 {% endif %}
                             </td>
                             <td>
                                 {% if hook.is_standard %}
-                                <span class="badge bg-info">Standard</span>
+                                Standard
                                 {% else %}
-                                <span class="badge bg-secondary">Custom</span>
+                                Custom
                                 {% endif %}
                             </td>
                         </tr>

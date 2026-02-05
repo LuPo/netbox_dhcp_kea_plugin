@@ -26,16 +26,16 @@
                             <td><a href="{{ group.get_absolute_url }}">{{ group.name }}</a></td>
                             <td>
                                 {% if group.library_path %}
-                                <code>{{ group.library_path }}</code>
+                                {{ group.library_path }}
                                 {% else %}
                                 <span class="text-muted">(none)</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if group.library_path %}
-                                <code>{{ group.library_path }}/{{ object.library_name }}</code>
+                                {{ group.library_path }}/{{ object.library_name }}
                                 {% else %}
-                                <code>{{ object.library_name }}</code>
+                                {{ object.library_name }}
                                 {% endif %}
                             </td>
                             <td>{{ group.hooks.count }}</td>
