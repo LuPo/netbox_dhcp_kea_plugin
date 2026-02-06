@@ -986,3 +986,172 @@ class TestSubnetPoolFormClientClassValidation:
             client_class=only_additional_class,
         )
         pool.clean()
+
+
+# ===========================================================================
+# Redundant evaluate-additional-classes detection tests
+# ===========================================================================
+
+
+class TestSubnetRedundantEvalClasses:
+    """Test detection of classes in evaluate_additional_classes that do NOT have
+    only_in_additional_list=True.
+
+    KEA evaluates normal classes globally for every packet, so listing them in
+    evaluate-additional-classes is redundant. The view surfaces these as info
+    notifications on the Subnet detail page.
+    """
+
+    def test_no_redundant_when_no_eval_classes(self, restriction_subnet):
+        """Subnet with no evaluate_additional_classes has no redundant entries."""
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert redundant == []
+
+    def test_no_redundant_when_all_only_in_additional(
+        self, restriction_subnet, only_additional_class, second_only_additional_class
+    ):
+        """Subnet whose evaluate_additional_classes all have only_in_additional_list=True
+        should report no redundant classes."""
+        restriction_subnet.evaluate_additional_classes.add(only_additional_class, second_only_additional_class)
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert redundant == []
+
+    def test_detects_normal_class_as_redundant(self, restriction_subnet, normal_class):
+        """A normal class (only_in_additional_list=False) in evaluate_additional_classes
+        is flagged as redundant since KEA already evaluates it globally."""
+        restriction_subnet.evaluate_additional_classes.add(normal_class)
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 1
+        assert redundant[0].pk == normal_class.pk
+
+    def test_detects_multiple_normal_classes(self, restriction_subnet, normal_class, normal_class_2):
+        """Multiple normal classes in evaluate_additional_classes are all detected."""
+        restriction_subnet.evaluate_additional_classes.add(normal_class, normal_class_2)
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 2
+        redundant_pks = {cc.pk for cc in redundant}
+        assert normal_class.pk in redundant_pks
+        assert normal_class_2.pk in redundant_pks
+
+    def test_mixed_classes_only_flags_normal(self, restriction_subnet, normal_class, only_additional_class):
+        """When evaluate_additional_classes has a mix, only the normal classes
+        (without only_in_additional_list) are flagged as redundant."""
+        restriction_subnet.evaluate_additional_classes.add(normal_class, only_additional_class)
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 1
+        assert redundant[0].pk == normal_class.pk
+
+    def test_single_only_in_additional_not_redundant(self, restriction_subnet, only_additional_class):
+        """A single only_in_additional_list class is the correct usage and should
+        not be flagged."""
+        restriction_subnet.evaluate_additional_classes.add(only_additional_class)
+        redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert redundant == []
+
+
+class TestSubnetPoolRedundantEvalClasses:
+    """Test detection of classes in pool-level evaluate_additional_classes that
+    do NOT have only_in_additional_list=True.
+
+    Same semantics as subnet-level: normal classes are already evaluated
+    globally by KEA, so listing them in a pool's evaluate-additional-classes
+    is redundant.
+    """
+
+    def test_no_redundant_when_pool_has_no_eval_classes(self, restriction_subnet, restriction_ip_range):
+        """Pool with no evaluate_additional_classes has no redundant entries."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert redundant == []
+
+    def test_no_redundant_when_pool_only_has_additional_classes(
+        self, restriction_subnet, restriction_ip_range, only_additional_class, second_only_additional_class
+    ):
+        """Pool whose evaluate_additional_classes all have only_in_additional_list=True
+        should report no redundant classes."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        pool.evaluate_additional_classes.add(only_additional_class, second_only_additional_class)
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert redundant == []
+
+    def test_detects_normal_class_as_redundant_on_pool(self, restriction_subnet, restriction_ip_range, normal_class):
+        """A normal class in pool's evaluate_additional_classes is flagged as
+        redundant."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        pool.evaluate_additional_classes.add(normal_class)
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 1
+        assert redundant[0].pk == normal_class.pk
+
+    def test_detects_multiple_normal_classes_on_pool(
+        self, restriction_subnet, restriction_ip_range, normal_class, normal_class_2
+    ):
+        """Multiple normal classes in pool's evaluate_additional_classes are all
+        detected."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        pool.evaluate_additional_classes.add(normal_class, normal_class_2)
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 2
+        redundant_pks = {cc.pk for cc in redundant}
+        assert normal_class.pk in redundant_pks
+        assert normal_class_2.pk in redundant_pks
+
+    def test_mixed_classes_only_flags_normal_on_pool(
+        self, restriction_subnet, restriction_ip_range, normal_class, only_additional_class
+    ):
+        """When pool's evaluate_additional_classes has a mix, only the normal
+        classes are flagged as redundant."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        pool.evaluate_additional_classes.add(normal_class, only_additional_class)
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 1
+        assert redundant[0].pk == normal_class.pk
+
+    def test_pool_redundant_independent_of_subnet_eval(
+        self, restriction_subnet, restriction_ip_range, normal_class, only_additional_class
+    ):
+        """Pool-level redundant detection is independent of what the parent
+        subnet has in its evaluate_additional_classes."""
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        # Subnet evaluates the only_additional class (correct usage)
+        restriction_subnet.evaluate_additional_classes.add(only_additional_class)
+
+        # Pool redundantly lists a normal class
+        pool = SubnetPool.objects.create(
+            subnet=restriction_subnet,
+            ip_range=restriction_ip_range,
+        )
+        pool.evaluate_additional_classes.add(normal_class)
+        redundant = list(pool.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert len(redundant) == 1
+        assert redundant[0].pk == normal_class.pk
+
+        # Subnet-level redundant check is unaffected
+        subnet_redundant = list(restriction_subnet.evaluate_additional_classes.filter(only_in_additional_list=False))
+        assert subnet_redundant == []

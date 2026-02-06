@@ -46,6 +46,37 @@
                 </table>
             </div>
         </div>
+        {% if redundant_eval_classes %}
+        <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-information text-info"></i> Redundant Evaluate-Additional-Classes
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-info mb-2">
+                    The following classes in evaluate-additional-classes do not have
+                    "Only in additional list" enabled. KEA already evaluates these classes globally for
+                    every packet, so listing them here is redundant. Consider enabling "Only in additional list"
+                    on these classes or removing them from evaluate-additional-classes.
+                </div>
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Client Class</th>
+                            <th>Test Expression</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in redundant_eval_classes %}
+                        <tr>
+                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td>{{ cc.test_expression|default:"(unconditional)" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
         {% if object.evaluate_additional_classes.exists %}
         <div class="card">
             <h5 class="card-header">Evaluate Additional Classes</h5>

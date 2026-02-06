@@ -682,9 +682,15 @@ class SubnetView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         import json
 
+        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
+        # These classes are already evaluated globally by KEA, so listing them in
+        # evaluate-additional-classes is redundant.
+        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
+
         return {
             "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
             "pool_count": instance.subnet_pools.count(),
+            "redundant_eval_classes": redundant_eval_classes,
         }
 
 
@@ -882,8 +888,14 @@ class SubnetPoolView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
+        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
+        # These classes are already evaluated globally by KEA, so listing them in
+        # evaluate-additional-classes is redundant.
+        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
+
         return {
             "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
+            "redundant_eval_classes": redundant_eval_classes,
         }
 
 
