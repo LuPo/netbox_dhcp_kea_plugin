@@ -92,10 +92,8 @@
                         <td>
                             {% if object.hook_groups.all %}
                             {% for group in object.hook_groups.all %}
-                            <a href="{{ group.get_absolute_url }}" class="badge bg-primary text-decoration-none">{{ group.name }}</a>
+                            <a href="{{ group.get_absolute_url }}">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}
                             {% endfor %}
-                            {% else %}
-                            <span class="text-muted">None</span>
                             {% endif %}
                         </td>
                     </tr>

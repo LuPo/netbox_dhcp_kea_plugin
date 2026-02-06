@@ -28,7 +28,7 @@
                                 <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
                             </td>
                             <td>
-                                <span class="badge" style="background-color: {{ server.get_status_color }};">{{ server.get_status_display }}</span>
+                                <span class="badge" style="background-color: {{ server.get_status_color }}; color: white">{{ server.get_status_display }}</span>
                             </td>
                             <td>
                                 {% if server.ha_relationship %}
