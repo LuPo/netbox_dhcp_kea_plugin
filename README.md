@@ -27,7 +27,7 @@ This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configur
 - **Option Definitions**: Create custom DHCP option definitions (KEA `option-def`)
 - **Option Data**: Configure DHCP option values (KEA `option-data`)
 - **Client Classes**: Configure client classification rules with KEA test expressions
-- **Prefix DHCP Config**: Link NetBox Prefixes to DHCP configurations with pools and options
+- **Subnets**: Link NetBox Prefixes to DHCP subnet configurations with pools and options
 - **HA Relationships**: Configure High Availability relationships between DHCP servers
 
 ### High Availability (HA) Support
@@ -170,10 +170,10 @@ Response:
 }
 ```
 
-#### Method 3: From PrefixDHCPConfig
+#### Method 3: From Subnet
 
 ```bash
-GET /api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/{id}/relay-config/
+GET /api/plugins/netbox-dhcp-kea-plugin/subnets/{id}/relay-config/
 ```
 
 #### Using Relay Targets
@@ -226,8 +226,9 @@ This returns a complete `Dhcp4` configuration dictionary including:
 | `/api/plugins/netbox-dhcp-kea-plugin/option-definitions/` | Option definitions |
 | `/api/plugins/netbox-dhcp-kea-plugin/option-data/` | Option data/values |
 | `/api/plugins/netbox-dhcp-kea-plugin/client-classes/` | Client classifications |
-| `/api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/` | Prefix DHCP configurations |
-| `/api/plugins/netbox-dhcp-kea-plugin/prefix-dhcp-configs/{id}/relay-config/` | Relay config for prefix |
+| `/api/plugins/netbox-dhcp-kea-plugin/subnets/` | Subnet (prefix DHCP) configurations |
+| `/api/plugins/netbox-dhcp-kea-plugin/subnets/{id}/relay-config/` | Relay config for subnet |
+| `/api/plugins/netbox-dhcp-kea-plugin/subnet-pools/` | Subnet pool configurations |
 | `/api/plugins/netbox-dhcp-kea-plugin/ha-relationships/` | HA relationships |
 | `/api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=X` | Lookup relay config by prefix |
 
@@ -263,7 +264,7 @@ PLUGINS_CONFIG = {
             'client_classes': 5,
             'dhcp_servers': 3,
             'ha_relationships': 1,
-            'prefix_configs': 5,
+            'subnets': 5,
         },
     },
 }

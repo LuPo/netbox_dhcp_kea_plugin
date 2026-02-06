@@ -1,5 +1,5 @@
 from dcim.api.serializers_.manufacturers import ManufacturerSerializer
-from ipam.api.serializers import IPAddressSerializer, ServiceSerializer, ServiceTemplateSerializer
+from ipam.api.serializers import IPAddressSerializer, IPRangeSerializer, ServiceSerializer, ServiceTemplateSerializer
 from ipam.models import Prefix
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from rest_framework import serializers
@@ -12,7 +12,8 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -50,6 +51,18 @@ class NestedHookSerializer(WritableNestedSerializer):
 class NestedHookGroupSerializer(WritableNestedSerializer):
     class Meta:
         model = HookGroup
+        fields = ["id", "url", "display", "name"]
+
+
+class NestedSubnetSerializer(WritableNestedSerializer):
+    class Meta:
+        model = Subnet
+        fields = ["id", "url", "display"]
+
+
+class NestedClientClassSerializer(WritableNestedSerializer):
+    class Meta:
+        model = ClientClass
         fields = ["id", "url", "display", "name"]
 
 
@@ -244,18 +257,17 @@ class ClientClassSerializer(NetBoxModelSerializer):
         )
 
 
-class PrefixDHCPConfigSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_dhcp_kea_plugin-api:prefixdhcpconfig-detail"
-    )
+class SubnetSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:subnet-detail")
     prefix = NestedPrefixSerializer()
     server = NestedDHCPServerSerializer()
     option_data = OptionDataSerializer(many=True, read_only=True)
-    client_classes = ClientClassSerializer(many=True, read_only=True)
+    client_class = NestedClientClassSerializer(read_only=True)
+    evaluate_additional_classes = NestedClientClassSerializer(many=True, read_only=True)
     router_ip = serializers.SerializerMethodField()
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "id",
             "url",
@@ -267,7 +279,8 @@ class PrefixDHCPConfigSerializer(NetBoxModelSerializer):
             "routers_option_offset",
             "router_ip",
             "option_data",
-            "client_classes",
+            "client_class",
+            "evaluate_additional_classes",
             "tags",
             "custom_fields",
             "created",
@@ -277,6 +290,33 @@ class PrefixDHCPConfigSerializer(NetBoxModelSerializer):
     def get_router_ip(self, obj):
         """Return the calculated router IP address."""
         return obj.get_router_ip()
+
+
+class SubnetPoolSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:subnetpool-detail")
+    subnet = NestedSubnetSerializer()
+    ip_range = IPRangeSerializer(nested=True, read_only=True)
+    client_class = NestedClientClassSerializer(read_only=True)
+    evaluate_additional_classes = NestedClientClassSerializer(many=True, read_only=True)
+    option_data = OptionDataSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SubnetPool
+        fields = (
+            "id",
+            "url",
+            "display",
+            "subnet",
+            "ip_range",
+            "client_class",
+            "evaluate_additional_classes",
+            "option_data",
+            "description",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
 
 
 class NestedDHCPHARelationshipSerializer(WritableNestedSerializer):

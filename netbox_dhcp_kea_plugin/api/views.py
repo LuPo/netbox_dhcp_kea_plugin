@@ -14,7 +14,8 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 from .serializers import (
@@ -25,7 +26,8 @@ from .serializers import (
     HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
-    PrefixDHCPConfigSerializer,
+    SubnetPoolSerializer,
+    SubnetSerializer,
     VendorOptionSpaceSerializer,
 )
 
@@ -96,12 +98,26 @@ class ClientClassViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ClientClassFilterSet
 
 
-class PrefixDHCPConfigViewSet(NetBoxModelViewSet):
-    queryset = PrefixDHCPConfig.objects.select_related("prefix", "server").prefetch_related(
-        "option_data", "client_classes"
+class SubnetViewSet(NetBoxModelViewSet):
+    queryset = Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
+        "option_data", "evaluate_additional_classes"
     )
-    serializer_class = PrefixDHCPConfigSerializer
-    filterset_class = filtersets.PrefixDHCPConfigFilterSet
+    serializer_class = SubnetSerializer
+    filterset_class = filtersets.SubnetFilterSet
+
+    @action(detail=True, methods=["get"], url_path="pools")
+    def pools(self, request, pk=None):
+        """
+        Return all SubnetPool configurations for this subnet.
+        """
+        subnet = self.get_object()
+        pool_configs = (
+            SubnetPool.objects.filter(subnet=subnet)
+            .select_related("ip_range", "client_class")
+            .prefetch_related("evaluate_additional_classes", "option_data")
+        )
+        serializer = SubnetPoolSerializer(pool_configs, many=True, context={"request": request})
+        return Response(serializer.data)
 
     @action(detail=True, methods=["get"], url_path="relay-config")
     def relay_config(self, request, pk=None):
@@ -135,6 +151,14 @@ class PrefixDHCPConfigViewSet(NetBoxModelViewSet):
                 "relay_targets": relay_targets,
             }
         )
+
+
+class SubnetPoolViewSet(NetBoxModelViewSet):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class").prefetch_related(
+        "evaluate_additional_classes", "option_data"
+    )
+    serializer_class = SubnetPoolSerializer
+    filterset_class = filtersets.SubnetPoolFilterSet
 
 
 class PrefixRelayConfigView(APIView):
@@ -186,7 +210,7 @@ class PrefixRelayConfigView(APIView):
         # Check if DHCP config exists
         try:
             dhcp_config = prefix.dhcp_config
-        except PrefixDHCPConfig.DoesNotExist:
+        except Subnet.DoesNotExist:
             return Response(
                 {
                     "prefix": prefix_str,

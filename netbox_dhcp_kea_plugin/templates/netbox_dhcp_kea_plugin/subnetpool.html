@@ -1,0 +1,139 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Subnet Pool Configuration</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Subnet</th>
+                        <td><a href="{{ object.subnet.get_absolute_url }}">{{ object.subnet }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>IP Range</th>
+                        <td><a href="{{ object.ip_range.get_absolute_url }}">{{ object.ip_range }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Pool Range</th>
+                        <td>
+                            {{ object.pool_range }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Client Class</th>
+                        <td>
+                            {% if object.client_class %}
+                                <a href="{{ object.client_class.get_absolute_url }}">{{ object.client_class.name }}</a>
+                                <br><small class="text-muted">Restricts which clients can use this pool</small>
+                            {% else %}
+                                <span class="text-muted">None (all clients)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>
+                            {% if object.description %}
+                                {{ object.description }}
+                            {% else %}
+                                <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% if redundant_eval_classes %}
+        <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-information text-info"></i> Redundant Evaluate-Additional-Classes
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-info mb-2">
+                    The following classes in evaluate-additional-classes do not have
+                    "Only in additional list" enabled. KEA already evaluates these classes globally for
+                    every packet, so listing them here is redundant. Consider enabling "Only in additional list"
+                    on these classes or removing them from evaluate-additional-classes.
+                </div>
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Client Class</th>
+                            <th>Test Expression</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in redundant_eval_classes %}
+                        <tr>
+                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td>{{ cc.test_expression|default:"(unconditional)" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if object.evaluate_additional_classes.exists %}
+        <div class="card">
+            <h5 class="card-header">Evaluate Additional Classes</h5>
+            <div class="card-body">
+                <p class="text-muted small">These client classes are additionally evaluated for clients in this pool (KEA evaluate-additional-classes).</p>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Test Expression</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in object.evaluate_additional_classes.all %}
+                        <tr>
+                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td>{{ cc.test_expression|default:"(unconditional)" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if object.option_data.exists %}
+        <div class="card">
+            <h5 class="card-header">Pool Option Data</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Code</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for option in object.option_data.all %}
+                        <tr>
+                            <td><a href="{{ option.get_absolute_url }}">{{ option.distinctive_name }}</a></td>
+                            <td>{{ option.code }}</td>
+                            <td>{{ option.data }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Pool Configuration</h5>
+            <div class="card-body">
+                <pre><code class="language-json">{{ kea_pool_config }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

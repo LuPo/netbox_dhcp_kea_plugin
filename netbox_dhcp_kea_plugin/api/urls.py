@@ -13,7 +13,8 @@ router.register("option-definitions", views.OptionDefinitionViewSet)
 router.register("option-data", views.OptionDataViewSet)
 router.register("dhcp-servers", views.DHCPServerViewSet)
 router.register("client-classes", views.ClientClassViewSet)
-router.register("prefix-dhcp-configs", views.PrefixDHCPConfigViewSet)
+router.register("subnets", views.SubnetViewSet)
+router.register("subnet-pools", views.SubnetPoolViewSet)
 router.register("ha-relationships", views.DHCPHARelationshipViewSet)
 
 urlpatterns = router.urls + [

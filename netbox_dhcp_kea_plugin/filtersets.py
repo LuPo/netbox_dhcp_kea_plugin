@@ -10,7 +10,8 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -114,10 +115,15 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
     only_in_additional_list = django_filters.BooleanFilter(
         field_name="only_in_additional_list", label="Only in Additional List"
     )
+    server_id = django_filters.ModelChoiceFilter(
+        field_name="servers",
+        queryset=DHCPServer.objects.all(),
+        label="Server",
+    )
 
     class Meta:
         model = ClientClass
-        fields = ["id", "name", "only_in_additional_list"]
+        fields = ["id", "name", "only_in_additional_list", "server_id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -127,17 +133,32 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
         )
 
 
-class PrefixDHCPConfigFilterSet(NetBoxModelFilterSet):
+class SubnetFilterSet(NetBoxModelFilterSet):
     server = django_filters.ModelChoiceFilter(queryset=DHCPServer.objects.all(), label="DHCP Server")
+    client_class = django_filters.ModelChoiceFilter(queryset=ClientClass.objects.all(), label="Client Class")
 
     class Meta:
-        model = PrefixDHCPConfig
-        fields = ["id", "prefix", "server"]
+        model = Subnet
+        fields = ["id", "prefix", "server", "client_class"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
         return queryset.filter(Q(prefix__prefix__icontains=value))
+
+
+class SubnetPoolFilterSet(NetBoxModelFilterSet):
+    subnet = django_filters.ModelChoiceFilter(queryset=Subnet.objects.all(), label="Subnet")
+    client_class = django_filters.ModelChoiceFilter(queryset=ClientClass.objects.all(), label="Client Class")
+
+    class Meta:
+        model = SubnetPool
+        fields = ["id", "subnet", "ip_range", "client_class"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(description__icontains=value) | Q(subnet__prefix__prefix__icontains=value))
 
 
 class DHCPHARelationshipFilterSet(NetBoxModelFilterSet):

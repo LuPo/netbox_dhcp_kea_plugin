@@ -1,12 +1,13 @@
 import json
 
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import redirect, render
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
+from .models import SubnetPool
 
 
 # Hook Views
@@ -338,6 +339,15 @@ class DHCPServerView(generic.ObjectView):
         # Check for unconditional classes (empty test) that are globally evaluated
         unconditional_global_classes = instance.client_classes.filter(test_expression="", only_in_additional_list=False)
 
+        # Check for unreachable subnet restrictions (only-in-additional-list class
+        # used as subnet client-class — no higher scope can trigger evaluation)
+        unreachable_subnets = instance.get_unreachable_subnet_restrictions()
+
+        # Check for unreachable pool restrictions (only-in-additional-list class
+        # used as pool client-class without being in the parent subnet's
+        # evaluate-additional-classes)
+        unreachable_pools = instance.get_unreachable_pool_restrictions()
+
         return {
             "subnet_count": len(dhcp4.get("subnet4", [])),
             "client_class_count": len(dhcp4.get("client-classes", [])),
@@ -346,6 +356,8 @@ class DHCPServerView(generic.ObjectView):
             "hook_count": len(dhcp4.get("hooks-libraries", [])),
             "unused_only_in_additional_list_classes": unused_classes,
             "unconditional_global_classes": unconditional_global_classes,
+            "unreachable_subnets": unreachable_subnets,
+            "unreachable_pools": unreachable_pools,
         }
 
 
@@ -431,21 +443,21 @@ class DHCPServerPrefixesView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
     template_name = "netbox_dhcp_kea_plugin/dhcpserver_prefixes.html"
     tab = ViewTab(
-        label="Assigned Prefixes",
-        badge=lambda obj: obj.prefix_configs.count(),
+        label="Subnets",
+        badge=lambda obj: obj.subnet_items.count(),
         visible=lambda obj: obj.is_ha_primary(),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
 
     def get(self, request, pk):
         server = self.get_object(pk=pk)
-        prefix_configs = server.prefix_configs.select_related("prefix").all()
+        subnet_items = server.subnet_items.select_related("prefix").all()
         return render(
             request,
             self.template_name,
             {
                 "object": server,
-                "prefix_configs": prefix_configs,
+                "subnet_items": subnet_items,
                 "tab": self.tab,
             },
         )
@@ -566,7 +578,7 @@ class ClientClassEditView(generic.ObjectEditView):
         if form and hasattr(form, "instance") and form.instance.pk:
             is_now_enabled = form.instance.only_in_additional_list
             if not was_enabled and is_now_enabled:
-                prefix_count = form.instance.prefix_configs.count()
+                prefix_count = form.instance.subnet_items.count()
                 if prefix_count == 0:
                     messages.warning(
                         request,
@@ -615,62 +627,91 @@ class ClientClassServersView(generic.ObjectView):
         )
 
 
+def _get_subnet_count_for_class(obj):
+    """Count subnets where the client class is used as restricting or evaluate-additional."""
+    from .models import Subnet
+
+    return Subnet.objects.filter(Q(client_class=obj) | Q(evaluate_additional_classes=obj)).distinct().count()
+
+
 @register_model_view(models.ClientClass, name="prefixes", path="prefixes")
 class ClientClassPrefixesView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related("prefix_configs__prefix", "prefix_configs__server")
+    queryset = models.ClientClass.objects.prefetch_related(
+        "subnet_restrictions__prefix",
+        "subnet_restrictions__server",
+        "subnet_evaluations__prefix",
+        "subnet_evaluations__server",
+    )
     template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
     tab = ViewTab(
-        label="Assigned Prefixes",
-        badge=lambda obj: "⚠️" if obj.prefix_configs.count() == 0 else obj.prefix_configs.count(),
+        label="Subnets",
+        badge=lambda obj: _get_subnet_count_for_class(obj),
         visible=lambda obj: obj.only_in_additional_list,
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
     def get(self, request, pk):
         client_class = self.get_object(pk=pk)
-        prefix_configs = client_class.prefix_configs.select_related("prefix", "server").all()
+        # Subnets where this class is the restricting client_class
+        restricting_subnets = client_class.subnet_restrictions.select_related("prefix", "server").all()
+        # Subnets where this class is in evaluate_additional_classes
+        evaluation_subnets = client_class.subnet_evaluations.select_related("prefix", "server").all()
+        # Combine and deduplicate
+        all_subnet_ids = set(restricting_subnets.values_list("pk", flat=True)) | set(
+            evaluation_subnets.values_list("pk", flat=True)
+        )
+        subnet_items = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
 
         return render(
             request,
             self.template_name,
             {
                 "object": client_class,
-                "prefix_configs": prefix_configs,
+                "subnet_items": subnet_items,
                 "tab": self.tab,
             },
         )
 
 
-# PrefixDHCPConfig Views
-class PrefixDHCPConfigView(generic.ObjectView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix", "server").prefetch_related(
-        "option_data", "client_classes"
+# Subnet Views
+class SubnetView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
+        "option_data", "evaluate_additional_classes"
     )
 
     def get_extra_context(self, request, instance):
         import json
 
+        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
+        # These classes are already evaluated globally by KEA, so listing them in
+        # evaluate-additional-classes is redundant.
+        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
+
         return {
             "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
+            "pool_count": instance.subnet_pools.count(),
+            "redundant_eval_classes": redundant_eval_classes,
         }
 
 
-class PrefixDHCPConfigListView(generic.ObjectListView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix", "server")
-    table = tables.PrefixDHCPConfigTable
-    filterset = filtersets.PrefixDHCPConfigFilterSet
-    filterset_form = forms.PrefixDHCPConfigFilterForm
+class SubnetListView(generic.ObjectListView):
+    queryset = models.Subnet.objects.select_related("prefix", "server").annotate(
+        pool_count=Count("subnet_pools"),
+    )
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
 
     def get_table(self, data, request, bulk_actions=True):
         # Use export table for CSV/YAML exports
         if request.GET.get("export"):
-            return tables.PrefixDHCPConfigExportTable(data)
+            return tables.SubnetExportTable(data)
         return super().get_table(data, request, bulk_actions)
 
 
-class PrefixDHCPConfigEditView(generic.ObjectEditView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    form = forms.PrefixDHCPConfigForm
+class SubnetEditView(generic.ObjectEditView):
+    queryset = models.Subnet.objects.all()
+    form = forms.SubnetForm
 
     def post(self, request, *args, **kwargs):
         """Handle form submission with HA redirect notification."""
@@ -699,19 +740,19 @@ class PrefixDHCPConfigEditView(generic.ObjectEditView):
         return response
 
 
-class PrefixDHCPConfigDeleteView(generic.ObjectDeleteView):
-    queryset = models.PrefixDHCPConfig.objects.all()
+class SubnetDeleteView(generic.ObjectDeleteView):
+    queryset = models.Subnet.objects.all()
 
 
-class PrefixDHCPConfigBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    filterset = filtersets.PrefixDHCPConfigFilterSet
-    table = tables.PrefixDHCPConfigTable
+class SubnetBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Subnet.objects.all()
+    filterset = filtersets.SubnetFilterSet
+    table = tables.SubnetTable
 
 
-class PrefixDHCPConfigImportView(generic.BulkImportView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    model_form = forms.PrefixDHCPConfigImportForm
+class SubnetImportView(generic.BulkImportView):
+    queryset = models.Subnet.objects.all()
+    model_form = forms.SubnetImportForm
 
 
 # DHCPHARelationship Views
@@ -747,18 +788,80 @@ class DHCPHARelationshipImportView(generic.BulkImportView):
 
 
 def get_reservation_count(obj):
-    """Calculate the number of DHCP reservations for a PrefixDHCPConfig."""
+    """Calculate the number of DHCP reservations for a Subnet."""
     return len(obj.get_reservations())
 
 
-@register_model_view(models.PrefixDHCPConfig, name="reservations", path="reservations")
-class PrefixDHCPConfigReservationsView(generic.ObjectView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/prefixdhcpconfig_reservations.html"
+def get_pool_count(obj):
+    """Calculate the number of configured SubnetPools for a Subnet."""
+    return obj.subnet_pools.count()
+
+
+@register_model_view(models.Subnet, name="pools", path="pools")
+class SubnetPoolsView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix")
+    template_name = "netbox_dhcp_kea_plugin/subnet_pools.html"
+    tab = ViewTab(
+        label="Pools",
+        badge=get_pool_count,
+        permission="netbox_dhcp_kea_plugin.view_subnetpool",
+    )
+
+    def get(self, request, pk):
+        subnet = self.get_object(pk=pk)
+        pools = subnet.get_pools()
+
+        # Get IP ranges and their SubnetPool configs
+        ip_ranges = subnet.prefix.get_child_ranges().filter(mark_utilized=False)
+        pool_configs = {
+            sp.ip_range_id: sp
+            for sp in SubnetPool.objects.filter(subnet=subnet, ip_range__in=ip_ranges)
+            .select_related("client_class", "ip_range")
+            .prefetch_related("evaluate_additional_classes", "option_data")
+        }
+
+        # Build enriched pool data for the template
+        pool_data = []
+        for ip_range in ip_ranges:
+            start_ip = str(ip_range.start_address).split("/")[0]
+            end_ip = str(ip_range.end_address).split("/")[0]
+            subnet_pool = pool_configs.get(ip_range.pk)
+            pool_data.append(
+                {
+                    "ip_range": ip_range,
+                    "pool_range": f"{start_ip} - {end_ip}",
+                    "subnet_pool": subnet_pool,
+                    "client_class": subnet_pool.client_class if subnet_pool else None,
+                    "additional_classes": list(subnet_pool.evaluate_additional_classes.all()) if subnet_pool else [],
+                    "option_data": list(subnet_pool.option_data.all()) if subnet_pool else [],
+                }
+            )
+
+        # Also include computed pools (from available IPs) that don't have IP ranges
+        has_ip_ranges = ip_ranges.exists()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": subnet,
+                "pool_data": pool_data,
+                "pools": pools,
+                "has_ip_ranges": has_ip_ranges,
+                "pool_config_count": len(pool_configs),
+                "tab": self.tab,
+            },
+        )
+
+
+@register_model_view(models.Subnet, name="reservations", path="reservations")
+class SubnetReservationsView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix")
+    template_name = "netbox_dhcp_kea_plugin/subnet_reservations.html"
     tab = ViewTab(
         label="Reservations",
         badge=get_reservation_count,
-        permission="netbox_dhcp_kea_plugin.view_prefixdhcpconfig",
+        permission="netbox_dhcp_kea_plugin.view_subnet",
     )
 
     def get(self, request, pk):
@@ -776,3 +879,48 @@ class PrefixDHCPConfigReservationsView(generic.ObjectView):
                 "tab": self.tab,
             },
         )
+
+
+# SubnetPool Views
+class SubnetPoolView(generic.ObjectView):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class").prefetch_related(
+        "evaluate_additional_classes", "option_data"
+    )
+
+    def get_extra_context(self, request, instance):
+        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
+        # These classes are already evaluated globally by KEA, so listing them in
+        # evaluate-additional-classes is redundant.
+        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
+
+        return {
+            "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
+            "redundant_eval_classes": redundant_eval_classes,
+        }
+
+
+class SubnetPoolListView(generic.ObjectListView):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class")
+    table = tables.SubnetPoolTable
+    filterset = filtersets.SubnetPoolFilterSet
+    filterset_form = forms.SubnetPoolFilterForm
+
+
+class SubnetPoolEditView(generic.ObjectEditView):
+    queryset = SubnetPool.objects.all()
+    form = forms.SubnetPoolForm
+
+
+class SubnetPoolDeleteView(generic.ObjectDeleteView):
+    queryset = SubnetPool.objects.all()
+
+
+class SubnetPoolBulkDeleteView(generic.BulkDeleteView):
+    queryset = SubnetPool.objects.all()
+    filterset = filtersets.SubnetPoolFilterSet
+    table = tables.SubnetPoolTable
+
+
+class SubnetPoolImportView(generic.BulkImportView):
+    queryset = SubnetPool.objects.all()
+    model_form = forms.SubnetPoolImportForm

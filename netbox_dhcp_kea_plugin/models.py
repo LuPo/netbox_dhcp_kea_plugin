@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from ipam.models import IPAddress, Prefix, Service, ServiceTemplate
+from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
 
@@ -347,14 +347,14 @@ class DHCPServer(NetBoxModel):
             try:
                 old_server = DHCPServer.objects.get(pk=self.pk)
                 if old_server.ha_role == "primary" and self.ha_role != "primary":
-                    prefix_count = self.prefix_configs.count()
+                    subnet_count = self.subnet_items.count()
                     class_count = self.client_classes.count()
                     option_count = self.option_data.count()
 
-                    if prefix_count > 0 or class_count > 0 or option_count > 0:
+                    if subnet_count > 0 or class_count > 0 or option_count > 0:
                         raise ValidationError(
                             f"Cannot change role from Primary: server '{self.name}' has "
-                            f"{prefix_count} prefix config(s), {class_count} client class(es), and "
+                            f"{subnet_count} Subnet(s), {class_count} client class(es), and "
                             f"{option_count} option data assigned. Use 'Migrate Configs to New Primary' "
                             f"on the HA Relationship to transfer these to the new primary first."
                         )
@@ -388,14 +388,16 @@ class DHCPServer(NetBoxModel):
         return None
 
     def get_unused_only_in_additional_list_classes(self):
-        """Get client classes with only_in_additional_list=True that are not used in any subnet.
+        """Get client classes with only_in_additional_list=True that are not used in any subnet or pool.
 
         For HA standby/secondary servers, this always returns an empty list since they inherit
-        prefix configs from the primary server.
+        Subnets from the primary server.
 
         Returns:
             list: List of ClientClass instances that have only_in_additional_list=True
-                  but are not referenced in any subnet's evaluate-additional-classes.
+                  but are not referenced in any subnet's client_class,
+                  evaluate_additional_classes, or any pool's client_class /
+                  evaluate_additional_classes.
         """
         # Skip validation for non-primary HA servers - they inherit configs from primary
         if not self.is_ha_primary():
@@ -407,15 +409,82 @@ class DHCPServer(NetBoxModel):
         if not only_in_list_classes.exists():
             return []
 
-        # Get all classes referenced in subnets (use effective prefix configs for HA)
+        # Get all classes referenced in subnets and pools (use effective subnets for HA)
         used_class_ids = set()
-        for prefix_config in self.get_effective_prefix_configs():
-            for cc in prefix_config.client_classes.all():
+        for subnet_item in self.get_effective_subnet_items():
+            # Subnet-level: restricting client_class + evaluate_additional_classes
+            for cc in subnet_item.get_all_subnet_client_classes():
+                used_class_ids.add(cc.id)
+            # Also check pool-level client classes
+            for cc in subnet_item.get_all_pool_client_classes():
                 used_class_ids.add(cc.id)
 
         # Find classes that are not used
         unused_classes = [cc for cc in only_in_list_classes if cc.id not in used_class_ids]
         return unused_classes
+
+    def get_unreachable_subnet_restrictions(self):
+        """Get subnets whose restricting client_class has only_in_additional_list=True.
+
+        KEA evaluates the subnet-level ``client-class`` restriction *after*
+        global class evaluation.  Classes with ``only-in-additional-list``
+        are skipped during global evaluation and there is no higher scope
+        that could list them in ``evaluate-additional-classes``, so no
+        client would ever match — making the subnet permanently unreachable.
+
+        For HA standby/secondary servers this always returns an empty list
+        since they inherit subnets from the primary server.
+
+        Returns:
+            list[Subnet]: Subnets with an unreachable restricting class.
+        """
+        if not self.is_ha_primary():
+            return []
+
+        unreachable = []
+        for subnet in self.get_effective_subnet_items().select_related("client_class"):
+            if subnet.client_class_id and subnet.client_class.only_in_additional_list:
+                unreachable.append(subnet)
+        return unreachable
+
+    def get_unreachable_pool_restrictions(self):
+        """Get subnet pools whose restricting client_class has
+        only_in_additional_list=True and is NOT listed in the parent
+        subnet's evaluate_additional_classes.
+
+        At pool level, KEA checks the ``client-class`` restriction after
+        evaluating the subnet's ``evaluate-additional-classes``.  An
+        ``only-in-additional-list`` class used as a pool restriction is
+        therefore valid *only* if the parent subnet explicitly lists it in
+        ``evaluate_additional_classes`` (triggering its evaluation before
+        pool selection).  Without that, KEA never evaluates the class and
+        no client can obtain addresses from the pool.
+
+        For HA standby/secondary servers this always returns an empty list
+        since they inherit subnets from the primary server.
+
+        Returns:
+            list[SubnetPool]: Pools with an unreachable restricting class.
+        """
+        if not self.is_ha_primary():
+            return []
+
+        unreachable = []
+        for subnet in self.get_effective_subnet_items().prefetch_related(
+            "evaluate_additional_classes",
+            "subnet_pools__client_class",
+        ):
+            # Pre-compute the set of class IDs the subnet evaluates additionally
+            subnet_eval_ids = set(subnet.evaluate_additional_classes.values_list("pk", flat=True))
+
+            for pool in subnet.subnet_pools.all():
+                if (
+                    pool.client_class_id
+                    and pool.client_class.only_in_additional_list
+                    and pool.client_class_id not in subnet_eval_ids
+                ):
+                    unreachable.append(pool)
+        return unreachable
 
     def is_ha_primary(self):
         """Check if this server is the primary in its HA relationship.
@@ -427,25 +496,25 @@ class DHCPServer(NetBoxModel):
             return True  # Not in HA, treat as primary
         return self.ha_role == "primary"
 
-    def get_effective_prefix_configs(self):
-        """Get prefix configs for this server, including from HA primary if applicable.
+    def get_effective_subnet_items(self):
+        """Get subnets for this server, including from HA primary if applicable.
 
         In HA mode, all servers serve the same subnets (from primary's config).
 
         Returns:
-            QuerySet: PrefixDHCPConfig instances this server should serve.
+            QuerySet: Subnet instances this server should serve.
         """
         if not self.ha_relationship:
             # Not in HA, return own configs
-            return self.prefix_configs.all()
+            return self.subnet_items.all()
 
         # In HA, get configs from the primary server
         primary_server = self.ha_relationship.servers.filter(ha_role="primary").first()
         if primary_server:
-            return primary_server.prefix_configs.all()
+            return primary_server.subnet_items.all()
 
         # Fallback to own configs if no primary found
-        return self.prefix_configs.all()
+        return self.subnet_items.all()
 
     def get_effective_client_classes(self):
         """Get client classes for this server, including from HA primary if applicable.
@@ -522,7 +591,7 @@ class DHCPServer(NetBoxModel):
         dhcp4 = result["Dhcp4"]
 
         # Use effective methods that respect HA configuration
-        effective_prefix_configs = self.get_effective_prefix_configs()
+        effective_subnet_items = self.get_effective_subnet_items()
         effective_client_classes = self.get_effective_client_classes()
         effective_option_data = self.get_effective_option_data()
 
@@ -530,13 +599,24 @@ class DHCPServer(NetBoxModel):
         all_option_data = set()
         vendor_spaces = set()
 
-        # From prefix configs (using effective configs for HA)
-        for prefix_config in effective_prefix_configs:
-            for opt in prefix_config.option_data.all():
+        # From subnet_items (using effective items for HA)
+        for subnet_item in effective_subnet_items:
+            for opt in subnet_item.option_data.all():
                 all_option_data.add(opt)
                 if opt.vendor_option_space:
                     vendor_spaces.add(opt.vendor_option_space)
-            for cc in prefix_config.client_classes.all():
+            # Subnet-level client classes (restricting + evaluate-additional)
+            for cc in subnet_item.get_all_subnet_client_classes():
+                for opt in cc.option_data.all():
+                    all_option_data.add(opt)
+                    if opt.vendor_option_space:
+                        vendor_spaces.add(opt.vendor_option_space)
+            # From subnet pool-level configurations
+            for opt in subnet_item.get_all_pool_option_data():
+                all_option_data.add(opt)
+                if opt.vendor_option_space:
+                    vendor_spaces.add(opt.vendor_option_space)
+            for cc in subnet_item.get_all_pool_client_classes():
                 for opt in cc.option_data.all():
                     all_option_data.add(opt)
                     if opt.vendor_option_space:
@@ -560,12 +640,16 @@ class DHCPServer(NetBoxModel):
         if global_option_data:
             dhcp4["option-data"] = global_option_data
 
-        # Collect all client-classes from prefix configs and server-level (using effective)
+        # Collect all client-classes from subnets, pools, and server-level (using effective)
         # All classes are included in global client-classes array
         # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
         all_client_classes = set()
-        for prefix_config in effective_prefix_configs:
-            for cc in prefix_config.client_classes.all():
+        for subnet_item in effective_subnet_items:
+            # Subnet-level: restricting client_class + evaluate_additional_classes
+            for cc in subnet_item.get_all_subnet_client_classes():
+                all_client_classes.add(cc)
+            # Include client classes from pool-level configurations
+            for cc in subnet_item.get_all_pool_client_classes():
                 all_client_classes.add(cc)
         # Add client classes directly linked to this server (using effective)
         for cc in effective_client_classes:
@@ -610,12 +694,12 @@ class DHCPServer(NetBoxModel):
         if all_client_classes:
             dhcp4["client-classes"] = [cc.to_kea_dict() for cc in all_client_classes]
 
-        # Add subnets (subnet4) - using effective prefix configs for HA
+        # Add subnets (subnet4) - using effective subnets for HA
         subnets = []
-        for prefix_config in effective_prefix_configs:
+        for subnet_item in effective_subnet_items:
             # Only include IPv4 prefixes
-            if prefix_config.prefix.prefix.version == 4:
-                subnets.append(prefix_config.to_kea_dict())
+            if subnet_item.prefix.prefix.version == 4:
+                subnets.append(subnet_item.to_kea_dict())
 
         if subnets:
             dhcp4["subnet4"] = subnets
@@ -1288,18 +1372,31 @@ class ClientClass(NetBoxModel):
         return json.dumps(self.to_kea_dict(ascii_format=ascii_format), indent=indent)
 
 
-class PrefixDHCPConfig(NetBoxModel):
-    """DHCP configuration for NetBox Prefixes (KEA subnet configuration)"""
+class Subnet(NetBoxModel):
+    """KEA subnet configuration linked to NetBox Prefixes"""
 
     prefix = models.OneToOneField(Prefix, on_delete=models.CASCADE, related_name="dhcp_config")
-    server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="prefix_configs")
+    server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="subnet_items")
     option_data = models.ManyToManyField(
         OptionData,
         blank=True,
-        related_name="prefix_configs",
+        related_name="subnet_items",
         help_text="Option data for this subnet",
     )
-    client_classes = models.ManyToManyField(ClientClass, blank=True, related_name="prefix_configs")
+    client_class = models.ForeignKey(
+        ClientClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subnet_restrictions",
+        help_text="Client class that restricts which clients can use this subnet (KEA client-class)",
+    )
+    evaluate_additional_classes = models.ManyToManyField(
+        ClientClass,
+        blank=True,
+        related_name="subnet_evaluations",
+        help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
+    )
     valid_lifetime = models.PositiveIntegerField(default=3600, help_text="Lease valid lifetime in seconds")
     max_lifetime = models.PositiveIntegerField(default=7200, help_text="Maximum lease lifetime in seconds")
     routers_option_offset = models.PositiveIntegerField(
@@ -1309,14 +1406,14 @@ class PrefixDHCPConfig(NetBoxModel):
 
     class Meta:
         ordering = ("prefix",)
-        verbose_name = "DHCP Prefix"
-        verbose_name_plural = "DHCP Prefixes"
+        verbose_name = "Subnet"
+        verbose_name_plural = "Subnets"
 
     def __str__(self):
         return str(self.prefix)
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig", args=[self.pk])
+        return reverse("plugins:netbox_dhcp_kea_plugin:subnet", args=[self.pk])
 
     def clean(self):
         super().clean()
@@ -1330,6 +1427,37 @@ class PrefixDHCPConfig(NetBoxModel):
             if self.routers_option_offset > max_offset:
                 raise ValidationError(
                     {"routers_option_offset": f"Offset must be between 0 and {max_offset} for this prefix."}
+                )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is not used at subnet level. KEA evaluates client-class restrictions AFTER
+        # global class evaluation. Classes with only-in-additional-list are skipped
+        # during global evaluation and there is no higher scope that could list them
+        # in evaluate-additional-classes, so no client would ever match — making the
+        # subnet permanently unreachable.
+        if self.client_class_id:
+            # Need to fetch the related object if not already loaded
+            cc = self.client_class
+            if cc and cc.only_in_additional_list:
+                raise ValidationError(
+                    {
+                        "client_class": f"Client class '{cc.name}' has 'only in additional list' enabled. "
+                        "It will not be evaluated globally by KEA, and there is no higher scope that can "
+                        "trigger its evaluation via evaluate-additional-classes. No client will ever match "
+                        "this class, making the subnet permanently unreachable. Either disable "
+                        "'only in additional list' on the class, or use a different restricting class."
+                    }
+                )
+
+        # Validate that client_class is not also in evaluate_additional_classes
+        # (can only check after save for M2M, so this is a best-effort check)
+        if self.pk and self.client_class_id:
+            if self.evaluate_additional_classes.filter(pk=self.client_class_id).exists():
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
                 )
 
     def get_router_ip(self):
@@ -1351,8 +1479,13 @@ class PrefixDHCPConfig(NetBoxModel):
         1. If the prefix has IPRanges that are NOT mark_utilized, use those ranges
         2. Otherwise, use prefix.get_available_ips() to get available IP ranges
 
+        When IP ranges are used, any associated SubnetPool configuration
+        (client class, evaluate-additional-classes, option-data) is merged
+        into the pool dictionary.
+
         Returns:
-            list: List of pool dictionaries with 'pool' key containing "start - end" format
+            list: List of pool dictionaries with 'pool' key containing
+                  "start - end" format and optional KEA pool-level config.
         """
         import netaddr
 
@@ -1362,12 +1495,27 @@ class PrefixDHCPConfig(NetBoxModel):
         ip_ranges = self.prefix.get_child_ranges().filter(mark_utilized=False)
 
         if ip_ranges.exists():
+            # Pre-fetch SubnetPool configs for these ranges in one query
+            pool_configs = {
+                sp.ip_range_id: sp
+                for sp in SubnetPool.objects.filter(subnet=self, ip_range__in=ip_ranges)
+                .select_related("client_class")
+                .prefetch_related("evaluate_additional_classes", "option_data")
+            }
+
             # Use IPRanges as pools
             for ip_range in ip_ranges:
                 # Extract IP without mask for pool range
                 start_ip = str(ip_range.start_address).split("/")[0]
                 end_ip = str(ip_range.end_address).split("/")[0]
-                pools.append({"pool": f"{start_ip} - {end_ip}"})
+                pool_dict = {"pool": f"{start_ip} - {end_ip}"}
+
+                # Merge SubnetPool configuration if it exists
+                subnet_pool = pool_configs.get(ip_range.pk)
+                if subnet_pool:
+                    subnet_pool.apply_to_pool_dict(pool_dict)
+
+                pools.append(pool_dict)
         else:
             # Use prefix's built-in method to get available IPs
             available_ips = self.prefix.get_available_ips()
@@ -1511,6 +1659,49 @@ class PrefixDHCPConfig(NetBoxModel):
         """
         return [r[0] for r in self.get_reservations()]
 
+    def get_all_pool_option_data(self):
+        """Get all OptionData instances used across this subnet's pool configurations.
+
+        Returns:
+            set: Set of OptionData instances from all SubnetPool configs.
+        """
+        option_data = set()
+        for sp in self.subnet_pools.prefetch_related("option_data"):
+            for opt in sp.option_data.all():
+                option_data.add(opt)
+        return option_data
+
+    def get_all_pool_client_classes(self):
+        """Get all ClientClass instances used across this subnet's pool configurations.
+
+        Returns:
+            set: Set of ClientClass instances from all SubnetPool configs
+                 (both client_class and evaluate_additional_classes).
+        """
+        client_classes = set()
+        for sp in self.subnet_pools.select_related("client_class").prefetch_related("evaluate_additional_classes"):
+            if sp.client_class:
+                client_classes.add(sp.client_class)
+            for cc in sp.evaluate_additional_classes.all():
+                client_classes.add(cc)
+        return client_classes
+
+    def get_all_subnet_client_classes(self):
+        """Get all ClientClass instances used at the subnet level.
+
+        Includes both the restricting client_class (if set) and all
+        evaluate_additional_classes.
+
+        Returns:
+            set: Set of ClientClass instances from subnet-level config.
+        """
+        client_classes = set()
+        if self.client_class:
+            client_classes.add(self.client_class)
+        for cc in self.evaluate_additional_classes.all():
+            client_classes.add(cc)
+        return client_classes
+
     def to_kea_dict(self):
         """Return a dictionary representation for KEA subnet configuration"""
         prefix = self.prefix.prefix
@@ -1521,7 +1712,7 @@ class PrefixDHCPConfig(NetBoxModel):
             "max-valid-lifetime": self.max_lifetime,
         }
 
-        # Add pools from available IPs or IP ranges
+        # Add pools from available IPs or IP ranges (includes pool-level config)
         pools = self.get_pools()
         if pools:
             result["pools"] = pools
@@ -1541,10 +1732,14 @@ class PrefixDHCPConfig(NetBoxModel):
         if option_data_list:
             result["option-data"] = option_data_list
 
-        # Add client-classes if any (only those with only_in_additional_list=True)
-        client_class_names = [cc.name for cc in self.client_classes.filter(only_in_additional_list=True)]
-        if client_class_names:
-            result["evaluate-additional-classes"] = client_class_names
+        # Add restricting client-class if set
+        if self.client_class:
+            result["client-class"] = self.client_class.name
+
+        # Add evaluate-additional-classes
+        additional_class_names = [cc.name for cc in self.evaluate_additional_classes.all()]
+        if additional_class_names:
+            result["evaluate-additional-classes"] = additional_class_names
 
         # Add reservations from assigned IP addresses
         reservations = self.get_kea_reservations()
@@ -1552,6 +1747,151 @@ class PrefixDHCPConfig(NetBoxModel):
             result["reservations"] = reservations
 
         return result
+
+
+class SubnetPool(NetBoxModel):
+    """Pool-level DHCP configuration for a Subnet's IP Range.
+
+    Optionally annotates a NetBox IPRange (child of the Subnet's Prefix) with
+    KEA pool-level settings: a restricting client class, additional evaluated
+    classes, and pool-specific option data.
+
+    IP Ranges without a SubnetPool are rendered as plain pools in KEA config.
+    """
+
+    subnet = models.ForeignKey(
+        Subnet,
+        on_delete=models.CASCADE,
+        related_name="subnet_pools",
+    )
+    ip_range = models.OneToOneField(
+        IPRange,
+        on_delete=models.CASCADE,
+        related_name="dhcp_pool_config",
+        help_text="NetBox IP Range that defines this pool's address boundaries",
+    )
+    client_class = models.ForeignKey(
+        ClientClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pool_restrictions",
+        help_text="Client class that restricts which clients can obtain addresses from this pool (KEA client-class)",
+    )
+    evaluate_additional_classes = models.ManyToManyField(
+        ClientClass,
+        blank=True,
+        related_name="pool_evaluations",
+        help_text="Additional client classes to evaluate for clients in this pool (KEA evaluate-additional-classes)",
+    )
+    option_data = models.ManyToManyField(
+        OptionData,
+        blank=True,
+        related_name="pool_configs",
+        help_text="DHCP options specific to this pool (KEA option-data)",
+    )
+    description = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ("subnet", "ip_range")
+        verbose_name = "Subnet Pool"
+        verbose_name_plural = "Subnet Pools"
+
+    def __str__(self):
+        start_ip = str(self.ip_range.start_address).split("/")[0]
+        end_ip = str(self.ip_range.end_address).split("/")[0]
+        return f"{self.subnet} / {start_ip}-{end_ip}"
+
+    @property
+    def pool_range(self):
+        """Return the pool range as 'start - end' without prefix masks."""
+        start_ip = str(self.ip_range.start_address).split("/")[0]
+        end_ip = str(self.ip_range.end_address).split("/")[0]
+        return f"{start_ip} - {end_ip}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:subnetpool", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+
+        # Validate that the IP range belongs to the subnet's prefix
+        if self.ip_range_id and self.subnet_id:
+            child_range_ids = set(self.subnet.prefix.get_child_ranges().values_list("pk", flat=True))
+            if self.ip_range_id not in child_range_ids:
+                raise ValidationError({"ip_range": "The selected IP range must be a child of this subnet's prefix."})
+
+            # Warn if the IP range is mark_utilized (won't be used as a pool)
+            if self.ip_range.mark_utilized:
+                raise ValidationError(
+                    {
+                        "ip_range": "This IP range is marked as utilized and will not be rendered as a DHCP pool. "
+                        "Remove the 'mark utilized' flag on the IP range to use it as a pool."
+                    }
+                )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is reachable. At pool level, KEA checks client-class AFTER evaluating the
+        # subnet's evaluate-additional-classes. So an only-in-additional-list class
+        # used as pool restriction is valid ONLY if the parent subnet explicitly lists
+        # it in evaluate_additional_classes (triggering its evaluation before pool
+        # selection). Without that, KEA never evaluates the class and no client can
+        # obtain addresses from the pool.
+        if self.client_class_id and self.subnet_id:
+            cc = self.client_class
+            if cc and cc.only_in_additional_list:
+                # Check if the parent subnet has this class in evaluate_additional_classes
+                subnet_evaluates_class = self.subnet.evaluate_additional_classes.filter(pk=cc.pk).exists()
+                if not subnet_evaluates_class:
+                    raise ValidationError(
+                        {
+                            "client_class": f"Client class '{cc.name}' has 'only in additional list' enabled. "
+                            "KEA will not evaluate it globally. For a pool-level restriction to work, the "
+                            "parent subnet must list this class in its 'evaluate additional classes' so that "
+                            "KEA evaluates it before pool selection. Either add the class to the subnet's "
+                            "evaluate-additional-classes, disable 'only in additional list' on the class, "
+                            "or use a different restricting class for this pool."
+                        }
+                    )
+
+        # Validate that client_class is not also in evaluate_additional_classes
+        # (can only check after save for M2M, so this is a best-effort check)
+        if self.pk and self.client_class_id:
+            if self.evaluate_additional_classes.filter(pk=self.client_class_id).exists():
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
+                )
+
+    def apply_to_pool_dict(self, pool_dict):
+        """Merge this SubnetPool's configuration into a KEA pool dictionary.
+
+        Args:
+            pool_dict: Dictionary with at least a 'pool' key. Modified in place.
+        """
+        # Add restricting client-class
+        if self.client_class:
+            pool_dict["client-class"] = self.client_class.name
+
+        # Add evaluate-additional-classes
+        additional_names = [cc.name for cc in self.evaluate_additional_classes.all()]
+        if additional_names:
+            pool_dict["evaluate-additional-classes"] = additional_names
+
+        # Add pool-level option-data
+        option_data_list = [opt.to_kea_dict() for opt in self.option_data.all()]
+        if option_data_list:
+            pool_dict["option-data"] = option_data_list
+
+    def to_kea_dict(self):
+        """Return a dictionary representation for this pool in KEA format."""
+        start_ip = str(self.ip_range.start_address).split("/")[0]
+        end_ip = str(self.ip_range.end_address).split("/")[0]
+        pool_dict = {"pool": f"{start_ip} - {end_ip}"}
+        self.apply_to_pool_dict(pool_dict)
+        return pool_dict
 
 
 class DHCPHARelationship(NetBoxModel):
@@ -1724,15 +2064,15 @@ class DHCPHARelationship(NetBoxModel):
         """
         return self.servers.filter(ha_role="primary").first()
 
-    def get_synced_prefix_count(self):
-        """Get the number of prefixes synced across this HA relationship.
+    def get_synced_subnet_count(self):
+        """Get the number of subnets synced across this HA relationship.
 
         Returns:
-            int: Number of prefix configs on the primary server.
+            int: Number of subnets on the primary server.
         """
         primary = self.get_primary_server()
         if primary:
-            return primary.prefix_configs.count()
+            return primary.subnet_items.count()
         return 0
 
     def get_synced_client_class_count(self):
@@ -1758,7 +2098,7 @@ class DHCPHARelationship(NetBoxModel):
         return 0
 
     def migrate_configs_to_new_primary(self, new_primary_server):
-        """Migrate all prefix configs, client classes, and options to a new primary server.
+        """Migrate all subnets, client classes, and options to a new primary server.
 
         Use this method when changing which server is the primary in an HA relationship.
         It transfers all DHCP configurations from the current primary to the new one.
@@ -1775,9 +2115,9 @@ class DHCPHARelationship(NetBoxModel):
 
         migrated = {"prefixes": 0, "client_classes": 0, "options": 0}
 
-        # Migrate prefix configs
-        prefix_configs = list(current_primary.prefix_configs.all())
-        for config in prefix_configs:
+        # Migrate Subnets
+        subnet_items = list(current_primary.subnet_items.all())
+        for config in subnet_items:
             config.server = new_primary_server
             config.save()
             migrated["prefixes"] += 1

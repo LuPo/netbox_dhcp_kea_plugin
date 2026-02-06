@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.3.0 (2026-02-06)
+
+### Added
+- **Subnet Pool Model**
+  - New `SubnetPool` model for pool-level DHCP configuration, annotating NetBox `IPRange` objects with KEA pool-level settings
+  - Pool-level `client_class` FK for restricting which clients can obtain addresses from a pool (KEA `client-class`)
+  - Pool-level `evaluate_additional_classes` M2M for triggering client class evaluation at pool scope (KEA `evaluate-additional-classes`)
+  - Pool-level `option_data` M2M for pool-specific DHCP options (KEA `option-data`)
+  - `pool_range` property for consistent template-friendly display of pool address ranges
+  - Full CRUD views, forms, serializers, filters, and tables for SubnetPool management
+  - Database migration (`0009`) creates the SubnetPool model
+
+- **Subnet Client Class Restriction**
+  - New `client_class` FK on `Subnet` model for a single restricting client class (KEA `client-class`)
+  - Separates the restricting class concept from additional evaluated classes, aligning with KEA semantics
+  - Database migration (`0010`) adds the field and renames the existing M2M
+
+- **KEA Client Class Validation**
+  - Subnet-level: raises `ValidationError` if restricting `client_class` has `only_in_additional_list=True` (subnet would be permanently unreachable since no higher scope triggers evaluation)
+  - Pool-level: raises `ValidationError` if restricting `client_class` has `only_in_additional_list=True` and the parent subnet does not include the class in `evaluate_additional_classes`
+  - Cross-field validation: restricting `client_class` cannot also appear in `evaluate_additional_classes` on the same object (both model and form level)
+
+- **Redundant Evaluate-Additional-Classes Notifications**
+  - Info notification card on Subnet detail page when `evaluate_additional_classes` contains classes without `only_in_additional_list` enabled (KEA already evaluates these globally, making the listing redundant)
+  - Info notification card on Subnet Pool detail page with the same detection
+  - Lists each redundant class with its name and test expression, with guidance to enable `only_in_additional_list` or remove the class from `evaluate-additional-classes`
+
+- **Server-Level Misconfiguration Detection**
+  - New `DHCPServer.get_unreachable_subnet_restrictions()` method to find subnets with unreachable restricting classes
+  - New `DHCPServer.get_unreachable_pool_restrictions()` method to find pools with unreachable restricting classes
+  - HA-aware: standby/secondary servers return empty lists (they inherit config from the primary)
+  - Danger alert cards on DHCP Server detail page listing unreachable subnets and pools with explanations and links
+
+- **Demo Data Generation for Subnet Pools**
+  - `generate_kea_demo_data` command now creates IP Ranges and SubnetPool configurations
+  - Demonstrates correct KEA patterns: normal global classes as restrictions, `only_in_additional_list` classes with proper subnet-level evaluation, and pool-level `evaluate-additional-classes`
+  - Demo cleanup handles SubnetPool and IPRange objects
+
+- **Test Coverage**
+  - New unit tests for SubnetPool behavior, Subnet client class validations, server-level unreachable restriction helpers, KEA output consistency, and redundant evaluate-additional-classes detection.
+
+### Changed
+- **BREAKING**: Renamed `client_classes` M2M field on `Subnet` to `evaluate_additional_classes` to align with KEA terminology
+- Subnet form: `evaluate_additional_classes` field now filters dropdown to show only client classes assigned to the selected server with `only_in_additional_list` enabled
+- Subnet Pool form: `evaluate_additional_classes` field now filters dropdown to show only client classes with `only_in_additional_list` enabled
+- Added `server_id` filter to `ClientClassFilterSet` for API-level filtering of client classes by server assignment
+  - API consumers must update field references from `client_classes` to `evaluate_additional_classes`
+  - Database migration (`0010`) handles the rename automatically
+- `Subnet.get_all_subnet_client_classes()` and new `Subnet.get_all_pool_client_classes()` helpers collect client classes across both subnet and pool scopes
+- `DHCPServer.to_kea_dict()` now includes pool-level client classes in the generated KEA configuration
+- `DHCPServer.get_unused_only_in_additional_list_classes()` now also checks pool-level class references
+
+### Fixed
+- Pool address range display mismatch between list view and detail view (detail view was including subnet mask on addresses)
+
+## 0.2.5 (2026-02-06)
+
+### Changed
+- **BREAKING**: Renamed `PrefixDHCPConfig` model to `Subnet` to align with KEA subnet terminology and avoid confusion with NetBox's IPAM `Prefix` model
+  - All class names updated: `SubnetSerializer`, `SubnetViewSet`, `SubnetFilterSet`, `SubnetForm`, `SubnetTable`, `SubnetView`, etc.
+  - URL path segments changed from `prefix-configs/` to `subnets/`
+  - API endpoint changed from `prefix-dhcp-configs/` to `subnets/`
+  - URL names changed from `prefixdhcpconfig_*` to `subnet_*`
+  - Django permissions changed from `*_prefixdhcpconfig` to `*_subnet`
+  - Template files renamed: `prefixdhcpconfig.html` → `subnet.html`, `prefixdhcpconfig_reservations.html` → `subnet_reservations.html`
+  - Navigation menu label changed from "DHCP Prefixes" to "Subnets"
+  - Database migration (`0008`) handles the model and table rename automatically
+
+
 ## 0.2.4 (2026-02-05)
 
 ### Added
@@ -10,7 +79,7 @@
 
 - **Option Definition Improvements**
   - Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering
-  - Add `id` field to PrefixDHCPConfig output for better identification
+  - Add `id` field to Subnet (formerly PrefixDHCPConfig) output for better identification
 
 ### Changed
 - **BREAKING**: Replaced `is_active` boolean field with `status` CharField on DHCPServer model
@@ -68,14 +137,14 @@
   - Added view (eye) button alongside edit button in DHCP Prefixes list
   - Added HA Assignment and HA Role fields to DHCP Server detail view
   - HA standby servers show info badge and card explaining config sync
-  - Hidden "Assigned Prefixes" tab, "Global Option Data" and "Client Classes" boxes for non-primary HA servers
+  - Hidden "Subnets" tab, "Global Option Data" and "Client Classes" boxes for non-primary HA servers
 
 - **Form Enhancements**
   - Auto-redirect to primary server when assigning prefixes to non-primary HA servers
   - User notification when config is saved to primary instead of selected server
 
 ### Changed
-- `PrefixDHCPConfigTable` now uses custom `ViewEditActionsColumn` for better action buttons
+- `SubnetTable` (formerly `PrefixDHCPConfigTable`) now uses custom `ViewEditActionsColumn` for better action buttons
 - DHCP Server detail view reorganized for HA information display
 
 ## 0.1.0 (2026-01-18)

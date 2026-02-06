@@ -11,39 +11,39 @@ import pytest
 from django.urls import reverse
 
 
-class TestPrefixDHCPConfigReservationsView:
-    """Tests for the PrefixDHCPConfig reservations view."""
+class TestSubnetReservationsView:
+    """Tests for the Subnet reservations view."""
 
-    def test_reservations_view_exists(self, db, prefix_dhcp_config_factory):
+    def test_reservations_view_exists(self, db, subnet_factory):
         """Test that the reservations view URL exists."""
-        config = prefix_dhcp_config_factory()
+        config = subnet_factory()
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         assert url is not None
         assert str(config.pk) in url
 
-    def test_reservations_view_returns_200(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_view_returns_200(self, db, client, subnet_factory, admin_user):
         """Test that the reservations view returns 200 for authenticated user."""
-        config = prefix_dhcp_config_factory()
+        config = subnet_factory()
         client.force_login(admin_user)
 
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
 
         assert response.status_code == 200
 
-    def test_reservations_view_context_has_reservations(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_view_context_has_reservations(self, db, client, subnet_factory, admin_user):
         """Test that the view context contains reservations list."""
-        config = prefix_dhcp_config_factory()
+        config = subnet_factory()
         client.force_login(admin_user)
 
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -52,13 +52,13 @@ class TestPrefixDHCPConfigReservationsView:
         assert "reservation_count" in response.context
         assert "kea_reservations" in response.context
 
-    def test_reservations_view_empty_prefix(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_view_empty_prefix(self, db, client, subnet_factory, admin_user):
         """Test that view handles prefix with no reservable IPs."""
-        config = prefix_dhcp_config_factory()
+        config = subnet_factory()
         client.force_login(admin_user)
 
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -67,7 +67,7 @@ class TestPrefixDHCPConfigReservationsView:
         assert response.context["reservation_count"] == 0
         assert response.context["reservations"] == []
 
-    def test_reservations_includes_primary_ip(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_includes_primary_ip(self, db, client, subnet_factory, admin_user):
         """Test that reservations include IPs marked as primary."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
@@ -116,11 +116,11 @@ class TestPrefixDHCPConfigReservationsView:
         device.save()
 
         # Create DHCP config for the prefix
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -137,7 +137,7 @@ class TestPrefixDHCPConfigReservationsView:
         assert kea_res["hostname"] == "test-host"
         assert meta["is_primary"] is True
 
-    def test_reservations_includes_oob_ip(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_includes_oob_ip(self, db, client, subnet_factory, admin_user):
         """Test that reservations include IPs marked as OOB."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
@@ -185,11 +185,11 @@ class TestPrefixDHCPConfigReservationsView:
         device.save()
 
         # Create DHCP config for the prefix
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -204,7 +204,7 @@ class TestPrefixDHCPConfigReservationsView:
         # OOB IP should have interface name appended to hostname
         assert "mgmt0" in kea_res["hostname"] or kea_res["hostname"] == "test-device-oob_mgmt0"
 
-    def test_reservations_excludes_non_primary_non_oob(self, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_excludes_non_primary_non_oob(self, client, subnet_factory, admin_user):
         """Test that IPs not marked as primary or OOB are excluded."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
@@ -240,11 +240,11 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create DHCP config for the prefix
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -253,7 +253,7 @@ class TestPrefixDHCPConfigReservationsView:
         # Should have no reservations since IP is not primary or OOB
         assert response.context["reservation_count"] == 0
 
-    def test_reservations_excludes_fhrp_groups(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_excludes_fhrp_groups(self, db, client, subnet_factory, admin_user):
         """Test that FHRP group IPs are excluded from reservations."""
         import netaddr
         from ipam.models import FHRPGroup, IPAddress, Prefix
@@ -274,11 +274,11 @@ class TestPrefixDHCPConfigReservationsView:
         )
 
         # Create DHCP config for the prefix
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -287,7 +287,7 @@ class TestPrefixDHCPConfigReservationsView:
         # Should have no reservations since FHRP IPs are excluded
         assert response.context["reservation_count"] == 0
 
-    def test_reservations_kea_format(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_kea_format(self, db, client, subnet_factory, admin_user):
         """Test that KEA reservations are properly formatted."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Site
@@ -332,11 +332,11 @@ class TestPrefixDHCPConfigReservationsView:
         device.primary_ip4 = ip
         device.save()
 
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -350,7 +350,7 @@ class TestPrefixDHCPConfigReservationsView:
         assert reservations[0]["hw-address"] == "de:ad:be:ef:ca:fe"
         assert reservations[0]["hostname"] == "json-host"
 
-    def test_reservations_without_mac_address(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_without_mac_address(self, db, client, subnet_factory, admin_user):
         """Test that reservations work without MAC address."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
@@ -387,11 +387,11 @@ class TestPrefixDHCPConfigReservationsView:
         device.primary_ip4 = ip
         device.save()
 
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -405,7 +405,7 @@ class TestPrefixDHCPConfigReservationsView:
         assert "hw-address" not in kea_res  # No MAC address
         assert kea_res["hostname"] == "nomac-device"
 
-    def test_reservations_hostname_from_dns_name(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_reservations_hostname_from_dns_name(self, db, client, subnet_factory, admin_user):
         """Test that hostname is extracted from dns_name when available."""
         import netaddr
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
@@ -442,11 +442,11 @@ class TestPrefixDHCPConfigReservationsView:
         device.primary_ip4 = ip
         device.save()
 
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)
@@ -460,7 +460,7 @@ class TestPrefixDHCPConfigReservationsView:
 class TestReservationCountBadge:
     """Tests for the reservation count badge on the tab."""
 
-    def test_badge_shows_correct_count(self, db, client, prefix_dhcp_config_factory, admin_user):
+    def test_badge_shows_correct_count(self, db, client, subnet_factory, admin_user):
         """Test that the badge shows the correct reservation count."""
         from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
         from ipam.models import IPAddress, Prefix
@@ -493,11 +493,11 @@ class TestReservationCountBadge:
             device.primary_ip4 = ip
             device.save()
 
-        config = prefix_dhcp_config_factory(prefix=prefix)
+        config = subnet_factory(prefix=prefix)
 
         client.force_login(admin_user)
         url = reverse(
-            "plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_reservations",
+            "plugins:netbox_dhcp_kea_plugin:subnet_reservations",
             kwargs={"pk": config.pk},
         )
         response = client.get(url)

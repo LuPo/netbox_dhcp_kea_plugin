@@ -3,7 +3,7 @@ from dcim.models import Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
-from ipam.models import IPAddress, Prefix, ServiceTemplate
+from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.forms import (
     NetBoxModelFilterSetForm,
     NetBoxModelForm,
@@ -25,7 +25,8 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -306,7 +307,36 @@ class ClientClassImportForm(NetBoxModelImportForm):
         )
 
 
-class PrefixDHCPConfigImportForm(NetBoxModelImportForm):
+class SubnetPoolImportForm(NetBoxModelImportForm):
+    subnet = CSVModelChoiceField(
+        queryset=Subnet.objects.all(),
+        to_field_name="pk",
+        help_text="Subnet ID",
+    )
+    ip_range = CSVModelChoiceField(
+        queryset=IPRange.objects.all(),
+        to_field_name="pk",
+        help_text="IP Range ID",
+    )
+    client_class = CSVModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Restricting client class name",
+    )
+
+    class Meta:
+        model = SubnetPool
+        fields = (
+            "subnet",
+            "ip_range",
+            "client_class",
+            "description",
+            "tags",
+        )
+
+
+class SubnetImportForm(NetBoxModelImportForm):
     prefix = CSVModelChoiceField(
         queryset=Prefix.objects.all(),
         to_field_name="prefix",
@@ -321,12 +351,19 @@ class PrefixDHCPConfigImportForm(NetBoxModelImportForm):
         to_field_name="name",
         help_text="DHCP server name",
     )
+    client_class = CSVModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Restricting client class name (KEA client-class)",
+    )
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "prefix",
             "server",
+            "client_class",
             "valid_lifetime",
             "max_lifetime",
             "routers_option_offset",
@@ -696,7 +733,7 @@ class ClientClassForm(NetBoxModelForm):
         return actual_servers
 
 
-class PrefixDHCPConfigForm(NetBoxModelForm):
+class SubnetForm(NetBoxModelForm):
     prefix = DynamicModelChoiceField(queryset=Prefix.objects.all())
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all())
     option_data = DynamicModelMultipleChoiceField(
@@ -704,11 +741,19 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
         required=False,
         help_text="Option data for this subnet",
     )
-    client_classes = DynamicModelMultipleChoiceField(
+    client_class = DynamicModelChoiceField(
         queryset=ClientClass.objects.all(),
         required=False,
-        query_params={"only_in_additional_list": True},
-        help_text="Client classes to evaluate additionally for this subnet (only classes with 'Only in additional list' enabled)",
+        help_text="Client class that restricts which clients can use this subnet (KEA client-class)",
+    )
+    evaluate_additional_classes = DynamicModelMultipleChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        query_params={
+            "server_id": "$server",
+            "only_in_additional_list": "True",
+        },
+        help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
     )
     routers_option_offset = forms.IntegerField(
         required=False,
@@ -721,11 +766,11 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
         FieldSet("prefix", "server", name="Prefix Assignment"),
         FieldSet("valid_lifetime", "max_lifetime", name="Lease Timing"),
         FieldSet("routers_option_offset", "option_data", name="DHCP Options"),
-        FieldSet("client_classes", name="Client Classes"),
+        FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
     )
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "prefix",
             "server",
@@ -733,7 +778,8 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
             "max_lifetime",
             "routers_option_offset",
             "option_data",
-            "client_classes",
+            "client_class",
+            "evaluate_additional_classes",
             "tags",
         )
 
@@ -748,6 +794,40 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
         option_data = self.cleaned_data.get("option_data")
         validate_unique_option_data_space_code(option_data)
         return option_data
+
+    def clean(self):
+        super().clean()
+        client_class = self.cleaned_data.get("client_class")
+        evaluate_additional = self.cleaned_data.get("evaluate_additional_classes")
+
+        # Validate client_class not in evaluate_additional_classes
+        if client_class and evaluate_additional:
+            if client_class in evaluate_additional:
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
+                )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is not used at subnet level. KEA evaluates client-class restrictions AFTER
+        # global class evaluation. Classes with only-in-additional-list are skipped
+        # during global evaluation and there is no higher scope that could list them
+        # in evaluate-additional-classes, so no client would ever match — making the
+        # subnet permanently unreachable.
+        if client_class and client_class.only_in_additional_list:
+            raise ValidationError(
+                {
+                    "client_class": f"Client class '{client_class.name}' has 'only in additional list' enabled. "
+                    "It will not be evaluated globally by KEA, and there is no higher scope that can "
+                    "trigger its evaluation via evaluate-additional-classes. No client will ever match "
+                    "this class, making the subnet permanently unreachable. Either disable "
+                    "'only in additional list' on the class, or use a different restricting class."
+                }
+            )
+
+        return self.cleaned_data
 
     def clean_server(self):
         """Redirect non-primary HA servers to their primary.
@@ -885,9 +965,132 @@ class ClientClassFilterForm(NetBoxModelFilterSetForm):
     )
 
 
-class PrefixDHCPConfigFilterForm(NetBoxModelFilterSetForm):
-    model = PrefixDHCPConfig
+class SubnetFilterForm(NetBoxModelFilterSetForm):
+    model = Subnet
+    client_class = DynamicModelChoiceField(queryset=ClientClass.objects.all(), required=False)
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all(), required=False)
+
+
+class SubnetPoolForm(NetBoxModelForm):
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all())
+    ip_range = DynamicModelChoiceField(
+        queryset=IPRange.objects.all(),
+        help_text="IP Range that defines this pool's address boundaries",
+    )
+    client_class = DynamicModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        help_text="Client class that restricts which clients can use this pool (KEA client-class)",
+    )
+    evaluate_additional_classes = DynamicModelMultipleChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        query_params={
+            "only_in_additional_list": "True",
+        },
+        help_text="Additional client classes to evaluate for clients in this pool (KEA evaluate-additional-classes)",
+    )
+    option_data = DynamicModelMultipleChoiceField(
+        queryset=OptionData.objects.all(),
+        required=False,
+        help_text="DHCP options specific to this pool",
+    )
+
+    fieldsets = (
+        FieldSet("subnet", "ip_range", name="Pool Assignment"),
+        FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
+        FieldSet("option_data", name="DHCP Options"),
+        FieldSet("description", name="Description"),
+    )
+
+    class Meta:
+        model = SubnetPool
+        fields = (
+            "subnet",
+            "ip_range",
+            "client_class",
+            "evaluate_additional_classes",
+            "option_data",
+            "description",
+            "tags",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Determine the subnet from existing instance or initial data (query params)
+        subnet_obj = None
+        if self.instance and self.instance.subnet_id:
+            subnet_obj = self.instance.subnet
+        elif self.initial.get("subnet"):
+            try:
+                subnet_obj = Subnet.objects.get(pk=self.initial["subnet"])
+            except (Subnet.DoesNotExist, ValueError):
+                pass
+
+        # Filter ip_range to only show child ranges of the subnet's prefix
+        if subnet_obj:
+            self.fields["ip_range"].queryset = IPRange.objects.filter(
+                pk__in=subnet_obj.prefix.get_child_ranges().values_list("pk", flat=True)
+            )
+
+    def clean_option_data(self):
+        """Validate that no two option data entries have the same space and code."""
+        option_data = self.cleaned_data.get("option_data")
+        validate_unique_option_data_space_code(option_data)
+        return option_data
+
+    def clean(self):
+        super().clean()
+        subnet = self.cleaned_data.get("subnet")
+        ip_range = self.cleaned_data.get("ip_range")
+        client_class = self.cleaned_data.get("client_class")
+        evaluate_additional = self.cleaned_data.get("evaluate_additional_classes")
+
+        # Validate IP range belongs to subnet's prefix
+        if subnet and ip_range:
+            child_range_ids = set(subnet.prefix.get_child_ranges().values_list("pk", flat=True))
+            if ip_range.pk not in child_range_ids:
+                raise ValidationError({"ip_range": "The selected IP range must be a child of this subnet's prefix."})
+
+        # Validate client_class not in evaluate_additional_classes
+        if client_class and evaluate_additional:
+            if client_class in evaluate_additional:
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
+                )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is reachable. At pool level, KEA checks client-class AFTER evaluating the
+        # subnet's evaluate-additional-classes. So an only-in-additional-list class
+        # used as pool restriction is valid ONLY if the parent subnet explicitly lists
+        # it in evaluate_additional_classes (triggering its evaluation before pool
+        # selection). Without that, KEA never evaluates the class and no client can
+        # obtain addresses from the pool.
+        if client_class and subnet and client_class.only_in_additional_list:
+            subnet_evaluates_class = subnet.evaluate_additional_classes.filter(pk=client_class.pk).exists()
+            if not subnet_evaluates_class:
+                raise ValidationError(
+                    {
+                        "client_class": f"Client class '{client_class.name}' has 'only in additional list' enabled. "
+                        "KEA will not evaluate it globally. For a pool-level restriction to work, the "
+                        "parent subnet must list this class in its 'evaluate additional classes' so that "
+                        "KEA evaluates it before pool selection. Either add the class to the subnet's "
+                        "evaluate-additional-classes, disable 'only in additional list' on the class, "
+                        "or use a different restricting class for this pool."
+                    }
+                )
+
+        return self.cleaned_data
+
+
+class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
+    model = SubnetPool
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all(), required=False)
+    client_class = DynamicModelChoiceField(queryset=ClientClass.objects.all(), required=False)
 
 
 # DHCPHARelationship Forms

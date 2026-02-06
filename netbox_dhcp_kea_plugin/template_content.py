@@ -1,7 +1,7 @@
 from ipam.models import Prefix
 from netbox.plugins import PluginTemplateExtension
 
-from .models import PrefixDHCPConfig
+from .models import Subnet
 
 
 class PrefixDHCPInfo(PluginTemplateExtension):
@@ -23,8 +23,8 @@ class PrefixDHCPInfo(PluginTemplateExtension):
 
         try:
             dhcp_config = (
-                PrefixDHCPConfig.objects.select_related("server")
-                .prefetch_related("option_data", "client_classes")
+                Subnet.objects.select_related("server", "client_class")
+                .prefetch_related("option_data", "evaluate_additional_classes")
                 .get(prefix=obj)
             )
 
@@ -34,7 +34,7 @@ class PrefixDHCPInfo(PluginTemplateExtension):
                     "dhcp_config": dhcp_config,
                 },
             )
-        except PrefixDHCPConfig.DoesNotExist:
+        except Subnet.DoesNotExist:
             return ""
 
 
