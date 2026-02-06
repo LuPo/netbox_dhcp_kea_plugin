@@ -9,6 +9,163 @@ from utilities.views import ViewTab, register_model_view
 from . import filtersets, forms, models, tables
 
 
+# Hook Views
+class HookView(generic.ObjectView):
+    queryset = models.Hook.objects.prefetch_related("hook_groups")
+
+
+class HookListView(generic.ObjectListView):
+    queryset = models.Hook.objects.annotate(hook_groups_count=Count("hook_groups"))
+    table = tables.HookTable
+    filterset = filtersets.HookFilterSet
+    filterset_form = forms.HookFilterForm
+
+
+class HookEditView(generic.ObjectEditView):
+    queryset = models.Hook.objects.all()
+    form = forms.HookForm
+
+
+class HookDeleteView(generic.ObjectDeleteView):
+    queryset = models.Hook.objects.all()
+
+
+class HookBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Hook.objects.all()
+    filterset = filtersets.HookFilterSet
+    table = tables.HookTable
+
+
+class HookImportView(generic.BulkImportView):
+    queryset = models.Hook.objects.all()
+    model_form = forms.HookImportForm
+
+
+def get_hook_group_count(obj):
+    """Get the number of hook groups for a hook."""
+    return obj.hook_groups.count()
+
+
+@register_model_view(models.Hook, name="hook_groups", path="hook-groups")
+class HookHookGroupsView(generic.ObjectView):
+    queryset = models.Hook.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/hook_hookgroups.html"
+    tab = ViewTab(
+        label="Hook Groups",
+        badge=get_hook_group_count,
+        permission="netbox_dhcp_kea_plugin.view_hook",
+    )
+
+    def get(self, request, pk):
+        hook = self.get_object(pk=pk)
+        hook_groups = hook.hook_groups.all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": hook,
+                "hook_groups": hook_groups,
+                "tab": self.tab,
+            },
+        )
+
+
+# HookGroup Views
+class HookGroupView(generic.ObjectView):
+    queryset = models.HookGroup.objects.prefetch_related("hooks", "servers")
+
+
+class HookGroupListView(generic.ObjectListView):
+    queryset = models.HookGroup.objects.annotate(
+        hooks_count=Count("hooks", distinct=True),
+        servers_count=Count("servers", distinct=True),
+    )
+    table = tables.HookGroupTable
+    filterset = filtersets.HookGroupFilterSet
+    filterset_form = forms.HookGroupFilterForm
+
+
+class HookGroupEditView(generic.ObjectEditView):
+    queryset = models.HookGroup.objects.all()
+    form = forms.HookGroupForm
+
+
+class HookGroupDeleteView(generic.ObjectDeleteView):
+    queryset = models.HookGroup.objects.all()
+
+
+class HookGroupBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HookGroup.objects.all()
+    filterset = filtersets.HookGroupFilterSet
+    table = tables.HookGroupTable
+
+
+class HookGroupImportView(generic.BulkImportView):
+    queryset = models.HookGroup.objects.all()
+    model_form = forms.HookGroupImportForm
+
+
+def get_hookgroup_hooks_count(obj):
+    """Get the number of hooks in a hook group."""
+    return obj.hooks.count()
+
+
+@register_model_view(models.HookGroup, name="hooks", path="hooks")
+class HookGroupHooksView(generic.ObjectView):
+    queryset = models.HookGroup.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/hookgroup_hooks.html"
+    tab = ViewTab(
+        label="Hooks",
+        badge=get_hookgroup_hooks_count,
+        permission="netbox_dhcp_kea_plugin.view_hookgroup",
+    )
+
+    def get(self, request, pk):
+        hook_group = self.get_object(pk=pk)
+        hooks = hook_group.hooks.all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": hook_group,
+                "hooks": hooks,
+                "tab": self.tab,
+            },
+        )
+
+
+def get_hookgroup_servers_count(obj):
+    """Get the number of servers in a hook group."""
+    return obj.servers.count()
+
+
+@register_model_view(models.HookGroup, name="servers", path="servers")
+class HookGroupServersView(generic.ObjectView):
+    queryset = models.HookGroup.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/hookgroup_servers.html"
+    tab = ViewTab(
+        label="Servers",
+        badge=get_hookgroup_servers_count,
+        permission="netbox_dhcp_kea_plugin.view_hookgroup",
+    )
+
+    def get(self, request, pk):
+        hook_group = self.get_object(pk=pk)
+        servers = hook_group.servers.all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": hook_group,
+                "servers": servers,
+                "tab": self.tab,
+            },
+        )
+
+
 # VendorOptionSpace Views
 class VendorOptionSpaceView(generic.ObjectView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
@@ -186,6 +343,7 @@ class DHCPServerView(generic.ObjectView):
             "client_class_count": len(dhcp4.get("client-classes", [])),
             "global_option_count": len(dhcp4.get("option-data", [])),
             "option_def_count": len(dhcp4.get("option-def", [])),
+            "hook_count": len(dhcp4.get("hooks-libraries", [])),
             "unused_only_in_additional_list_classes": unused_classes,
             "unconditional_global_classes": unconditional_global_classes,
         }

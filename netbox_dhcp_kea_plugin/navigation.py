@@ -5,6 +5,34 @@ menu_name = get_plugin_config("netbox_dhcp_kea_plugin", "menu_name")
 top_level_menu = get_plugin_config("netbox_dhcp_kea_plugin", "top_level_menu")
 
 # Define menu items
+hook_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:hook_list",
+    link_text="Hooks",
+    permissions=["netbox_dhcp_kea_plugin.view_hook"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:hook_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_hook"],
+        ),
+    ),
+)
+
+hookgroup_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:hookgroup_list",
+    link_text="Hook Groups",
+    permissions=["netbox_dhcp_kea_plugin.view_hookgroup"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:hookgroup_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_hookgroup"],
+        ),
+    ),
+)
+
 vendoroptionspace_menu_item = PluginMenuItem(
     link="plugins:netbox_dhcp_kea_plugin:vendoroptionspace_list",
     link_text="Vendor Option Spaces",
@@ -121,6 +149,13 @@ if top_level_menu:
                 (dhcpharelationship_menu_item,),
             ),
             (
+                "Hook Libraries",
+                (
+                    hook_menu_item,
+                    hookgroup_menu_item,
+                ),
+            ),
+            (
                 "Option Definition",
                 (
                     optiondefinition_menu_item,
@@ -137,6 +172,8 @@ else:
         prefixdhcpconfig_menu_item,
         clientclass_menu_item,
         dhcpharelationship_menu_item,
+        hook_menu_item,
+        hookgroup_menu_item,
         optiondefinition_menu_item,
         optiondata_menu_item,
         vendoroptionspace_menu_item,

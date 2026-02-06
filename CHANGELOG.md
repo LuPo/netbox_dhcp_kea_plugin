@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.4 (2026-02-05)
+
+### Added
+- **Hook Support**
+  - New `Hook` and `HookGroup` models for managing KEA hook libraries
+  - Views and UI for configuring hook libraries on DHCP servers
+  - Demo data generation now includes sample HookGroups with standard hooks assigned to servers
+
+- **Option Definition Improvements**
+  - Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering
+  - Add `id` field to PrefixDHCPConfig output for better identification
+
+### Changed
+- **BREAKING**: Replaced `is_active` boolean field with `status` CharField on DHCPServer model
+  - Uses `DeviceStatusChoices` from NetBox's dcim.choices for consistency with native models
+  - Provides more granular status options (active, planned, staged, failed, offline, decommissioning, inventory)
+  - Migration automatically converts `is_active=True` to `status="active"` and `is_active=False` to `status="offline"`
+- Updated issue templates for versions and Python compatibility
+- Linted tests with Ruff for code quality improvements
+
+### Fixed
+- Default `csv_format` to `True`; only emit `False` when explicitly set
+
+
 ## 0.2.3 (2026-02-28)
 
 ### Fixed

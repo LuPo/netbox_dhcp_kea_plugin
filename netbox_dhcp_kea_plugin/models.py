@@ -1,10 +1,176 @@
+from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from ipam.models import IPAddress, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
+
+
+class Hook(NetBoxModel):
+    """KEA Hook Library configuration.
+
+    Represents a single hook library that can be loaded by KEA processes.
+    Standard hooks are pre-populated from KEA documentation; custom hooks
+    can be created by users.
+    """
+
+    # Process type choices - which KEA processes can load this hook
+    PROCESS_CHOICES = (
+        ("kea-ctrl-agent", "KEA Control Agent"),
+        ("kea-dhcp4", "KEA DHCPv4"),
+        ("kea-dhcp6", "KEA DHCPv6"),
+        ("kea-dhcp-ddns", "KEA DHCP-DDNS"),
+    )
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Human-readable name for this hook library",
+    )
+    library_name = models.CharField(
+        max_length=255,
+        help_text="Library filename (e.g., libdhcp_lease_cmds.so) or full path for custom hooks",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of what this hook library does",
+    )
+    is_standard = models.BooleanField(
+        default=False,
+        help_text="Whether this is a standard KEA hook library (pre-populated, read-only)",
+    )
+    allowed_processes = ArrayField(
+        models.CharField(max_length=20, choices=PROCESS_CHOICES),
+        default=list,
+        help_text="KEA processes that can load this hook library",
+    )
+    parameters = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="Hook library parameters as JSON (will be passed to KEA configuration)",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Hook"
+        verbose_name_plural = "Hooks"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:hook", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if not self.allowed_processes:
+            raise ValidationError({"allowed_processes": "At least one allowed process must be specified."})
+
+    def get_library_path(self, base_path=""):
+        """Construct the full library path.
+
+        Args:
+            base_path: Optional base path to prepend (from HookGroup.library_path)
+
+        Returns:
+            The full library path/filename for KEA configuration
+        """
+        if base_path:
+            # Remove trailing slash from base_path and leading slash from library_name
+            base = base_path.rstrip("/")
+            lib = self.library_name.lstrip("/")
+            return f"{base}/{lib}"
+        return self.library_name
+
+    def to_kea_dict(self, base_path=""):
+        """Generate the KEA hooks-libraries entry for this hook.
+
+        Args:
+            base_path: Optional base path to prepend (from HookGroup.library_path)
+
+        Returns:
+            Dictionary suitable for inclusion in KEA hooks-libraries array
+        """
+        result = {"library": self.get_library_path(base_path)}
+        if self.parameters:
+            result["parameters"] = self.parameters
+        return result
+
+
+class HookGroup(NetBoxModel):
+    """Group of KEA Hook Libraries.
+
+    Hook groups allow organizing hooks together and associating them with
+    DHCP servers. The library_path field specifies where hook libraries
+    are installed on the target system.
+    """
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Unique name for this hook group",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of this hook group",
+    )
+    library_path = models.CharField(
+        max_length=255,
+        blank=True,
+        default="/usr/lib/kea/hooks",
+        help_text="Base path where hook libraries are installed (e.g., /usr/lib/kea/hooks). "
+        "Leave empty to use only the library filename.",
+    )
+    hooks = models.ManyToManyField(
+        Hook,
+        blank=True,
+        related_name="hook_groups",
+        help_text="Hooks included in this group",
+    )
+    servers = models.ManyToManyField(
+        "DHCPServer",
+        blank=True,
+        related_name="hook_groups",
+        help_text="DHCP servers that use this hook group",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Hook Group"
+        verbose_name_plural = "Hook Groups"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:hookgroup", args=[self.pk])
+
+    def get_hooks_for_process(self, process):
+        """Get hooks that are valid for a specific KEA process.
+
+        Args:
+            process: Process identifier (e.g., 'kea-dhcp4', 'kea-dhcp6')
+
+        Returns:
+            QuerySet of Hook objects valid for the specified process
+        """
+        return self.hooks.filter(allowed_processes__contains=[process])
+
+    def to_kea_hooks_libraries(self, process):
+        """Generate KEA hooks-libraries array for a specific process.
+
+        Args:
+            process: Process identifier (e.g., 'kea-dhcp4', 'kea-dhcp6')
+
+        Returns:
+            List of dictionaries suitable for KEA hooks-libraries configuration
+        """
+        hooks = self.get_hooks_for_process(process)
+        return [hook.to_kea_dict(self.library_path) for hook in hooks]
 
 
 class DHCPServer(NetBoxModel):
@@ -25,7 +191,13 @@ class DHCPServer(NetBoxModel):
         related_name="dhcp_servers",
         help_text="IP address of the DHCP server (from NetBox IPAM)",
     )
-    is_active = models.BooleanField(default=True, help_text="Is this server active?")
+    status = models.CharField(
+        verbose_name=_("status"),
+        max_length=50,
+        choices=DeviceStatusChoices,
+        default=DeviceStatusChoices.STATUS_ACTIVE,
+        help_text="Operational status of this DHCP server",
+    )
     service_template = models.ForeignKey(
         ServiceTemplate,
         on_delete=models.PROTECT,
@@ -94,6 +266,10 @@ class DHCPServer(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver", args=[self.pk])
+
+    def get_status_color(self):
+        """Return the color associated with the current status for badge display."""
+        return DeviceStatusChoices.colors.get(self.status, "secondary")
 
     def save(self, *args, **kwargs):
         # Check if this is a new instance or service_template changed
@@ -303,6 +479,30 @@ class DHCPServer(NetBoxModel):
 
         return self.option_data.all()
 
+    def get_hooks_libraries(self, process="kea-dhcp4"):
+        """Get all hooks-libraries entries for this server.
+
+        Collects hooks from all associated hook groups, filtered by the
+        specified process type, and deduplicates by library path.
+
+        Args:
+            process: KEA process identifier (default: 'kea-dhcp4')
+
+        Returns:
+            List of dictionaries suitable for KEA hooks-libraries configuration
+        """
+        hooks_libraries = []
+        seen_libraries = set()
+
+        for hook_group in self.hook_groups.all():
+            for hook_entry in hook_group.to_kea_hooks_libraries(process):
+                library_path = hook_entry.get("library")
+                if library_path not in seen_libraries:
+                    seen_libraries.add(library_path)
+                    hooks_libraries.append(hook_entry)
+
+        return hooks_libraries
+
     def to_kea_dict(self):
         """Return a complete KEA Dhcp4 configuration dictionary for this server.
 
@@ -420,16 +620,34 @@ class DHCPServer(NetBoxModel):
         if subnets:
             dhcp4["subnet4"] = subnets
 
+        # Build hooks-libraries from hook groups assigned to this server
+        hooks_libraries = self.get_hooks_libraries("kea-dhcp4")
+
         # Add HA hooks-libraries if this server is part of an HA relationship
         ha_config = self.get_ha_config()
         if ha_config:
-            dhcp4["hooks-libraries"] = [
-                {"library": "/usr/lib/kea/hooks/libdhcp_lease_cmds.so"},
+            # Track libraries already added from hook groups
+            seen_libraries = {h.get("library") for h in hooks_libraries}
+
+            # Add lease_cmds hook if not already present (required for HA)
+            lease_cmds_lib = "/usr/lib/kea/hooks/libdhcp_lease_cmds.so"
+            if lease_cmds_lib not in seen_libraries:
+                hooks_libraries.append({"library": lease_cmds_lib})
+                seen_libraries.add(lease_cmds_lib)
+
+            # Add HA hook with configuration
+            ha_lib = "/usr/lib/kea/hooks/libdhcp_ha.so"
+            # Remove any existing HA hook entry (we need to add our configured one)
+            hooks_libraries = [h for h in hooks_libraries if h.get("library") != ha_lib]
+            hooks_libraries.append(
                 {
-                    "library": "/usr/lib/kea/hooks/libdhcp_ha.so",
+                    "library": ha_lib,
                     "parameters": {"high-availability": [ha_config]},
-                },
-            ]
+                }
+            )
+
+        if hooks_libraries:
+            dhcp4["hooks-libraries"] = hooks_libraries
 
         return result
 

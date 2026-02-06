@@ -5,6 +5,8 @@ from .models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
@@ -259,7 +261,7 @@ class DHCPServerTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="name")
     description = tables.Column(verbose_name="description")
     ip_address = tables.Column(linkify=True, verbose_name="ip_address")
-    is_active = BooleanColumn(verbose_name="is_active")
+    status = ChoiceFieldColumn(verbose_name="status")
     service_template = tables.Column(linkify=True, verbose_name="service_template", accessor="service_template__pk")
     service = tables.Column(linkify=True, verbose_name="Application Service")
     ha_relationship = tables.Column(linkify=True, verbose_name="HA Relationship")
@@ -274,7 +276,7 @@ class DHCPServerTable(NetBoxTable):
             "name",
             "description",
             "ip_address",
-            "is_active",
+            "status",
             "service_template",
             "service",
             "ha_relationship",
@@ -283,7 +285,7 @@ class DHCPServerTable(NetBoxTable):
             "ha_auto_failover",
             "actions",
         )
-        default_columns = ("name", "description", "ip_address", "is_active", "ha_relationship", "ha_role")
+        default_columns = ("name", "description", "ip_address", "status", "ha_relationship", "ha_role")
 
 
 class ClientClassTable(NetBoxTable):
@@ -401,4 +403,73 @@ class DHCPHARelationshipTable(NetBoxTable):
             "actions",
         )
         default_columns = ("name", "mode", "servers_count", "enable_multi_threading", "description")
+        exclude = ("id",)
+
+
+class HookTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    library_name = tables.Column(verbose_name="Library Name")
+    is_standard = BooleanColumn(verbose_name="Standard")
+    allowed_processes = tables.Column(verbose_name="Allowed Processes")
+    description = tables.Column(verbose_name="Description")
+    hook_groups_count = tables.Column(
+        verbose_name="Hook Groups",
+        accessor="hook_groups__count",
+        orderable=False,
+        linkify=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = Hook
+        fields = (
+            "pk",
+            "name",
+            "library_name",
+            "is_standard",
+            "allowed_processes",
+            "description",
+            "hook_groups_count",
+            "actions",
+        )
+        default_columns = ("name", "library_name", "is_standard", "allowed_processes", "hook_groups_count")
+        exclude = ("id",)
+
+    def render_allowed_processes(self, value):
+        """Render allowed_processes as comma-separated list."""
+        if value:
+            # Map process codes to display names
+            process_map = dict(Hook.PROCESS_CHOICES)
+            return ", ".join(process_map.get(p, p) for p in value)
+        return "—"
+
+
+class HookGroupTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    library_path = tables.Column(verbose_name="Library Path")
+    description = tables.Column(verbose_name="Description")
+    hooks_count = tables.Column(
+        verbose_name="Hooks",
+        accessor="hooks__count",
+        orderable=False,
+        linkify=False,
+    )
+    servers_count = tables.Column(
+        verbose_name="Servers",
+        accessor="servers__count",
+        orderable=False,
+        linkify=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = HookGroup
+        fields = (
+            "pk",
+            "name",
+            "library_path",
+            "description",
+            "hooks_count",
+            "servers_count",
+            "actions",
+        )
+        default_columns = ("name", "library_path", "hooks_count", "servers_count", "description")
         exclude = ("id",)

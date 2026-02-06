@@ -6,6 +6,8 @@ from . import views
 app_name = "netbox_dhcp_kea_plugin"
 
 router = NetBoxRouter()
+router.register("hooks", views.HookViewSet)
+router.register("hook-groups", views.HookGroupViewSet)
 router.register("vendor-option-spaces", views.VendorOptionSpaceViewSet)
 router.register("option-definitions", views.OptionDefinitionViewSet)
 router.register("option-data", views.OptionDataViewSet)

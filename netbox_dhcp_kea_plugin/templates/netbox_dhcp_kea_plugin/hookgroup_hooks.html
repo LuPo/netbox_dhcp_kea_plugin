@@ -1,0 +1,63 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card">
+            <h5 class="card-header">Hooks in "{{ object.name }}"</h5>
+            <div class="card-body">
+                {% if hooks %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Library Name</th>
+                            <th>Full Library Path</th>
+                            <th>Standard</th>
+                            <th>Allowed Processes</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hook in hooks %}
+                        <tr>
+                            <td><a href="{{ hook.get_absolute_url }}">{{ hook.name }}</a></td>
+                            <td>{{ hook.library_name }}</td>
+                            <td>
+                                {% if object.library_path %}
+                                {{ object.library_path }}/{{ hook.library_name }}
+                                {% else %}
+                                {{ hook.library_name }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if hook.is_standard %}
+                                <span class="text-success"><i class="mdi mdi-check-bold"></i></span>
+                                {% else %}
+                                <span class="text-danger"><i class="mdi mdi-close-thick"></i></span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for process in hook.allowed_processes %}
+                                <span class="badge bg-primary" style="color: white">{{ process }}</span>
+                                {% empty %}
+                                <span class="text-muted">None</span>
+                                {% endfor %}
+                            </td>
+                            <td>{{ hook.description|placeholder }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted">
+                    No hooks are assigned to this hook group.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

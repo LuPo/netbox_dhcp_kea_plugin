@@ -1,0 +1,42 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Hook Group</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Library Path</th>
+                        <td>
+                            {% if object.library_path %}
+                            {{ object.library_path }}
+                            {% else %}
+                            <span class="text-muted">(filename only - no path prefix)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Hooks</th>
+                        <td>{{ object.hooks.count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Servers</th>
+                        <td>{{ object.servers.count }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -6,6 +6,8 @@ from .models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
@@ -21,7 +23,7 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = DHCPServer
-        fields = ["id", "name", "is_active", "ha_relationship", "ha_role", "ha_auto_failover"]
+        fields = ["id", "name", "status", "ha_relationship", "ha_role", "ha_auto_failover"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -144,6 +146,51 @@ class DHCPHARelationshipFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = DHCPHARelationship
         fields = ["id", "name", "mode", "enable_multi_threading"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class HookFilterSet(NetBoxModelFilterSet):
+    is_standard = django_filters.BooleanFilter(label="Standard Hook")
+    allowed_processes = django_filters.CharFilter(
+        method="filter_allowed_processes",
+        label="Allowed Process",
+    )
+
+    class Meta:
+        model = Hook
+        fields = ["id", "name", "library_name", "is_standard"]
+
+    def filter_allowed_processes(self, queryset, name, value):
+        """Filter hooks that support a specific process."""
+        if value:
+            return queryset.filter(allowed_processes__contains=[value])
+        return queryset
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(library_name__icontains=value) | Q(description__icontains=value)
+        )
+
+
+class HookGroupFilterSet(NetBoxModelFilterSet):
+    hooks = django_filters.ModelChoiceFilter(
+        queryset=Hook.objects.all(),
+        label="Hook",
+    )
+    servers = django_filters.ModelChoiceFilter(
+        queryset=DHCPServer.objects.all(),
+        label="DHCP Server",
+    )
+
+    class Meta:
+        model = HookGroup
+        fields = ["id", "name", "library_path"]
 
     def search(self, queryset, name, value):
         if not value.strip():

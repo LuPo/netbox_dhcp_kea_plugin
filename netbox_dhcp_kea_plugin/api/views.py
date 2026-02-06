@@ -10,6 +10,8 @@ from ..models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
@@ -19,11 +21,25 @@ from .serializers import (
     ClientClassSerializer,
     DHCPHARelationshipSerializer,
     DHCPServerSerializer,
+    HookGroupSerializer,
+    HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
     PrefixDHCPConfigSerializer,
     VendorOptionSpaceSerializer,
 )
+
+
+class HookViewSet(NetBoxModelViewSet):
+    queryset = Hook.objects.all()
+    serializer_class = HookSerializer
+    filterset_class = filtersets.HookFilterSet
+
+
+class HookGroupViewSet(NetBoxModelViewSet):
+    queryset = HookGroup.objects.prefetch_related("hooks", "servers")
+    serializer_class = HookGroupSerializer
+    filterset_class = filtersets.HookGroupFilterSet
 
 
 class VendorOptionSpaceViewSet(NetBoxModelViewSet):

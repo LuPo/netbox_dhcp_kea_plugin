@@ -168,7 +168,7 @@ def dhcp_server(db, ip_address, service_template):
         description="Test DHCP server",
         ip_address=ip_address,
         service_template=service_template,
-        is_active=True,
+        status="active",
     )
 
 
@@ -204,7 +204,7 @@ def dhcp_server_factory(db, service_template):
             description=f"Test DHCP server {counter[0]}",
             ip_address=ip,
             service_template=service_template,
-            is_active=True,
+            status="active",
             ha_relationship=ha_relationship,
             ha_role=ha_role,
             ha_url=ha_url,
