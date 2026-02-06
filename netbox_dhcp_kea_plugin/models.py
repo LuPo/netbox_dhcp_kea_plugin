@@ -1802,6 +1802,13 @@ class SubnetPool(NetBoxModel):
         end_ip = str(self.ip_range.end_address).split("/")[0]
         return f"{self.subnet} / {start_ip}-{end_ip}"
 
+    @property
+    def pool_range(self):
+        """Return the pool range as 'start - end' without prefix masks."""
+        start_ip = str(self.ip_range.start_address).split("/")[0]
+        end_ip = str(self.ip_range.end_address).split("/")[0]
+        return f"{start_ip} - {end_ip}"
+
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:subnetpool", args=[self.pk])
 

@@ -19,9 +19,7 @@
                     <tr>
                         <th>Pool Range</th>
                         <td>
-                            {% with start=object.ip_range.start_address|stringformat:"s" end=object.ip_range.end_address|stringformat:"s" %}
-                            {{ start }} - {{ end }}
-                            {% endwith %}
+                            {{ object.pool_range }}
                         </td>
                     </tr>
                     <tr>
@@ -52,7 +50,7 @@
         <div class="card">
             <h5 class="card-header">Evaluate Additional Classes</h5>
             <div class="card-body">
-                <p class="text-muted small">These client classes are additionally evaluated for clients in this pool (KEA <code>evaluate-additional-classes</code>).</p>
+                <p class="text-muted small">These client classes are additionally evaluated for clients in this pool (KEA evaluate-additional-classes).</p>
                 <table class="table table-hover">
                     <thead>
                         <tr>
@@ -64,7 +62,7 @@
                         {% for cc in object.evaluate_additional_classes.all %}
                         <tr>
                             <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
-                            <td><code>{{ cc.test_expression|default:"(unconditional)" }}</code></td>
+                            <td>{{ cc.test_expression|default:"(unconditional)" }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -39,7 +39,7 @@
                                 <br><small class="text-muted">{{ pool.ip_range.description }}</small>
                                 {% endif %}
                             </td>
-                            <td><code>{{ pool.pool_range }}</code></td>
+                            <td>{{ pool.pool_range }}</td>
                             <td>
                                 {% if pool.client_class %}
                                     <a href="{{ pool.client_class.get_absolute_url }}">
