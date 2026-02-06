@@ -658,7 +658,9 @@ class SubnetView(generic.ObjectView):
 
 
 class SubnetListView(generic.ObjectListView):
-    queryset = models.Subnet.objects.select_related("prefix", "server")
+    queryset = models.Subnet.objects.select_related("prefix", "server").annotate(
+        pool_count=Count("subnet_pools"),
+    )
     table = tables.SubnetTable
     filterset = filtersets.SubnetFilterSet
     filterset_form = forms.SubnetFilterForm

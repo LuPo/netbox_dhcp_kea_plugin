@@ -324,6 +324,7 @@ class SubnetTable(NetBoxTable):
     server = tables.Column(linkify=True)
     valid_lifetime = tables.Column(verbose_name="Valid Lifetime")
     max_lifetime = tables.Column(verbose_name="Max Lifetime")
+    pool_count = tables.Column(verbose_name="Pools", accessor="pool_count", orderable=True)
     option_data_count = tables.Column(verbose_name="Options", accessor="option_data__count", orderable=False)
     actions = tables.TemplateColumn(
         template_code="""
@@ -348,8 +349,26 @@ class SubnetTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = Subnet
-        fields = ("pk", "prefix", "server", "valid_lifetime", "max_lifetime", "option_data_count", "id", "actions")
-        default_columns = ("prefix", "server", "valid_lifetime", "max_lifetime", "option_data_count", "actions")
+        fields = (
+            "pk",
+            "prefix",
+            "server",
+            "valid_lifetime",
+            "max_lifetime",
+            "pool_count",
+            "option_data_count",
+            "id",
+            "actions",
+        )
+        default_columns = (
+            "prefix",
+            "server",
+            "valid_lifetime",
+            "max_lifetime",
+            "pool_count",
+            "option_data_count",
+            "actions",
+        )
 
 
 class SubnetExportTable(NetBoxTable):
