@@ -28,7 +28,7 @@ class DHCPKEAConfig(PluginConfig):
             "client_classes": 5,
             "dhcp_servers": 3,
             "ha_relationships": 1,
-            "prefix_configs": 5,
+            "dhcp_subnets": 5,
         },
     }
 

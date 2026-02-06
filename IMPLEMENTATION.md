@@ -221,7 +221,7 @@ With optimized querysets using select_related and prefetch_related.
 - `dhcpserver_kea_config.html`: KEA config output tab
 
 #### Injection Template
-- `inc/prefix_dhcp_panel.html`: DHCP info panel for Prefix pages
+- `inc/prefix_dhcp_panel.html`: DHCP info panel for IPAM Prefix views
 
 ### 10. Filter Sets (`filtersets.py`)
 

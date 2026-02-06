@@ -289,14 +289,14 @@ class TestDHCPServer:
             only_in_additional_list=False,
         )
 
-        # Create a prefix config and add both classes to it
-        prefix_config = Subnet.objects.create(
+        # Create a Subnet and add both classes to it
+        subnet_under_test = Subnet.objects.create(
             prefix=prefix,
             server=dhcp_server,
             valid_lifetime=3600,
         )
-        prefix_config.evaluate_additional_classes.add(scoped_class)
-        prefix_config.evaluate_additional_classes.add(normal_class)
+        subnet_under_test.evaluate_additional_classes.add(scoped_class)
+        subnet_under_test.evaluate_additional_classes.add(normal_class)
 
         kea_dict = dhcp_server.to_kea_dict()
         dhcp4 = kea_dict["Dhcp4"]
@@ -329,7 +329,7 @@ class TestDHCPServer:
 
         # Verify subnet has id field from database primary key
         assert "id" in subnet, "Subnet should have 'id' field"
-        assert subnet["id"] == prefix_config.pk, "Subnet id should match Subnet primary key"
+        assert subnet["id"] == subnet_under_test.pk, "Subnet id should match Subnet primary key"
 
         eval_classes = subnet.get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"

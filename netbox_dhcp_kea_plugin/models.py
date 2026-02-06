@@ -347,14 +347,14 @@ class DHCPServer(NetBoxModel):
             try:
                 old_server = DHCPServer.objects.get(pk=self.pk)
                 if old_server.ha_role == "primary" and self.ha_role != "primary":
-                    prefix_count = self.prefix_configs.count()
+                    subnet_count = self.subnet_items.count()
                     class_count = self.client_classes.count()
                     option_count = self.option_data.count()
 
-                    if prefix_count > 0 or class_count > 0 or option_count > 0:
+                    if subnet_count > 0 or class_count > 0 or option_count > 0:
                         raise ValidationError(
                             f"Cannot change role from Primary: server '{self.name}' has "
-                            f"{prefix_count} prefix config(s), {class_count} client class(es), and "
+                            f"{subnet_count} Subnet(s), {class_count} client class(es), and "
                             f"{option_count} option data assigned. Use 'Migrate Configs to New Primary' "
                             f"on the HA Relationship to transfer these to the new primary first."
                         )
@@ -391,7 +391,7 @@ class DHCPServer(NetBoxModel):
         """Get client classes with only_in_additional_list=True that are not used in any subnet or pool.
 
         For HA standby/secondary servers, this always returns an empty list since they inherit
-        prefix configs from the primary server.
+        Subnets from the primary server.
 
         Returns:
             list: List of ClientClass instances that have only_in_additional_list=True
@@ -409,14 +409,14 @@ class DHCPServer(NetBoxModel):
         if not only_in_list_classes.exists():
             return []
 
-        # Get all classes referenced in subnets and pools (use effective prefix configs for HA)
+        # Get all classes referenced in subnets and pools (use effective subnets for HA)
         used_class_ids = set()
-        for prefix_config in self.get_effective_prefix_configs():
+        for subnet_item in self.get_effective_subnet_items():
             # Subnet-level: restricting client_class + evaluate_additional_classes
-            for cc in prefix_config.get_all_subnet_client_classes():
+            for cc in subnet_item.get_all_subnet_client_classes():
                 used_class_ids.add(cc.id)
             # Also check pool-level client classes
-            for cc in prefix_config.get_all_pool_client_classes():
+            for cc in subnet_item.get_all_pool_client_classes():
                 used_class_ids.add(cc.id)
 
         # Find classes that are not used
@@ -433,7 +433,7 @@ class DHCPServer(NetBoxModel):
         client would ever match — making the subnet permanently unreachable.
 
         For HA standby/secondary servers this always returns an empty list
-        since they inherit prefix configs from the primary server.
+        since they inherit subnets from the primary server.
 
         Returns:
             list[Subnet]: Subnets with an unreachable restricting class.
@@ -442,7 +442,7 @@ class DHCPServer(NetBoxModel):
             return []
 
         unreachable = []
-        for subnet in self.get_effective_prefix_configs().select_related("client_class"):
+        for subnet in self.get_effective_subnet_items().select_related("client_class"):
             if subnet.client_class_id and subnet.client_class.only_in_additional_list:
                 unreachable.append(subnet)
         return unreachable
@@ -461,7 +461,7 @@ class DHCPServer(NetBoxModel):
         no client can obtain addresses from the pool.
 
         For HA standby/secondary servers this always returns an empty list
-        since they inherit prefix configs from the primary server.
+        since they inherit subnets from the primary server.
 
         Returns:
             list[SubnetPool]: Pools with an unreachable restricting class.
@@ -470,7 +470,7 @@ class DHCPServer(NetBoxModel):
             return []
 
         unreachable = []
-        for subnet in self.get_effective_prefix_configs().prefetch_related(
+        for subnet in self.get_effective_subnet_items().prefetch_related(
             "evaluate_additional_classes",
             "subnet_pools__client_class",
         ):
@@ -496,8 +496,8 @@ class DHCPServer(NetBoxModel):
             return True  # Not in HA, treat as primary
         return self.ha_role == "primary"
 
-    def get_effective_prefix_configs(self):
-        """Get prefix configs for this server, including from HA primary if applicable.
+    def get_effective_subnet_items(self):
+        """Get subnets for this server, including from HA primary if applicable.
 
         In HA mode, all servers serve the same subnets (from primary's config).
 
@@ -506,15 +506,15 @@ class DHCPServer(NetBoxModel):
         """
         if not self.ha_relationship:
             # Not in HA, return own configs
-            return self.prefix_configs.all()
+            return self.subnet_items.all()
 
         # In HA, get configs from the primary server
         primary_server = self.ha_relationship.servers.filter(ha_role="primary").first()
         if primary_server:
-            return primary_server.prefix_configs.all()
+            return primary_server.subnet_items.all()
 
         # Fallback to own configs if no primary found
-        return self.prefix_configs.all()
+        return self.subnet_items.all()
 
     def get_effective_client_classes(self):
         """Get client classes for this server, including from HA primary if applicable.
@@ -591,7 +591,7 @@ class DHCPServer(NetBoxModel):
         dhcp4 = result["Dhcp4"]
 
         # Use effective methods that respect HA configuration
-        effective_prefix_configs = self.get_effective_prefix_configs()
+        effective_subnet_items = self.get_effective_subnet_items()
         effective_client_classes = self.get_effective_client_classes()
         effective_option_data = self.get_effective_option_data()
 
@@ -599,24 +599,24 @@ class DHCPServer(NetBoxModel):
         all_option_data = set()
         vendor_spaces = set()
 
-        # From prefix configs (using effective configs for HA)
-        for prefix_config in effective_prefix_configs:
-            for opt in prefix_config.option_data.all():
+        # From subnet_items (using effective items for HA)
+        for subnet_item in effective_subnet_items:
+            for opt in subnet_item.option_data.all():
                 all_option_data.add(opt)
                 if opt.vendor_option_space:
                     vendor_spaces.add(opt.vendor_option_space)
             # Subnet-level client classes (restricting + evaluate-additional)
-            for cc in prefix_config.get_all_subnet_client_classes():
+            for cc in subnet_item.get_all_subnet_client_classes():
                 for opt in cc.option_data.all():
                     all_option_data.add(opt)
                     if opt.vendor_option_space:
                         vendor_spaces.add(opt.vendor_option_space)
             # From subnet pool-level configurations
-            for opt in prefix_config.get_all_pool_option_data():
+            for opt in subnet_item.get_all_pool_option_data():
                 all_option_data.add(opt)
                 if opt.vendor_option_space:
                     vendor_spaces.add(opt.vendor_option_space)
-            for cc in prefix_config.get_all_pool_client_classes():
+            for cc in subnet_item.get_all_pool_client_classes():
                 for opt in cc.option_data.all():
                     all_option_data.add(opt)
                     if opt.vendor_option_space:
@@ -640,16 +640,16 @@ class DHCPServer(NetBoxModel):
         if global_option_data:
             dhcp4["option-data"] = global_option_data
 
-        # Collect all client-classes from prefix configs, pools, and server-level (using effective)
+        # Collect all client-classes from subnets, pools, and server-level (using effective)
         # All classes are included in global client-classes array
         # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
         all_client_classes = set()
-        for prefix_config in effective_prefix_configs:
+        for subnet_item in effective_subnet_items:
             # Subnet-level: restricting client_class + evaluate_additional_classes
-            for cc in prefix_config.get_all_subnet_client_classes():
+            for cc in subnet_item.get_all_subnet_client_classes():
                 all_client_classes.add(cc)
             # Include client classes from pool-level configurations
-            for cc in prefix_config.get_all_pool_client_classes():
+            for cc in subnet_item.get_all_pool_client_classes():
                 all_client_classes.add(cc)
         # Add client classes directly linked to this server (using effective)
         for cc in effective_client_classes:
@@ -694,12 +694,12 @@ class DHCPServer(NetBoxModel):
         if all_client_classes:
             dhcp4["client-classes"] = [cc.to_kea_dict() for cc in all_client_classes]
 
-        # Add subnets (subnet4) - using effective prefix configs for HA
+        # Add subnets (subnet4) - using effective subnets for HA
         subnets = []
-        for prefix_config in effective_prefix_configs:
+        for subnet_item in effective_subnet_items:
             # Only include IPv4 prefixes
-            if prefix_config.prefix.prefix.version == 4:
-                subnets.append(prefix_config.to_kea_dict())
+            if subnet_item.prefix.prefix.version == 4:
+                subnets.append(subnet_item.to_kea_dict())
 
         if subnets:
             dhcp4["subnet4"] = subnets
@@ -1376,11 +1376,11 @@ class Subnet(NetBoxModel):
     """KEA subnet configuration linked to NetBox Prefixes"""
 
     prefix = models.OneToOneField(Prefix, on_delete=models.CASCADE, related_name="dhcp_config")
-    server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="prefix_configs")
+    server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="subnet_items")
     option_data = models.ManyToManyField(
         OptionData,
         blank=True,
-        related_name="prefix_configs",
+        related_name="subnet_items",
         help_text="Option data for this subnet",
     )
     client_class = models.ForeignKey(
@@ -2057,15 +2057,15 @@ class DHCPHARelationship(NetBoxModel):
         """
         return self.servers.filter(ha_role="primary").first()
 
-    def get_synced_prefix_count(self):
-        """Get the number of prefixes synced across this HA relationship.
+    def get_synced_subnet_count(self):
+        """Get the number of subnets synced across this HA relationship.
 
         Returns:
-            int: Number of prefix configs on the primary server.
+            int: Number of subnets on the primary server.
         """
         primary = self.get_primary_server()
         if primary:
-            return primary.prefix_configs.count()
+            return primary.subnet_items.count()
         return 0
 
     def get_synced_client_class_count(self):
@@ -2091,7 +2091,7 @@ class DHCPHARelationship(NetBoxModel):
         return 0
 
     def migrate_configs_to_new_primary(self, new_primary_server):
-        """Migrate all prefix configs, client classes, and options to a new primary server.
+        """Migrate all subnets, client classes, and options to a new primary server.
 
         Use this method when changing which server is the primary in an HA relationship.
         It transfers all DHCP configurations from the current primary to the new one.
@@ -2108,9 +2108,9 @@ class DHCPHARelationship(NetBoxModel):
 
         migrated = {"prefixes": 0, "client_classes": 0, "options": 0}
 
-        # Migrate prefix configs
-        prefix_configs = list(current_primary.prefix_configs.all())
-        for config in prefix_configs:
+        # Migrate Subnets
+        subnet_items = list(current_primary.subnet_items.all())
+        for config in subnet_items:
             config.server = new_primary_server
             config.save()
             migrated["prefixes"] += 1

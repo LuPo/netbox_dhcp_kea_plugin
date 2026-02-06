@@ -18,7 +18,7 @@ Configuration in configuration.py:
                 'client_classes': 5,
                 'dhcp_servers': 3,
                 'ha_relationships': 1,
-                'prefix_configs': 5,
+                'dhcp_subnets': 5,
             }
         }
     }
@@ -1244,7 +1244,7 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"  Failed to assign {server.name} to HA: {e}"))
 
-    def create_prefix_configs(
+    def create_dhcp_subnets(
         self, count, prefixes, servers_with_roles, option_data_list, client_classes, demo_tag, dry_run=False
     ):
         """Create prefix DHCP configurations.
@@ -1259,11 +1259,11 @@ class Command(BaseCommand):
         self.stdout.write(f"\nCreating {count} Subnet objects...")
 
         if not prefixes:
-            self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no suitable prefixes available"))
+            self.stdout.write(self.style.WARNING("  Skipping DHCP Subnet creation - no suitable prefixes available"))
             return []
 
         if not servers_with_roles:
-            self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no DHCP servers available"))
+            self.stdout.write(self.style.WARNING("  Skipping DHCP Subnet creation - no DHCP servers available"))
             return []
 
         # Extract just the servers from tuples
@@ -1272,9 +1272,7 @@ class Command(BaseCommand):
         # Filter to only primary servers (ha_role='primary' or not in HA relationship)
         primary_servers = [s for s in servers if s.is_ha_primary()]
         if not primary_servers:
-            self.stdout.write(
-                self.style.WARNING("  Skipping prefix config creation - no primary DHCP servers available")
-            )
+            self.stdout.write(self.style.WARNING("  Skipping DHCP Subnet creation - no primary DHCP servers available"))
             return []
 
         self.stdout.write(
@@ -1356,7 +1354,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  - Client Classes: {config['client_classes']}")
         self.stdout.write(f"  - DHCP Servers: {config['dhcp_servers']}")
         self.stdout.write(f"  - HA Relationships: {config['ha_relationships']}")
-        self.stdout.write(f"  - Prefix Configs: {config['prefix_configs']}")
+        self.stdout.write(f"  - DHCP Subnets: {config['dhcp_subnets']}")
         self.stdout.write("")
 
         # Clear existing data if requested
@@ -1419,8 +1417,8 @@ class Command(BaseCommand):
         # Assign servers to HA relationships
         self.assign_servers_to_ha(servers, ha_relationships, dry_run=dry_run)
 
-        prefix_configs = self.create_prefix_configs(
-            config["prefix_configs"],
+        dhcp_subnets = self.create_dhcp_subnets(
+            config["dhcp_subnets"],
             prerequisites["prefixes"],
             servers,
             option_data_list,
@@ -1448,5 +1446,5 @@ class Command(BaseCommand):
             self.stdout.write(f"  - Client Classes: {len(client_classes)}")
             self.stdout.write(f"  - DHCP Servers: {len(servers)}")
             self.stdout.write(f"  - HA Relationships: {len(ha_relationships)}")
-            self.stdout.write(f"  - Prefix Configs: {len(prefix_configs)}")
+            self.stdout.write(f"  - DHCP Subnets: {len(dhcp_subnets)}")
             self.stdout.write(f"  - Hook Groups: {len(hook_groups)}")

@@ -57,7 +57,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 1,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -79,7 +79,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 5,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -110,7 +110,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -134,7 +134,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -158,7 +158,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -180,7 +180,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 3,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -204,7 +204,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 2,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -228,7 +228,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 1,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -270,7 +270,7 @@ class TestGenerateKeaDemoDataCommand:
                     "client_classes": 2,
                     "dhcp_servers": 0,
                     "ha_relationships": 1,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -326,7 +326,7 @@ class TestGenerateKeaDemoDataTagging:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -349,7 +349,7 @@ class TestGenerateKeaDemoDataTagging:
                     "client_classes": 1,
                     "dhcp_servers": 0,
                     "ha_relationships": 1,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -377,7 +377,7 @@ class TestGenerateKeaDemoDataTagging:
                     "client_classes": 1,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -414,7 +414,7 @@ class TestGenerateKeaDemoDataTagging:
                     "client_classes": 1,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -461,7 +461,7 @@ class TestGenerateKeaDemoDataTagging:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -498,7 +498,7 @@ class TestGenerateKeaDemoDataPrerequisites:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -521,7 +521,7 @@ class TestGenerateKeaDemoDataPrerequisites:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -559,7 +559,7 @@ class TestGenerateKeaDemoDataPrefixFiltering:
                     "client_classes": 0,
                     "dhcp_servers": 0,
                     "ha_relationships": 0,
-                    "prefix_configs": 10,
+                    "dhcp_subnets": 10,
                 }
             }
         }
@@ -646,7 +646,7 @@ class TestGenerateKeaDemoDataDHCPServers:
                     "client_classes": 0,
                     "dhcp_servers": 2,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -685,7 +685,7 @@ class TestGenerateKeaDemoDataDHCPServers:
                     "client_classes": 0,
                     "dhcp_servers": 1,
                     "ha_relationships": 0,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }
@@ -716,7 +716,7 @@ class TestGenerateKeaDemoDataHAAssignment:
                     "client_classes": 0,
                     "dhcp_servers": 2,
                     "ha_relationships": 1,
-                    "prefix_configs": 0,
+                    "dhcp_subnets": 0,
                 }
             }
         }

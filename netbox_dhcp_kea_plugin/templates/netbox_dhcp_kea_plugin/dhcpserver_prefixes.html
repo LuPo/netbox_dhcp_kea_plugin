@@ -7,7 +7,7 @@
         <div class="card">
             <h5 class="card-header">Subnets</h5>
             <div class="card-body">
-                {% if prefix_configs %}
+                {% if subnet_items %}
                 <table class="table table-hover">
                     <thead>
                         <tr>
@@ -21,7 +21,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for config in prefix_configs %}
+                        {% for config in subnet_items %}
                         <tr>
                             <td>
                                 <a href="{{ config.prefix.get_absolute_url }}">{{ config.prefix.prefix }}</a>

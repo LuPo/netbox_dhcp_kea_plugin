@@ -444,20 +444,20 @@ class DHCPServerPrefixesView(generic.ObjectView):
     template_name = "netbox_dhcp_kea_plugin/dhcpserver_prefixes.html"
     tab = ViewTab(
         label="Subnets",
-        badge=lambda obj: obj.prefix_configs.count(),
+        badge=lambda obj: obj.subnet_items.count(),
         visible=lambda obj: obj.is_ha_primary(),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
 
     def get(self, request, pk):
         server = self.get_object(pk=pk)
-        prefix_configs = server.prefix_configs.select_related("prefix").all()
+        subnet_items = server.subnet_items.select_related("prefix").all()
         return render(
             request,
             self.template_name,
             {
                 "object": server,
-                "prefix_configs": prefix_configs,
+                "subnet_items": subnet_items,
                 "tab": self.tab,
             },
         )
@@ -578,7 +578,7 @@ class ClientClassEditView(generic.ObjectEditView):
         if form and hasattr(form, "instance") and form.instance.pk:
             is_now_enabled = form.instance.only_in_additional_list
             if not was_enabled and is_now_enabled:
-                prefix_count = form.instance.prefix_configs.count()
+                prefix_count = form.instance.subnet_items.count()
                 if prefix_count == 0:
                     messages.warning(
                         request,
@@ -660,14 +660,14 @@ class ClientClassPrefixesView(generic.ObjectView):
         all_subnet_ids = set(restricting_subnets.values_list("pk", flat=True)) | set(
             evaluation_subnets.values_list("pk", flat=True)
         )
-        prefix_configs = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
+        subnet_items = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
 
         return render(
             request,
             self.template_name,
             {
                 "object": client_class,
-                "prefix_configs": prefix_configs,
+                "subnet_items": subnet_items,
                 "tab": self.tab,
             },
         )

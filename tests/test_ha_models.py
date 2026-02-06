@@ -665,8 +665,8 @@ class TestHASyncFunctionality:
 
         assert server.is_ha_primary() is True
 
-    def test_get_effective_prefix_configs_syncs_from_primary(self, dhcp_server_factory, prefix_factory):
-        """Test that get_effective_prefix_configs syncs from primary."""
+    def test_get_effective_subnet_items_syncs_from_primary(self, dhcp_server_factory, prefix_factory):
+        """Test that get_effective_subnet_items syncs from primary."""
         from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
@@ -686,7 +686,7 @@ class TestHASyncFunctionality:
             ha_url="http://192.168.1.2:8000/",
         )
 
-        # Create prefix config on primary
+        # Create DHCP Subnet on primary
         prefix = prefix_factory()
         Subnet.objects.create(
             prefix=prefix,
@@ -696,13 +696,13 @@ class TestHASyncFunctionality:
         )
 
         # Primary should have its own config
-        assert primary_server.get_effective_prefix_configs().count() == 1
+        assert primary_server.get_effective_subnet_items().count() == 1
 
         # Standby should get configs from primary
-        assert standby_server.get_effective_prefix_configs().count() == 1
+        assert standby_server.get_effective_subnet_items().count() == 1
 
-    def test_get_effective_prefix_configs_returns_own_for_non_ha(self, dhcp_server_factory, prefix_factory):
-        """Test that get_effective_prefix_configs returns own configs for non-HA."""
+    def test_get_effective_subnet_items_returns_own_for_non_ha(self, dhcp_server_factory, prefix_factory):
+        """Test that get_effective_subnet_items returns own configs for non-HA."""
         from netbox_dhcp_kea_plugin.models import Subnet
 
         server = dhcp_server_factory()
@@ -715,7 +715,7 @@ class TestHASyncFunctionality:
             max_lifetime=7200,
         )
 
-        assert server.get_effective_prefix_configs().count() == 1
+        assert server.get_effective_subnet_items().count() == 1
 
     def test_to_kea_dict_syncs_subnets_for_secondary(self, dhcp_server_factory, prefix_factory):
         """Test that to_kea_dict syncs subnets from primary for secondary server."""
@@ -738,7 +738,7 @@ class TestHASyncFunctionality:
             ha_url="http://192.168.1.2:8000/",
         )
 
-        # Create prefix config on primary
+        # Create DHCP Subnet on primary
         prefix = prefix_factory()
         Subnet.objects.create(
             prefix=prefix,
@@ -784,8 +784,8 @@ class TestHARelationshipHelpers:
 
         assert relationship.get_primary_server() == primary_server
 
-    def test_get_synced_prefix_count(self, dhcp_server_factory, prefix_factory):
-        """Test get_synced_prefix_count returns count from primary."""
+    def test_get_synced_subnet_count(self, dhcp_server_factory, prefix_factory):
+        """Test get_synced_subnet_count returns count from primary."""
         from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
@@ -805,7 +805,7 @@ class TestHARelationshipHelpers:
             ha_url="http://192.168.1.2:8000/",
         )
 
-        # Create prefix configs on primary
+        # Create DHCP Subnets on primary
         for _i in range(3):
             prefix = prefix_factory()
             Subnet.objects.create(
@@ -815,7 +815,7 @@ class TestHARelationshipHelpers:
                 max_lifetime=7200,
             )
 
-        assert relationship.get_synced_prefix_count() == 3
+        assert relationship.get_synced_subnet_count() == 3
 
     def test_migrate_configs_to_new_primary(self, dhcp_server_factory, prefix_factory):
         """Test migrate_configs_to_new_primary transfers configs."""
@@ -838,7 +838,7 @@ class TestHARelationshipHelpers:
             ha_url="http://192.168.1.2:8000/",
         )
 
-        # Create prefix config on old primary
+        # Create DHCP Subnet on old primary
         prefix = prefix_factory()
         Subnet.objects.create(
             prefix=prefix,
@@ -853,8 +853,8 @@ class TestHARelationshipHelpers:
         assert result["prefixes"] == 1
 
         # Config should now be on new primary
-        assert new_primary.prefix_configs.count() == 1
-        assert old_primary.prefix_configs.count() == 0
+        assert new_primary.subnet_items.count() == 1
+        assert old_primary.subnet_items.count() == 0
 
 
 @pytest.mark.django_db
@@ -876,7 +876,7 @@ class TestHARoleChangeProtection:
             ha_url="http://192.168.1.1:8000/",
         )
 
-        # Create prefix config
+        # Create DHCP Subnet
         prefix = prefix_factory()
         Subnet.objects.create(
             prefix=prefix,
@@ -912,7 +912,7 @@ class TestHARoleChangeProtection:
             ha_url="http://192.168.1.2:8000/",
         )
 
-        # Create prefix config
+        # Create DHCP Subnet
         prefix = prefix_factory()
         Subnet.objects.create(
             prefix=prefix,
