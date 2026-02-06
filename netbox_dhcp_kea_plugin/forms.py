@@ -749,6 +749,10 @@ class SubnetForm(NetBoxModelForm):
     evaluate_additional_classes = DynamicModelMultipleChoiceField(
         queryset=ClientClass.objects.all(),
         required=False,
+        query_params={
+            "server_id": "$server",
+            "only_in_additional_list": "True",
+        },
         help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
     )
     routers_option_offset = forms.IntegerField(
