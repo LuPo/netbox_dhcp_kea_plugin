@@ -423,6 +423,69 @@ class DHCPServer(NetBoxModel):
         unused_classes = [cc for cc in only_in_list_classes if cc.id not in used_class_ids]
         return unused_classes
 
+    def get_unreachable_subnet_restrictions(self):
+        """Get subnets whose restricting client_class has only_in_additional_list=True.
+
+        KEA evaluates the subnet-level ``client-class`` restriction *after*
+        global class evaluation.  Classes with ``only-in-additional-list``
+        are skipped during global evaluation and there is no higher scope
+        that could list them in ``evaluate-additional-classes``, so no
+        client would ever match — making the subnet permanently unreachable.
+
+        For HA standby/secondary servers this always returns an empty list
+        since they inherit prefix configs from the primary server.
+
+        Returns:
+            list[Subnet]: Subnets with an unreachable restricting class.
+        """
+        if not self.is_ha_primary():
+            return []
+
+        unreachable = []
+        for subnet in self.get_effective_prefix_configs().select_related("client_class"):
+            if subnet.client_class_id and subnet.client_class.only_in_additional_list:
+                unreachable.append(subnet)
+        return unreachable
+
+    def get_unreachable_pool_restrictions(self):
+        """Get subnet pools whose restricting client_class has
+        only_in_additional_list=True and is NOT listed in the parent
+        subnet's evaluate_additional_classes.
+
+        At pool level, KEA checks the ``client-class`` restriction after
+        evaluating the subnet's ``evaluate-additional-classes``.  An
+        ``only-in-additional-list`` class used as a pool restriction is
+        therefore valid *only* if the parent subnet explicitly lists it in
+        ``evaluate_additional_classes`` (triggering its evaluation before
+        pool selection).  Without that, KEA never evaluates the class and
+        no client can obtain addresses from the pool.
+
+        For HA standby/secondary servers this always returns an empty list
+        since they inherit prefix configs from the primary server.
+
+        Returns:
+            list[SubnetPool]: Pools with an unreachable restricting class.
+        """
+        if not self.is_ha_primary():
+            return []
+
+        unreachable = []
+        for subnet in self.get_effective_prefix_configs().prefetch_related(
+            "evaluate_additional_classes",
+            "subnet_pools__client_class",
+        ):
+            # Pre-compute the set of class IDs the subnet evaluates additionally
+            subnet_eval_ids = set(subnet.evaluate_additional_classes.values_list("pk", flat=True))
+
+            for pool in subnet.subnet_pools.all():
+                if (
+                    pool.client_class_id
+                    and pool.client_class.only_in_additional_list
+                    and pool.client_class_id not in subnet_eval_ids
+                ):
+                    unreachable.append(pool)
+        return unreachable
+
     def is_ha_primary(self):
         """Check if this server is the primary in its HA relationship.
 
@@ -1366,6 +1429,26 @@ class Subnet(NetBoxModel):
                     {"routers_option_offset": f"Offset must be between 0 and {max_offset} for this prefix."}
                 )
 
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is not used at subnet level. KEA evaluates client-class restrictions AFTER
+        # global class evaluation. Classes with only-in-additional-list are skipped
+        # during global evaluation and there is no higher scope that could list them
+        # in evaluate-additional-classes, so no client would ever match — making the
+        # subnet permanently unreachable.
+        if self.client_class_id:
+            # Need to fetch the related object if not already loaded
+            cc = self.client_class
+            if cc and cc.only_in_additional_list:
+                raise ValidationError(
+                    {
+                        "client_class": f"Client class '{cc.name}' has 'only in additional list' enabled. "
+                        "It will not be evaluated globally by KEA, and there is no higher scope that can "
+                        "trigger its evaluation via evaluate-additional-classes. No client will ever match "
+                        "this class, making the subnet permanently unreachable. Either disable "
+                        "'only in additional list' on the class, or use a different restricting class."
+                    }
+                )
+
         # Validate that client_class is not also in evaluate_additional_classes
         # (can only check after save for M2M, so this is a best-effort check)
         if self.pk and self.client_class_id:
@@ -1739,6 +1822,30 @@ class SubnetPool(NetBoxModel):
                         "Remove the 'mark utilized' flag on the IP range to use it as a pool."
                     }
                 )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is reachable. At pool level, KEA checks client-class AFTER evaluating the
+        # subnet's evaluate-additional-classes. So an only-in-additional-list class
+        # used as pool restriction is valid ONLY if the parent subnet explicitly lists
+        # it in evaluate_additional_classes (triggering its evaluation before pool
+        # selection). Without that, KEA never evaluates the class and no client can
+        # obtain addresses from the pool.
+        if self.client_class_id and self.subnet_id:
+            cc = self.client_class
+            if cc and cc.only_in_additional_list:
+                # Check if the parent subnet has this class in evaluate_additional_classes
+                subnet_evaluates_class = self.subnet.evaluate_additional_classes.filter(pk=cc.pk).exists()
+                if not subnet_evaluates_class:
+                    raise ValidationError(
+                        {
+                            "client_class": f"Client class '{cc.name}' has 'only in additional list' enabled. "
+                            "KEA will not evaluate it globally. For a pool-level restriction to work, the "
+                            "parent subnet must list this class in its 'evaluate additional classes' so that "
+                            "KEA evaluates it before pool selection. Either add the class to the subnet's "
+                            "evaluate-additional-classes, disable 'only in additional list' on the class, "
+                            "or use a different restricting class for this pool."
+                        }
+                    )
 
         # Validate that client_class is not also in evaluate_additional_classes
         # (can only check after save for M2M, so this is a best-effort check)

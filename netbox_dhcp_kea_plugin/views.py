@@ -339,6 +339,15 @@ class DHCPServerView(generic.ObjectView):
         # Check for unconditional classes (empty test) that are globally evaluated
         unconditional_global_classes = instance.client_classes.filter(test_expression="", only_in_additional_list=False)
 
+        # Check for unreachable subnet restrictions (only-in-additional-list class
+        # used as subnet client-class — no higher scope can trigger evaluation)
+        unreachable_subnets = instance.get_unreachable_subnet_restrictions()
+
+        # Check for unreachable pool restrictions (only-in-additional-list class
+        # used as pool client-class without being in the parent subnet's
+        # evaluate-additional-classes)
+        unreachable_pools = instance.get_unreachable_pool_restrictions()
+
         return {
             "subnet_count": len(dhcp4.get("subnet4", [])),
             "client_class_count": len(dhcp4.get("client-classes", [])),
@@ -347,6 +356,8 @@ class DHCPServerView(generic.ObjectView):
             "hook_count": len(dhcp4.get("hooks-libraries", [])),
             "unused_only_in_additional_list_classes": unused_classes,
             "unconditional_global_classes": unconditional_global_classes,
+            "unreachable_subnets": unreachable_subnets,
+            "unreachable_pools": unreachable_pools,
         }
 
 

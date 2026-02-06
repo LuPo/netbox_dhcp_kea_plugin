@@ -129,8 +129,71 @@
         </div>
     </div>
     <div class="col col-md-6">
-        {% if unused_only_in_additional_list_classes %}
+        {% if unreachable_subnets %}
         <div class="card">
+            <h5 class="card-header">
+                <i class="mdi mdi-alert-octagon text-danger"></i> Unreachable Subnet Restrictions
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-danger mb-2">
+                    The following subnets use a restricting client class that has "Only in additional list" enabled.
+                    KEA will not evaluate these classes globally, and there is no higher scope that can trigger their evaluation.
+                    <strong>No client will ever match, making these subnets permanently unreachable.</strong>
+                </div>
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Subnet</th>
+                            <th>Restricting Class</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subnet in unreachable_subnets %}
+                        <tr>
+                            <td><a href="{{ subnet.get_absolute_url }}">{{ subnet }}</a></td>
+                            <td><a href="{{ subnet.client_class.get_absolute_url }}">{{ subnet.client_class.name }}</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if unreachable_pools %}
+        <div class="card{% if unreachable_subnets %} mt-3{% endif %}">
+            <h5 class="card-header">
+                <i class="mdi mdi-alert-octagon text-danger"></i> Unreachable Pool Restrictions
+            </h5>
+            <div class="card-body">
+                <div class="alert alert-danger mb-2">
+                    The following pools use a restricting client class that has "Only in additional list" enabled
+                    but is <strong>not</strong> listed in the parent subnet's evaluate-additional-classes.
+                    KEA will never evaluate the class before pool selection, making these pools permanently unreachable.
+                    Add the class to the subnet's evaluate-additional-classes to fix this.
+                </div>
+                <table class="table table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Pool</th>
+                            <th>Parent Subnet</th>
+                            <th>Restricting Class</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pool in unreachable_pools %}
+                        <tr>
+                            <td><a href="{{ pool.get_absolute_url }}">{{ pool }}</a></td>
+                            <td><a href="{{ pool.subnet.get_absolute_url }}">{{ pool.subnet }}</a></td>
+                            <td><a href="{{ pool.client_class.get_absolute_url }}">{{ pool.client_class.name }}</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if unused_only_in_additional_list_classes %}
+        <div class="card{% if unreachable_subnets or unreachable_pools %} mt-3{% endif %}">
             <h5 class="card-header">
                 <i class="mdi mdi-alert text-warning"></i> Unused Client Classes
             </h5>
@@ -144,7 +207,7 @@
         </div>
         {% endif %}
         {% if unconditional_global_classes %}
-        <div class="card mt-3">
+        <div class="card{% if unreachable_subnets or unreachable_pools or unused_only_in_additional_list_classes %} mt-3{% endif %}">
             <h5 class="card-header">
                 <i class="mdi mdi-information text-info"></i> Unconditional Global Classes
             </h5>

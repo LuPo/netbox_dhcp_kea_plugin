@@ -806,6 +806,23 @@ class SubnetForm(NetBoxModelForm):
                     }
                 )
 
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is not used at subnet level. KEA evaluates client-class restrictions AFTER
+        # global class evaluation. Classes with only-in-additional-list are skipped
+        # during global evaluation and there is no higher scope that could list them
+        # in evaluate-additional-classes, so no client would ever match — making the
+        # subnet permanently unreachable.
+        if client_class and client_class.only_in_additional_list:
+            raise ValidationError(
+                {
+                    "client_class": f"Client class '{client_class.name}' has 'only in additional list' enabled. "
+                    "It will not be evaluated globally by KEA, and there is no higher scope that can "
+                    "trigger its evaluation via evaluate-additional-classes. No client will ever match "
+                    "this class, making the subnet permanently unreachable. Either disable "
+                    "'only in additional list' on the class, or use a different restricting class."
+                }
+            )
+
         return self.cleaned_data
 
     def clean_server(self):
@@ -1036,6 +1053,27 @@ class SubnetPoolForm(NetBoxModelForm):
                     {
                         "client_class": "The restricting client class should not also appear in "
                         "evaluate-additional-classes."
+                    }
+                )
+
+        # Validate that a restricting client_class with only_in_additional_list=True
+        # is reachable. At pool level, KEA checks client-class AFTER evaluating the
+        # subnet's evaluate-additional-classes. So an only-in-additional-list class
+        # used as pool restriction is valid ONLY if the parent subnet explicitly lists
+        # it in evaluate_additional_classes (triggering its evaluation before pool
+        # selection). Without that, KEA never evaluates the class and no client can
+        # obtain addresses from the pool.
+        if client_class and subnet and client_class.only_in_additional_list:
+            subnet_evaluates_class = subnet.evaluate_additional_classes.filter(pk=client_class.pk).exists()
+            if not subnet_evaluates_class:
+                raise ValidationError(
+                    {
+                        "client_class": f"Client class '{client_class.name}' has 'only in additional list' enabled. "
+                        "KEA will not evaluate it globally. For a pool-level restriction to work, the "
+                        "parent subnet must list this class in its 'evaluate additional classes' so that "
+                        "KEA evaluates it before pool selection. Either add the class to the subnet's "
+                        "evaluate-additional-classes, disable 'only in additional list' on the class, "
+                        "or use a different restricting class for this pool."
                     }
                 )
 
