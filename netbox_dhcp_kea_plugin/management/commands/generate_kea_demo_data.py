@@ -30,7 +30,7 @@ from dcim.models import Manufacturer
 from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand, CommandError
 from extras.models import Tag
-from ipam.models import IPAddress, Prefix, ServiceTemplate
+from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.plugins.utils import get_plugin_config
 from virtualization.models import Cluster, ClusterType, VirtualMachine, VMInterface
 
@@ -44,6 +44,7 @@ from netbox_dhcp_kea_plugin.models import (
     OptionData,
     OptionDefinition,
     Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -125,6 +126,19 @@ class Command(BaseCommand):
             return
 
         # Delete in order to respect foreign key constraints
+
+        # Delete demo SubnetPools
+        demo_subnets = Subnet.objects.filter(tags=demo_tag)
+        count = SubnetPool.objects.filter(tags=demo_tag).count()
+        count += SubnetPool.objects.filter(subnet__in=demo_subnets).exclude(tags=demo_tag).count()
+        SubnetPool.objects.filter(tags=demo_tag).delete()
+        SubnetPool.objects.filter(subnet__in=demo_subnets).delete()
+        self.stdout.write(f"  - Deleted {count} SubnetPool objects")
+
+        # Delete demo IP Ranges
+        count = IPRange.objects.filter(tags=demo_tag).count()
+        IPRange.objects.filter(tags=demo_tag).delete()
+        self.stdout.write(f"  - Deleted {count} IPRange objects")
 
         # Delete demo HookGroups (clear M2M relations first)
         demo_hook_groups = HookGroup.objects.filter(tags=demo_tag)
@@ -1318,6 +1332,208 @@ class Command(BaseCommand):
 
         return created_configs
 
+    def create_subnet_pools(self, dhcp_subnets, client_classes, option_data_list, demo_tag, dry_run=False):
+        """Create IP Ranges and SubnetPool configurations for demo subnets.
+
+        For each subnet, creates 2-3 IP Ranges within the prefix and optionally
+        configures them with restricting client classes, evaluate-additional-classes,
+        and pool-specific option data.
+
+        Demonstrates correct KEA semantics:
+        - Normal classes (only_in_additional_list=False) can be used as pool
+          restrictions directly since they are globally evaluated.
+        - only_in_additional_list classes can be used as pool restrictions ONLY
+          when the parent subnet lists them in evaluate_additional_classes
+          (which triggers their evaluation before pool selection).
+        """
+        self.stdout.write("\nCreating IP Ranges and SubnetPool configurations...")
+
+        if not dhcp_subnets:
+            self.stdout.write(self.style.WARNING("  Skipping SubnetPool creation - no subnets available"))
+            return []
+
+        import netaddr
+
+        # Separate client classes by type for correct assignment
+        normal_classes = [cc for cc in client_classes if not cc.only_in_additional_list]
+        only_additional_classes = [cc for cc in client_classes if cc.only_in_additional_list]
+
+        created_pools = []
+        for subnet in dhcp_subnets:
+            prefix_network = subnet.prefix.prefix
+            if isinstance(prefix_network, str):
+                prefix_network = netaddr.IPNetwork(prefix_network)
+
+            # Skip if prefix is too small for multiple pools
+            if prefix_network.size < 32:
+                self.stdout.write(f"  Skipping {subnet}: prefix too small for demo pools")
+                continue
+
+            # Check if this prefix already has child IP ranges
+            existing_ranges = subnet.prefix.get_child_ranges().count()
+            if existing_ranges > 0:
+                self.stdout.write(f"  Skipping {subnet}: already has {existing_ranges} IP range(s)")
+                continue
+
+            if dry_run:
+                self.stdout.write(f"  [DRY-RUN] Would create IP ranges and pools for: {subnet}")
+                continue
+
+            try:
+                # Calculate pool boundaries within the prefix, leaving room for
+                # the router (.1) and some headroom at the top
+                network_addr = int(prefix_network.network)
+                broadcast_addr = int(prefix_network.broadcast)
+                usable_start = network_addr + 10  # Skip .0-.9 (network, router, static)
+                usable_end = broadcast_addr - 5  # Leave .251-.255 (broadcast, reserved)
+                usable_size = usable_end - usable_start
+
+                if usable_size < 30:
+                    self.stdout.write(f"  Skipping {subnet}: not enough usable space for demo pools")
+                    continue
+
+                # Split usable space into 2-3 pools with gaps between them
+                pool_count = 2 if usable_size < 100 else 3
+                pool_size = usable_size // (pool_count + 1)  # +1 for gaps
+                gap_size = max(5, pool_size // 4)
+
+                ip_ranges = []
+                current_start = usable_start
+                for p_idx in range(pool_count):
+                    pool_end = min(current_start + pool_size - 1, usable_end)
+                    if pool_end <= current_start:
+                        break
+
+                    start_ip = netaddr.IPAddress(current_start)
+                    end_ip = netaddr.IPAddress(pool_end)
+                    prefix_len = prefix_network.prefixlen
+
+                    ip_range, range_created = IPRange.objects.get_or_create(
+                        start_address=netaddr.IPNetwork(f"{start_ip}/{prefix_len}"),
+                        end_address=netaddr.IPNetwork(f"{end_ip}/{prefix_len}"),
+                        defaults={
+                            "description": f"Demo pool {p_idx + 1} for {subnet.prefix}",
+                        },
+                    )
+                    if range_created:
+                        self.tag_object(ip_range, demo_tag)
+                    ip_ranges.append(ip_range)
+                    self.stdout.write(f"    Created IP Range: {str(start_ip)} - {str(end_ip)}")
+
+                    current_start = pool_end + gap_size + 1
+
+                if not ip_ranges:
+                    continue
+
+                # --- Pool configuration scenarios ---
+                # We demonstrate several patterns across the pools:
+                #
+                # Pool 0 (first pool): Restricted by a normal class (globally
+                #   evaluated, so no special subnet config needed).
+                #
+                # Pool 1 (second pool): Restricted by an only_in_additional_list
+                #   class — requires the parent subnet to list the class in
+                #   evaluate_additional_classes so KEA evaluates it before pool
+                #   selection. Also gets pool-level option data.
+                #
+                # Pool 2 (third pool, if exists): No restriction, but has
+                #   evaluate_additional_classes at pool level to trigger extra
+                #   class evaluation for clients in this pool.
+
+                for p_idx, ip_range in enumerate(ip_ranges):
+                    pool_kwargs = {
+                        "subnet": subnet,
+                        "ip_range": ip_range,
+                    }
+                    pool_eval_classes = []
+                    pool_description = ""
+
+                    if p_idx == 0 and normal_classes:
+                        # Scenario 1: Normal class as pool restriction
+                        restricting_class = random.choice(normal_classes)
+                        pool_kwargs["client_class"] = restricting_class
+                        pool_description = f"Restricted to '{restricting_class.name}' (globally evaluated class)"
+                        self.stdout.write(
+                            f"    Pool {p_idx + 1}: restricted by normal class '{restricting_class.name}'"
+                        )
+
+                    elif p_idx == 1 and only_additional_classes:
+                        # Scenario 2: only_in_additional_list class as pool restriction
+                        # Must add to subnet's evaluate_additional_classes first!
+                        restricting_class = random.choice(only_additional_classes)
+                        pool_kwargs["client_class"] = restricting_class
+
+                        # Ensure the parent subnet evaluates this class
+                        subnet.evaluate_additional_classes.add(restricting_class)
+                        self.stdout.write(
+                            f"    Pool {p_idx + 1}: restricted by only-in-additional "
+                            f"class '{restricting_class.name}' "
+                            f"(added to subnet evaluate-additional-classes)"
+                        )
+                        pool_description = (
+                            f"Restricted to '{restricting_class.name}' "
+                            f"(only-in-additional-list — subnet triggers evaluation)"
+                        )
+
+                        # Also add pool-level option data
+                        if option_data_list:
+                            pool_opts = random.sample(
+                                option_data_list,
+                                min(random.randint(1, 2), len(option_data_list)),
+                            )
+
+                    elif p_idx == 2:
+                        # Scenario 3: No restriction, but pool-level evaluate-additional
+                        if only_additional_classes:
+                            pool_eval_classes = random.sample(
+                                only_additional_classes,
+                                min(1, len(only_additional_classes)),
+                            )
+                            class_names = ", ".join(c.name for c in pool_eval_classes)
+                            self.stdout.write(
+                                f"    Pool {p_idx + 1}: no restriction, evaluate-additional classes: [{class_names}]"
+                            )
+                            pool_description = f"Open pool with additional class evaluation: {class_names}"
+                        else:
+                            pool_description = "Open pool (no restrictions)"
+                            self.stdout.write(f"    Pool {p_idx + 1}: open (no restrictions)")
+                    else:
+                        pool_description = "Open pool (no restrictions)"
+                        self.stdout.write(f"    Pool {p_idx + 1}: open (no restrictions)")
+
+                    pool_kwargs["description"] = pool_description
+
+                    subnet_pool, pool_created = SubnetPool.objects.get_or_create(
+                        subnet=subnet,
+                        ip_range=ip_range,
+                        defaults={k: v for k, v in pool_kwargs.items() if k not in ("subnet", "ip_range")},
+                    )
+
+                    if pool_created:
+                        self.tag_object(subnet_pool, demo_tag)
+
+                        # Set evaluate_additional_classes M2M
+                        if pool_eval_classes:
+                            subnet_pool.evaluate_additional_classes.set(pool_eval_classes)
+
+                        # Set pool-level option data for scenario 2
+                        if p_idx == 1 and option_data_list:
+                            pool_opts = random.sample(
+                                option_data_list,
+                                min(random.randint(1, 2), len(option_data_list)),
+                            )
+                            subnet_pool.option_data.set(pool_opts)
+                            self.stdout.write(f"      Added {len(pool_opts)} pool-level option data entries")
+
+                    created_pools.append(subnet_pool)
+
+                self.stdout.write(f"  Configured {len(ip_ranges)} pool(s) for {subnet}")
+
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"  Failed to create pools for {subnet}: {e}"))
+
+        return created_pools
+
     def handle(self, *args, **options):
         config = self.get_config()
         force = options["force"]
@@ -1427,6 +1643,15 @@ class Command(BaseCommand):
             dry_run=dry_run,
         )
 
+        # Create subnet pools with IP ranges and client class restrictions
+        subnet_pools = self.create_subnet_pools(
+            dhcp_subnets,
+            client_classes,
+            option_data_list,
+            demo_tag,
+            dry_run=dry_run,
+        )
+
         # Create hook groups and assign to servers
         hook_groups = self.create_hook_groups(
             servers,
@@ -1447,4 +1672,5 @@ class Command(BaseCommand):
             self.stdout.write(f"  - DHCP Servers: {len(servers)}")
             self.stdout.write(f"  - HA Relationships: {len(ha_relationships)}")
             self.stdout.write(f"  - DHCP Subnets: {len(dhcp_subnets)}")
+            self.stdout.write(f"  - Subnet Pools: {len(subnet_pools)}")
             self.stdout.write(f"  - Hook Groups: {len(hook_groups)}")
