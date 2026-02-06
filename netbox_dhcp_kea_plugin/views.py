@@ -431,7 +431,7 @@ class DHCPServerPrefixesView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
     template_name = "netbox_dhcp_kea_plugin/dhcpserver_prefixes.html"
     tab = ViewTab(
-        label="Assigned Prefixes",
+        label="Subnets",
         badge=lambda obj: obj.prefix_configs.count(),
         visible=lambda obj: obj.is_ha_primary(),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
@@ -620,7 +620,7 @@ class ClientClassPrefixesView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("prefix_configs__prefix", "prefix_configs__server")
     template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
     tab = ViewTab(
-        label="Assigned Prefixes",
+        label="Subnets",
         badge=lambda obj: "⚠️" if obj.prefix_configs.count() == 0 else obj.prefix_configs.count(),
         visible=lambda obj: obj.only_in_additional_list,
         permission="netbox_dhcp_kea_plugin.view_clientclass",
@@ -641,9 +641,9 @@ class ClientClassPrefixesView(generic.ObjectView):
         )
 
 
-# PrefixDHCPConfig Views
-class PrefixDHCPConfigView(generic.ObjectView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix", "server").prefetch_related(
+# Subnet Views
+class SubnetView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix", "server").prefetch_related(
         "option_data", "client_classes"
     )
 
@@ -655,22 +655,22 @@ class PrefixDHCPConfigView(generic.ObjectView):
         }
 
 
-class PrefixDHCPConfigListView(generic.ObjectListView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix", "server")
-    table = tables.PrefixDHCPConfigTable
-    filterset = filtersets.PrefixDHCPConfigFilterSet
-    filterset_form = forms.PrefixDHCPConfigFilterForm
+class SubnetListView(generic.ObjectListView):
+    queryset = models.Subnet.objects.select_related("prefix", "server")
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
 
     def get_table(self, data, request, bulk_actions=True):
         # Use export table for CSV/YAML exports
         if request.GET.get("export"):
-            return tables.PrefixDHCPConfigExportTable(data)
+            return tables.SubnetExportTable(data)
         return super().get_table(data, request, bulk_actions)
 
 
-class PrefixDHCPConfigEditView(generic.ObjectEditView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    form = forms.PrefixDHCPConfigForm
+class SubnetEditView(generic.ObjectEditView):
+    queryset = models.Subnet.objects.all()
+    form = forms.SubnetForm
 
     def post(self, request, *args, **kwargs):
         """Handle form submission with HA redirect notification."""
@@ -699,19 +699,19 @@ class PrefixDHCPConfigEditView(generic.ObjectEditView):
         return response
 
 
-class PrefixDHCPConfigDeleteView(generic.ObjectDeleteView):
-    queryset = models.PrefixDHCPConfig.objects.all()
+class SubnetDeleteView(generic.ObjectDeleteView):
+    queryset = models.Subnet.objects.all()
 
 
-class PrefixDHCPConfigBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    filterset = filtersets.PrefixDHCPConfigFilterSet
-    table = tables.PrefixDHCPConfigTable
+class SubnetBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Subnet.objects.all()
+    filterset = filtersets.SubnetFilterSet
+    table = tables.SubnetTable
 
 
-class PrefixDHCPConfigImportView(generic.BulkImportView):
-    queryset = models.PrefixDHCPConfig.objects.all()
-    model_form = forms.PrefixDHCPConfigImportForm
+class SubnetImportView(generic.BulkImportView):
+    queryset = models.Subnet.objects.all()
+    model_form = forms.SubnetImportForm
 
 
 # DHCPHARelationship Views
@@ -747,18 +747,18 @@ class DHCPHARelationshipImportView(generic.BulkImportView):
 
 
 def get_reservation_count(obj):
-    """Calculate the number of DHCP reservations for a PrefixDHCPConfig."""
+    """Calculate the number of DHCP reservations for a Subnet."""
     return len(obj.get_reservations())
 
 
-@register_model_view(models.PrefixDHCPConfig, name="reservations", path="reservations")
-class PrefixDHCPConfigReservationsView(generic.ObjectView):
-    queryset = models.PrefixDHCPConfig.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/prefixdhcpconfig_reservations.html"
+@register_model_view(models.Subnet, name="reservations", path="reservations")
+class SubnetReservationsView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix")
+    template_name = "netbox_dhcp_kea_plugin/subnet_reservations.html"
     tab = ViewTab(
         label="Reservations",
         badge=get_reservation_count,
-        permission="netbox_dhcp_kea_plugin.view_prefixdhcpconfig",
+        permission="netbox_dhcp_kea_plugin.view_subnet",
     )
 
     def get(self, request, pk):

@@ -235,9 +235,9 @@ def prefix_factory(db):
 
 
 @pytest.fixture
-def prefix_dhcp_config_factory(db, dhcp_server_factory, prefix_factory):
-    """Factory fixture to create PrefixDHCPConfig instances."""
-    from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+def subnet_factory(db, dhcp_server_factory, prefix_factory):
+    """Factory fixture to create Subnet instances."""
+    from netbox_dhcp_kea_plugin.models import Subnet
 
     def create_config(server=None, prefix=None):
         if server is None:
@@ -245,7 +245,7 @@ def prefix_dhcp_config_factory(db, dhcp_server_factory, prefix_factory):
         if prefix is None:
             prefix = prefix_factory()
 
-        return PrefixDHCPConfig.objects.create(
+        return Subnet.objects.create(
             prefix=prefix,
             server=server,
             valid_lifetime=3600,

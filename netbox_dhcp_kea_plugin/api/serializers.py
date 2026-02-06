@@ -12,7 +12,7 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
     VendorOptionSpace,
 )
 
@@ -244,9 +244,9 @@ class ClientClassSerializer(NetBoxModelSerializer):
         )
 
 
-class PrefixDHCPConfigSerializer(NetBoxModelSerializer):
+class SubnetSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_dhcp_kea_plugin-api:prefixdhcpconfig-detail"
+        view_name="plugins-api:netbox_dhcp_kea_plugin-api:subnet-detail"
     )
     prefix = NestedPrefixSerializer()
     server = NestedDHCPServerSerializer()
@@ -255,7 +255,7 @@ class PrefixDHCPConfigSerializer(NetBoxModelSerializer):
     router_ip = serializers.SerializerMethodField()
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "id",
             "url",

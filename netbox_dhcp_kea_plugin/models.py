@@ -433,7 +433,7 @@ class DHCPServer(NetBoxModel):
         In HA mode, all servers serve the same subnets (from primary's config).
 
         Returns:
-            QuerySet: PrefixDHCPConfig instances this server should serve.
+            QuerySet: Subnet instances this server should serve.
         """
         if not self.ha_relationship:
             # Not in HA, return own configs
@@ -1288,8 +1288,8 @@ class ClientClass(NetBoxModel):
         return json.dumps(self.to_kea_dict(ascii_format=ascii_format), indent=indent)
 
 
-class PrefixDHCPConfig(NetBoxModel):
-    """DHCP configuration for NetBox Prefixes (KEA subnet configuration)"""
+class Subnet(NetBoxModel):
+    """KEA subnet configuration linked to NetBox Prefixes"""
 
     prefix = models.OneToOneField(Prefix, on_delete=models.CASCADE, related_name="dhcp_config")
     server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="prefix_configs")
@@ -1309,14 +1309,14 @@ class PrefixDHCPConfig(NetBoxModel):
 
     class Meta:
         ordering = ("prefix",)
-        verbose_name = "DHCP Prefix"
-        verbose_name_plural = "DHCP Prefixes"
+        verbose_name = "Subnet"
+        verbose_name_plural = "Subnets"
 
     def __str__(self):
         return str(self.prefix)
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig", args=[self.pk])
+        return reverse("plugins:netbox_dhcp_kea_plugin:subnet", args=[self.pk])
 
     def clean(self):
         super().clean()

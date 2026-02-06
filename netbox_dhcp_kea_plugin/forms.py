@@ -25,7 +25,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
     VendorOptionSpace,
 )
 
@@ -306,7 +306,7 @@ class ClientClassImportForm(NetBoxModelImportForm):
         )
 
 
-class PrefixDHCPConfigImportForm(NetBoxModelImportForm):
+class SubnetImportForm(NetBoxModelImportForm):
     prefix = CSVModelChoiceField(
         queryset=Prefix.objects.all(),
         to_field_name="prefix",
@@ -323,7 +323,7 @@ class PrefixDHCPConfigImportForm(NetBoxModelImportForm):
     )
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "prefix",
             "server",
@@ -696,7 +696,7 @@ class ClientClassForm(NetBoxModelForm):
         return actual_servers
 
 
-class PrefixDHCPConfigForm(NetBoxModelForm):
+class SubnetForm(NetBoxModelForm):
     prefix = DynamicModelChoiceField(queryset=Prefix.objects.all())
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all())
     option_data = DynamicModelMultipleChoiceField(
@@ -725,7 +725,7 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
     )
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = (
             "prefix",
             "server",
@@ -885,8 +885,8 @@ class ClientClassFilterForm(NetBoxModelFilterSetForm):
     )
 
 
-class PrefixDHCPConfigFilterForm(NetBoxModelFilterSetForm):
-    model = PrefixDHCPConfig
+class SubnetFilterForm(NetBoxModelFilterSetForm):
+    model = Subnet
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all(), required=False)
 
 

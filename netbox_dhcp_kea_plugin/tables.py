@@ -9,7 +9,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
     VendorOptionSpace,
 )
 
@@ -23,19 +23,19 @@ class ViewEditActionsColumn(tables.TemplateColumn):
             <i class="mdi mdi-eye"></i>
         </a>
         {% load helpers %}
-        {% if perms.netbox_dhcp_kea_plugin.change_prefixdhcpconfig %}
+        {% if perms.netbox_dhcp_kea_plugin.change_subnet %}
         <span class="dropdown">
-            <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_edit' pk=record.pk %}" class="btn btn-sm btn-warning" title="Edit">
+            <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_edit' pk=record.pk %}" class="btn btn-sm btn-warning" title="Edit">
                 <i class="mdi mdi-pencil"></i>
             </a>
             <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
                 <span class="visually-hidden">Toggle Dropdown</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-                {% if perms.netbox_dhcp_kea_plugin.delete_prefixdhcpconfig %}
-                <li><a class="dropdown-item text-danger" href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_delete' pk=record.pk %}"><i class="mdi mdi-trash-can-outline"></i> Delete</a></li>
+                {% if perms.netbox_dhcp_kea_plugin.delete_subnet %}
+                <li><a class="dropdown-item text-danger" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_delete' pk=record.pk %}"><i class="mdi mdi-trash-can-outline"></i> Delete</a></li>
                 {% endif %}
-                <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_changelog' pk=record.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
+                <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_changelog' pk=record.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
             </ul>
         </span>
         {% endif %}
@@ -317,7 +317,7 @@ class ClientClassTable(NetBoxTable):
         default_columns = ("name", "test_expression", "only_in_additional_list", "description")
 
 
-class PrefixDHCPConfigTable(NetBoxTable):
+class SubnetTable(NetBoxTable):
     prefix = tables.Column(linkify=True)
     id = tables.Column(verbose_name="id")
     server = tables.Column(linkify=True)
@@ -329,13 +329,13 @@ class PrefixDHCPConfigTable(NetBoxTable):
             <div class="text-end text-nowrap">
             <a href="{{ record.get_absolute_url }}" class="btn btn-sm btn-outline-primary" title="View"><i class="mdi mdi-eye"></i></a>
             {% load helpers %}
-            {% if perms.netbox_dhcp_kea_plugin.change_prefixdhcpconfig %}
+            {% if perms.netbox_dhcp_kea_plugin.change_subnet %}
             <span class="btn-group">
-                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_edit' pk=record.pk %}" class="btn btn-sm btn-warning" title="Edit"><i class="mdi mdi-pencil"></i></a>
+                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_edit' pk=record.pk %}" class="btn btn-sm btn-warning" title="Edit"><i class="mdi mdi-pencil"></i></a>
                 <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle Dropdown</span></button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                    {% if perms.netbox_dhcp_kea_plugin.delete_prefixdhcpconfig %}<li><a class="dropdown-item text-danger" href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_delete' pk=record.pk %}"><i class="mdi mdi-trash-can-outline"></i> Delete</a></li>{% endif %}
-                    <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_changelog' pk=record.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
+                    {% if perms.netbox_dhcp_kea_plugin.delete_subnet %}<li><a class="dropdown-item text-danger" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_delete' pk=record.pk %}"><i class="mdi mdi-trash-can-outline"></i> Delete</a></li>{% endif %}
+                    <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_changelog' pk=record.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
                 </ul>
             </span>
             {% endif %}
@@ -346,13 +346,13 @@ class PrefixDHCPConfigTable(NetBoxTable):
     )
 
     class Meta(NetBoxTable.Meta):
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = ("pk", "prefix", "server", "valid_lifetime", "max_lifetime", "option_data_count", "id", "actions")
         default_columns = ("prefix", "server", "valid_lifetime", "max_lifetime", "option_data_count", "actions")
 
 
-class PrefixDHCPConfigExportTable(NetBoxTable):
-    """Export-specific table for PrefixDHCPConfig with VRF for prefix identification."""
+class SubnetExportTable(NetBoxTable):
+    """Export-specific table for Subnet with VRF for prefix identification."""
 
     prefix = tables.Column(accessor="prefix__prefix", verbose_name="prefix")
     vrf = tables.Column(accessor="prefix__vrf__name", verbose_name="vrf")
@@ -362,7 +362,7 @@ class PrefixDHCPConfigExportTable(NetBoxTable):
     routers_option_offset = tables.Column(verbose_name="routers_option_offset")
 
     class Meta(NetBoxTable.Meta):
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = ("prefix", "vrf", "server", "valid_lifetime", "max_lifetime", "routers_option_offset")
         default_columns = ("prefix", "vrf", "server", "valid_lifetime", "max_lifetime", "routers_option_offset")
         exclude = ("id",)

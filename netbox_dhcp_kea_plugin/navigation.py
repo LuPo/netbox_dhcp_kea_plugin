@@ -103,16 +103,16 @@ clientclass_menu_item = PluginMenuItem(
     ),
 )
 
-prefixdhcpconfig_menu_item = PluginMenuItem(
-    link="plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_list",
-    link_text="DHCP Prefixes",
-    permissions=["netbox_dhcp_kea_plugin.view_prefixdhcpconfig"],
+subnet_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:subnet_list",
+    link_text="Subnets",
+    permissions=["netbox_dhcp_kea_plugin.view_subnet"],
     buttons=(
         PluginMenuButton(
-            link="plugins:netbox_dhcp_kea_plugin:prefixdhcpconfig_add",
+            link="plugins:netbox_dhcp_kea_plugin:subnet_add",
             title="Add",
             icon_class="mdi mdi-plus-thick",
-            permissions=["netbox_dhcp_kea_plugin.add_prefixdhcpconfig"],
+            permissions=["netbox_dhcp_kea_plugin.add_subnet"],
         ),
     ),
 )
@@ -140,7 +140,7 @@ if top_level_menu:
                 "Server Configuration",
                 (
                     dhcpserver_menu_item,
-                    prefixdhcpconfig_menu_item,
+                    subnet_menu_item,
                     clientclass_menu_item,
                 ),
             ),
@@ -169,7 +169,7 @@ if top_level_menu:
 else:
     menu_items = (
         dhcpserver_menu_item,
-        prefixdhcpconfig_menu_item,
+        subnet_menu_item,
         clientclass_menu_item,
         dhcpharelationship_menu_item,
         hook_menu_item,

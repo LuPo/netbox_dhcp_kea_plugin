@@ -667,7 +667,7 @@ class TestHASyncFunctionality:
 
     def test_get_effective_prefix_configs_syncs_from_primary(self, dhcp_server_factory, prefix_factory):
         """Test that get_effective_prefix_configs syncs from primary."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="prefix-sync-test",
@@ -688,7 +688,7 @@ class TestHASyncFunctionality:
 
         # Create prefix config on primary
         prefix = prefix_factory()
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=primary_server,
             valid_lifetime=3600,
@@ -703,12 +703,12 @@ class TestHASyncFunctionality:
 
     def test_get_effective_prefix_configs_returns_own_for_non_ha(self, dhcp_server_factory, prefix_factory):
         """Test that get_effective_prefix_configs returns own configs for non-HA."""
-        from netbox_dhcp_kea_plugin.models import PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import Subnet
 
         server = dhcp_server_factory()
         prefix = prefix_factory()
 
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=server,
             valid_lifetime=3600,
@@ -719,7 +719,7 @@ class TestHASyncFunctionality:
 
     def test_to_kea_dict_syncs_subnets_for_secondary(self, dhcp_server_factory, prefix_factory):
         """Test that to_kea_dict syncs subnets from primary for secondary server."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="subnet-sync-test",
@@ -740,7 +740,7 @@ class TestHASyncFunctionality:
 
         # Create prefix config on primary
         prefix = prefix_factory()
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=primary_server,
             valid_lifetime=3600,
@@ -786,7 +786,7 @@ class TestHARelationshipHelpers:
 
     def test_get_synced_prefix_count(self, dhcp_server_factory, prefix_factory):
         """Test get_synced_prefix_count returns count from primary."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="count-test",
@@ -808,7 +808,7 @@ class TestHARelationshipHelpers:
         # Create prefix configs on primary
         for _i in range(3):
             prefix = prefix_factory()
-            PrefixDHCPConfig.objects.create(
+            Subnet.objects.create(
                 prefix=prefix,
                 server=primary_server,
                 valid_lifetime=3600,
@@ -819,7 +819,7 @@ class TestHARelationshipHelpers:
 
     def test_migrate_configs_to_new_primary(self, dhcp_server_factory, prefix_factory):
         """Test migrate_configs_to_new_primary transfers configs."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="migration-test",
@@ -840,7 +840,7 @@ class TestHARelationshipHelpers:
 
         # Create prefix config on old primary
         prefix = prefix_factory()
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=old_primary,
             valid_lifetime=3600,
@@ -863,7 +863,7 @@ class TestHARoleChangeProtection:
 
     def test_cannot_change_primary_role_with_configs(self, dhcp_server_factory, prefix_factory):
         """Test that changing from primary role with configs raises error."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="role-protection-test",
@@ -878,7 +878,7 @@ class TestHARoleChangeProtection:
 
         # Create prefix config
         prefix = prefix_factory()
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=primary_server,
             valid_lifetime=3600,
@@ -893,7 +893,7 @@ class TestHARoleChangeProtection:
 
     def test_can_change_primary_role_after_migration(self, dhcp_server_factory, prefix_factory):
         """Test that changing role is allowed after migrating configs."""
-        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Subnet
 
         relationship = DHCPHARelationship.objects.create(
             name="migration-role-test",
@@ -914,7 +914,7 @@ class TestHARoleChangeProtection:
 
         # Create prefix config
         prefix = prefix_factory()
-        PrefixDHCPConfig.objects.create(
+        Subnet.objects.create(
             prefix=prefix,
             server=old_primary,
             valid_lifetime=3600,

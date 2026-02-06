@@ -269,7 +269,7 @@ class TestDHCPServer:
 
     def test_to_kea_dict_includes_only_in_additional_list_classes(self, dhcp_server, prefix_factory, db):
         """Test DHCPServer.to_kea_dict() includes all classes in global client-classes, with only-in-additional-list flag set appropriately."""
-        from netbox_dhcp_kea_plugin.models import ClientClass, PrefixDHCPConfig
+        from netbox_dhcp_kea_plugin.models import ClientClass, Subnet
 
         prefix = prefix_factory()
 
@@ -290,7 +290,7 @@ class TestDHCPServer:
         )
 
         # Create a prefix config and add both classes to it
-        prefix_config = PrefixDHCPConfig.objects.create(
+        prefix_config = Subnet.objects.create(
             prefix=prefix,
             server=dhcp_server,
             valid_lifetime=3600,
@@ -329,7 +329,7 @@ class TestDHCPServer:
 
         # Verify subnet has id field from database primary key
         assert "id" in subnet, "Subnet should have 'id' field"
-        assert subnet["id"] == prefix_config.pk, "Subnet id should match PrefixDHCPConfig primary key"
+        assert subnet["id"] == prefix_config.pk, "Subnet id should match Subnet primary key"
 
         eval_classes = subnet.get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"

@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 
 from netbox.plugins import PluginConfig
@@ -38,13 +38,13 @@ class DHCPKEAConfig(PluginConfig):
 
         from ipam.api.serializers import PrefixSerializer
 
-        from .models import PrefixDHCPConfig
+        from .models import Subnet
 
         def get_dhcp_config(self, obj):
             """Return DHCP config with server info and relay targets."""
             try:
                 config = obj.dhcp_config
-            except PrefixDHCPConfig.DoesNotExist:
+            except Subnet.DoesNotExist:
                 return None
 
             if not config or not config.server:

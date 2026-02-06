@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.5 (2026-02-06)
+
+### Changed
+- **BREAKING**: Renamed `PrefixDHCPConfig` model to `Subnet` to align with KEA subnet terminology and avoid confusion with NetBox's IPAM `Prefix` model
+  - All class names updated: `SubnetSerializer`, `SubnetViewSet`, `SubnetFilterSet`, `SubnetForm`, `SubnetTable`, `SubnetView`, etc.
+  - URL path segments changed from `prefix-configs/` to `subnets/`
+  - API endpoint changed from `prefix-dhcp-configs/` to `subnets/`
+  - URL names changed from `prefixdhcpconfig_*` to `subnet_*`
+  - Django permissions changed from `*_prefixdhcpconfig` to `*_subnet`
+  - Template files renamed: `prefixdhcpconfig.html` → `subnet.html`, `prefixdhcpconfig_reservations.html` → `subnet_reservations.html`
+  - Navigation menu label changed from "DHCP Prefixes" to "Subnets"
+  - Database migration (`0008`) handles the model and table rename automatically
+
+
 ## 0.2.4 (2026-02-05)
 
 ### Added
@@ -10,7 +24,7 @@
 
 - **Option Definition Improvements**
   - Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering
-  - Add `id` field to PrefixDHCPConfig output for better identification
+  - Add `id` field to Subnet (formerly PrefixDHCPConfig) output for better identification
 
 ### Changed
 - **BREAKING**: Replaced `is_active` boolean field with `status` CharField on DHCPServer model
@@ -68,14 +82,14 @@
   - Added view (eye) button alongside edit button in DHCP Prefixes list
   - Added HA Assignment and HA Role fields to DHCP Server detail view
   - HA standby servers show info badge and card explaining config sync
-  - Hidden "Assigned Prefixes" tab, "Global Option Data" and "Client Classes" boxes for non-primary HA servers
+  - Hidden "Subnets" tab, "Global Option Data" and "Client Classes" boxes for non-primary HA servers
 
 - **Form Enhancements**
   - Auto-redirect to primary server when assigning prefixes to non-primary HA servers
   - User notification when config is saved to primary instead of selected server
 
 ### Changed
-- `PrefixDHCPConfigTable` now uses custom `ViewEditActionsColumn` for better action buttons
+- `SubnetTable` (formerly `PrefixDHCPConfigTable`) now uses custom `ViewEditActionsColumn` for better action buttons
 - DHCP Server detail view reorganized for HA information display
 
 ## 0.1.0 (2026-01-18)

@@ -10,7 +10,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
     VendorOptionSpace,
 )
 
@@ -127,11 +127,11 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
         )
 
 
-class PrefixDHCPConfigFilterSet(NetBoxModelFilterSet):
+class SubnetFilterSet(NetBoxModelFilterSet):
     server = django_filters.ModelChoiceFilter(queryset=DHCPServer.objects.all(), label="DHCP Server")
 
     class Meta:
-        model = PrefixDHCPConfig
+        model = Subnet
         fields = ["id", "prefix", "server"]
 
     def search(self, queryset, name, value):

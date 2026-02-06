@@ -43,7 +43,7 @@ from netbox_dhcp_kea_plugin.models import (
     HookGroup,
     OptionData,
     OptionDefinition,
-    PrefixDHCPConfig,
+    Subnet,
     VendorOptionSpace,
 )
 
@@ -135,13 +135,13 @@ class Command(BaseCommand):
             hg.delete()
         self.stdout.write(f"  - Deleted {count} HookGroup objects")
 
-        # First, delete PrefixDHCPConfigs that are tagged OR reference demo-tagged servers
+        # First, delete Subnets that are tagged OR reference demo-tagged servers
         demo_servers = DHCPServer.objects.filter(tags=demo_tag)
-        count = PrefixDHCPConfig.objects.filter(tags=demo_tag).count()
-        count += PrefixDHCPConfig.objects.filter(server__in=demo_servers).exclude(tags=demo_tag).count()
-        PrefixDHCPConfig.objects.filter(tags=demo_tag).delete()
-        PrefixDHCPConfig.objects.filter(server__in=demo_servers).delete()
-        self.stdout.write(f"  - Deleted {count} PrefixDHCPConfig objects")
+        count = Subnet.objects.filter(tags=demo_tag).count()
+        count += Subnet.objects.filter(server__in=demo_servers).exclude(tags=demo_tag).count()
+        Subnet.objects.filter(tags=demo_tag).delete()
+        Subnet.objects.filter(server__in=demo_servers).delete()
+        self.stdout.write(f"  - Deleted {count} Subnet objects")
 
         # Clear HA relationships from demo servers before deleting
         demo_servers.update(ha_relationship=None, ha_role="", ha_url="")
@@ -1256,7 +1256,7 @@ class Command(BaseCommand):
         Args:
             servers_with_roles: List of (server, role) tuples from create_dhcp_servers.
         """
-        self.stdout.write(f"\nCreating {count} PrefixDHCPConfig objects...")
+        self.stdout.write(f"\nCreating {count} Subnet objects...")
 
         if not prefixes:
             self.stdout.write(self.style.WARNING("  Skipping prefix config creation - no suitable prefixes available"))
@@ -1290,7 +1290,7 @@ class Command(BaseCommand):
             try:
                 server = primary_servers[i % len(primary_servers)]
 
-                config, created = PrefixDHCPConfig.objects.get_or_create(
+                config, created = Subnet.objects.get_or_create(
                     prefix=prefix,
                     defaults={
                         "server": server,
