@@ -259,7 +259,7 @@ class TestDHCPServer:
     def test_create_dhcp_server(self, dhcp_server):
         """Test creating a DHCPServer."""
         assert dhcp_server.name == "TestServer"
-        assert dhcp_server.is_active is True
+        assert dhcp_server.status == "active"
 
     def test_to_kea_dict_basic(self, dhcp_server):
         """Test DHCPServer.to_kea_dict() basic structure."""

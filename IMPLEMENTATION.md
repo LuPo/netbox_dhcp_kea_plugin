@@ -10,7 +10,7 @@ This NetBox plugin provides comprehensive management for ISC KEA DHCP server con
 
 #### DHCPServer
 - Manages DHCP server instances
-- Fields: name, description, ip_address, port, is_active
+- Fields: name, description, ip_address, status, service_template
 - Used to identify DHCP servers in your infrastructure
 
 #### DHCPOption
@@ -208,9 +208,9 @@ DHCPServer
 # Create infrastructure
 server = DHCPServer.objects.create(
     name="kea-dhcp-01",
-    ip_address="10.0.0.10",
-    port=67,
-    is_active=True
+    ip_address=ip_address,  # IPAddress object from NetBox IPAM
+    status="active",  # Uses DeviceStatusChoices from dcim.choices
+    service_template=service_template,
 )
 
 # Define options

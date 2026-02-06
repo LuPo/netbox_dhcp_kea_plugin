@@ -14,7 +14,7 @@
                         <tr>
                             <th>Name</th>
                             <th>IP Address</th>
-                            <th>Active</th>
+                            <th>Status</th>
                             <th>HA Relationship</th>
                             <th>HA Role</th>
                             <th>Description</th>
@@ -28,11 +28,7 @@
                                 <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
                             </td>
                             <td>
-                                {% if server.is_active %}
-                                <span class="badge text-bg-green">Active</span>
-                                {% else %}
-                                <span class="badge text-bg-orange">Inactive</span>
-                                {% endif %}
+                                <span class="badge" style="background-color: {{ server.get_status_color }};">{{ server.get_status_display }}</span>
                             </td>
                             <td>
                                 {% if server.ha_relationship %}

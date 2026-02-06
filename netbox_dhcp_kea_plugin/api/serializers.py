@@ -193,7 +193,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "name",
             "description",
             "ip_address",
-            "is_active",
+            "status",
             "service_template",
             "service",
             "option_data",

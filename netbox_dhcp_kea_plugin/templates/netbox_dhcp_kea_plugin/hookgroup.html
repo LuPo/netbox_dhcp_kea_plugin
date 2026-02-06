@@ -100,11 +100,7 @@
                                 <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
                             </td>
                             <td>
-                                {% if server.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inactive</span>
-                                {% endif %}
+                                {% badge server.get_status_display server.get_status_color %}
                             </td>
                         </tr>
                         {% endfor %}

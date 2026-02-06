@@ -1,9 +1,11 @@
+from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from ipam.models import IPAddress, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
@@ -189,7 +191,13 @@ class DHCPServer(NetBoxModel):
         related_name="dhcp_servers",
         help_text="IP address of the DHCP server (from NetBox IPAM)",
     )
-    is_active = models.BooleanField(default=True, help_text="Is this server active?")
+    status = models.CharField(
+        verbose_name=_("status"),
+        max_length=50,
+        choices=DeviceStatusChoices,
+        default=DeviceStatusChoices.STATUS_ACTIVE,
+        help_text="Operational status of this DHCP server",
+    )
     service_template = models.ForeignKey(
         ServiceTemplate,
         on_delete=models.PROTECT,
@@ -258,6 +266,10 @@ class DHCPServer(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver", args=[self.pk])
+
+    def get_status_color(self):
+        """Return the color associated with the current status for badge display."""
+        return DeviceStatusChoices.colors.get(self.status, "secondary")
 
     def save(self, *args, **kwargs):
         # Check if this is a new instance or service_template changed

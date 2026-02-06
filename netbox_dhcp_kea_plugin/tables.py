@@ -261,7 +261,7 @@ class DHCPServerTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="name")
     description = tables.Column(verbose_name="description")
     ip_address = tables.Column(linkify=True, verbose_name="ip_address")
-    is_active = BooleanColumn(verbose_name="is_active")
+    status = ChoiceFieldColumn(verbose_name="status")
     service_template = tables.Column(linkify=True, verbose_name="service_template", accessor="service_template__pk")
     service = tables.Column(linkify=True, verbose_name="Application Service")
     ha_relationship = tables.Column(linkify=True, verbose_name="HA Relationship")
@@ -276,7 +276,7 @@ class DHCPServerTable(NetBoxTable):
             "name",
             "description",
             "ip_address",
-            "is_active",
+            "status",
             "service_template",
             "service",
             "ha_relationship",
@@ -285,7 +285,7 @@ class DHCPServerTable(NetBoxTable):
             "ha_auto_failover",
             "actions",
         )
-        default_columns = ("name", "description", "ip_address", "is_active", "ha_relationship", "ha_role")
+        default_columns = ("name", "description", "ip_address", "status", "ha_relationship", "ha_role")
 
 
 class ClientClassTable(NetBoxTable):

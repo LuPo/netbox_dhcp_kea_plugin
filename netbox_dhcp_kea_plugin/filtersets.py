@@ -23,7 +23,7 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = DHCPServer
-        fields = ["id", "name", "is_active", "ha_relationship", "ha_role", "ha_auto_failover"]
+        fields = ["id", "name", "status", "ha_relationship", "ha_role", "ha_auto_failover"]
 
     def search(self, queryset, name, value):
         if not value.strip():

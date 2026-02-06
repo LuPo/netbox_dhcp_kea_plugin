@@ -1,3 +1,4 @@
+from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
@@ -278,7 +279,7 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "name",
             "description",
             "ip_address",
-            "is_active",
+            "status",
             "service_template",
             "ha_relationship",
             "ha_role",
@@ -508,7 +509,7 @@ class DHCPServerForm(NetBoxModelForm):
             "name",
             "description",
             "ip_address",
-            "is_active",
+            "status",
             "service_template",
             "option_data",
             "ha_relationship",
@@ -524,7 +525,7 @@ class DHCPServerForm(NetBoxModelForm):
                 "name",
                 "description",
                 "ip_address",
-                "is_active",
+                "status",
                 "service_template",
                 "option_data",
                 "tags",
@@ -774,15 +775,9 @@ class PrefixDHCPConfigForm(NetBoxModelForm):
 class DHCPServerFilterForm(NetBoxModelFilterSetForm):
     model = DHCPServer
     name = forms.CharField(required=False)
-    is_active = forms.NullBooleanField(
+    status = forms.MultipleChoiceField(
+        choices=DeviceStatusChoices,
         required=False,
-        widget=forms.Select(
-            choices=[
-                ("", "---------"),
-                ("true", "Yes"),
-                ("false", "No"),
-            ]
-        ),
     )
     ha_relationship = DynamicModelChoiceField(
         queryset=DHCPHARelationship.objects.all(),

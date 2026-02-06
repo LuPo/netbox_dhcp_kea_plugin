@@ -1095,7 +1095,7 @@ class Command(BaseCommand):
                         "ip_address": ip_address,
                         "service_template": service_template,
                         "description": template["description"],
-                        "is_active": True,
+                        "status": "active",
                     },
                 )
 

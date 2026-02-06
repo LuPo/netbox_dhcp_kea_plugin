@@ -12,6 +12,10 @@
   - Add `id` field to PrefixDHCPConfig output for better identification
 
 ### Changed
+- **BREAKING**: Replaced `is_active` boolean field with `status` CharField on DHCPServer model
+  - Uses `DeviceStatusChoices` from NetBox's dcim.choices for consistency with native models
+  - Provides more granular status options (active, planned, staged, failed, offline, decommissioning, inventory)
+  - Migration automatically converts `is_active=True` to `status="active"` and `is_active=False` to `status="offline"`
 - Updated issue templates for versions and Python compatibility
 - Linted tests with Ruff for code quality improvements
 
