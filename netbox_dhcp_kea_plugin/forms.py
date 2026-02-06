@@ -985,6 +985,9 @@ class SubnetPoolForm(NetBoxModelForm):
     evaluate_additional_classes = DynamicModelMultipleChoiceField(
         queryset=ClientClass.objects.all(),
         required=False,
+        query_params={
+            "only_in_additional_list": "True",
+        },
         help_text="Additional client classes to evaluate for clients in this pool (KEA evaluate-additional-classes)",
     )
     option_data = DynamicModelMultipleChoiceField(

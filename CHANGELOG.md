@@ -22,6 +22,11 @@
   - Pool-level: raises `ValidationError` if restricting `client_class` has `only_in_additional_list=True` and the parent subnet does not include the class in `evaluate_additional_classes`
   - Cross-field validation: restricting `client_class` cannot also appear in `evaluate_additional_classes` on the same object (both model and form level)
 
+- **Redundant Evaluate-Additional-Classes Notifications**
+  - Info notification card on Subnet detail page when `evaluate_additional_classes` contains classes without `only_in_additional_list` enabled (KEA already evaluates these globally, making the listing redundant)
+  - Info notification card on Subnet Pool detail page with the same detection
+  - Lists each redundant class with its name and test expression, with guidance to enable `only_in_additional_list` or remove the class from `evaluate-additional-classes`
+
 - **Server-Level Misconfiguration Detection**
   - New `DHCPServer.get_unreachable_subnet_restrictions()` method to find subnets with unreachable restricting classes
   - New `DHCPServer.get_unreachable_pool_restrictions()` method to find pools with unreachable restricting classes
@@ -34,10 +39,13 @@
   - Demo cleanup handles SubnetPool and IPRange objects
 
 - **Test Coverage**
-  - New unit tests for SubnetPool behavior, Subnet client class validations, server-level unreachable restriction helpers, and KEA output consistency (247 tests passing)
+  - New unit tests for SubnetPool behavior, Subnet client class validations, server-level unreachable restriction helpers, KEA output consistency, and redundant evaluate-additional-classes detection.
 
 ### Changed
 - **BREAKING**: Renamed `client_classes` M2M field on `Subnet` to `evaluate_additional_classes` to align with KEA terminology
+- Subnet form: `evaluate_additional_classes` field now filters dropdown to show only client classes assigned to the selected server with `only_in_additional_list` enabled
+- Subnet Pool form: `evaluate_additional_classes` field now filters dropdown to show only client classes with `only_in_additional_list` enabled
+- Added `server_id` filter to `ClientClassFilterSet` for API-level filtering of client classes by server assignment
   - API consumers must update field references from `client_classes` to `evaluate_additional_classes`
   - Database migration (`0010`) handles the rename automatically
 - `Subnet.get_all_subnet_client_classes()` and new `Subnet.get_all_pool_client_classes()` helpers collect client classes across both subnet and pool scopes
