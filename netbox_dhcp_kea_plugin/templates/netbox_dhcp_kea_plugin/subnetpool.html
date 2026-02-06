@@ -1,0 +1,110 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Subnet Pool Configuration</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Subnet</th>
+                        <td><a href="{{ object.subnet.get_absolute_url }}">{{ object.subnet }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>IP Range</th>
+                        <td><a href="{{ object.ip_range.get_absolute_url }}">{{ object.ip_range }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Pool Range</th>
+                        <td>
+                            {% with start=object.ip_range.start_address|stringformat:"s" end=object.ip_range.end_address|stringformat:"s" %}
+                            {{ start }} - {{ end }}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Client Class</th>
+                        <td>
+                            {% if object.client_class %}
+                                <a href="{{ object.client_class.get_absolute_url }}">{{ object.client_class.name }}</a>
+                                <br><small class="text-muted">Restricts which clients can use this pool</small>
+                            {% else %}
+                                <span class="text-muted">None (all clients)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>
+                            {% if object.description %}
+                                {{ object.description }}
+                            {% else %}
+                                <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% if object.evaluate_additional_classes.exists %}
+        <div class="card">
+            <h5 class="card-header">Evaluate Additional Classes</h5>
+            <div class="card-body">
+                <p class="text-muted small">These client classes are additionally evaluated for clients in this pool (KEA <code>evaluate-additional-classes</code>).</p>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Test Expression</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in object.evaluate_additional_classes.all %}
+                        <tr>
+                            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+                            <td><code>{{ cc.test_expression|default:"(unconditional)" }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% if object.option_data.exists %}
+        <div class="card">
+            <h5 class="card-header">Pool Option Data</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Code</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for option in object.option_data.all %}
+                        <tr>
+                            <td><a href="{{ option.get_absolute_url }}">{{ option.distinctive_name }}</a></td>
+                            <td>{{ option.code }}</td>
+                            <td>{{ option.data }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">KEA Pool Configuration</h5>
+            <div class="card-body">
+                <pre><code class="language-json">{{ kea_pool_config }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

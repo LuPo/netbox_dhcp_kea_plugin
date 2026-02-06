@@ -10,6 +10,7 @@ from .models import (
     OptionData,
     OptionDefinition,
     Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -366,6 +367,64 @@ class SubnetExportTable(NetBoxTable):
         fields = ("prefix", "vrf", "server", "valid_lifetime", "max_lifetime", "routers_option_offset")
         default_columns = ("prefix", "vrf", "server", "valid_lifetime", "max_lifetime", "routers_option_offset")
         exclude = ("id",)
+
+
+class SubnetPoolTable(NetBoxTable):
+    subnet = tables.Column(linkify=True)
+    ip_range = tables.Column(verbose_name="IP Range", linkify=True)
+    client_class = tables.Column(verbose_name="Client Class", linkify=True)
+    additional_classes_count = tables.Column(
+        verbose_name="Additional Classes",
+        accessor="evaluate_additional_classes__count",
+        orderable=False,
+    )
+    option_data_count = tables.Column(
+        verbose_name="Options",
+        accessor="option_data__count",
+        orderable=False,
+    )
+    description = tables.Column(verbose_name="Description")
+    actions = tables.TemplateColumn(
+        template_code="""
+            <div class="text-end text-nowrap">
+            <a href="{{ record.get_absolute_url }}" class="btn btn-sm btn-outline-primary" title="View"><i class="mdi mdi-eye"></i></a>
+            {% load helpers %}
+            {% if perms.netbox_dhcp_kea_plugin.change_subnetpool %}
+            <span class="btn-group">
+                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_edit' pk=record.pk %}" class="btn btn-sm btn-warning" title="Edit"><i class="mdi mdi-pencil"></i></a>
+                <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle Dropdown</span></button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {% if perms.netbox_dhcp_kea_plugin.delete_subnetpool %}<li><a class="dropdown-item text-danger" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_delete' pk=record.pk %}"><i class="mdi mdi-trash-can-outline"></i> Delete</a></li>{% endif %}
+                    <li><a class="dropdown-item" href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_changelog' pk=record.pk %}"><i class="mdi mdi-history"></i> Changelog</a></li>
+                </ul>
+            </span>
+            {% endif %}
+            </div>
+        """,
+        verbose_name="",
+        orderable=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = SubnetPool
+        fields = (
+            "pk",
+            "subnet",
+            "ip_range",
+            "client_class",
+            "additional_classes_count",
+            "option_data_count",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "subnet",
+            "ip_range",
+            "client_class",
+            "additional_classes_count",
+            "option_data_count",
+            "actions",
+        )
 
 
 class DHCPHARelationshipTable(NetBoxTable):

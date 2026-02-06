@@ -15,6 +15,7 @@ from ..models import (
     OptionData,
     OptionDefinition,
     Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 from .serializers import (
@@ -25,6 +26,7 @@ from .serializers import (
     HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
+    SubnetPoolSerializer,
     SubnetSerializer,
     VendorOptionSpaceSerializer,
 )
@@ -97,11 +99,23 @@ class ClientClassViewSet(NetBoxModelViewSet):
 
 
 class SubnetViewSet(NetBoxModelViewSet):
-    queryset = Subnet.objects.select_related("prefix", "server").prefetch_related(
-        "option_data", "client_classes"
-    )
+    queryset = Subnet.objects.select_related("prefix", "server").prefetch_related("option_data", "client_classes")
     serializer_class = SubnetSerializer
     filterset_class = filtersets.SubnetFilterSet
+
+    @action(detail=True, methods=["get"], url_path="pools")
+    def pools(self, request, pk=None):
+        """
+        Return all SubnetPool configurations for this subnet.
+        """
+        subnet = self.get_object()
+        pool_configs = (
+            SubnetPool.objects.filter(subnet=subnet)
+            .select_related("ip_range", "client_class")
+            .prefetch_related("evaluate_additional_classes", "option_data")
+        )
+        serializer = SubnetPoolSerializer(pool_configs, many=True, context={"request": request})
+        return Response(serializer.data)
 
     @action(detail=True, methods=["get"], url_path="relay-config")
     def relay_config(self, request, pk=None):
@@ -135,6 +149,14 @@ class SubnetViewSet(NetBoxModelViewSet):
                 "relay_targets": relay_targets,
             }
         )
+
+
+class SubnetPoolViewSet(NetBoxModelViewSet):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class").prefetch_related(
+        "evaluate_additional_classes", "option_data"
+    )
+    serializer_class = SubnetPoolSerializer
+    filterset_class = filtersets.SubnetPoolFilterSet
 
 
 class PrefixRelayConfigView(APIView):

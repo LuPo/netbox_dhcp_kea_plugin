@@ -3,7 +3,7 @@ from dcim.models import Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
-from ipam.models import IPAddress, Prefix, ServiceTemplate
+from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.forms import (
     NetBoxModelFilterSetForm,
     NetBoxModelForm,
@@ -26,6 +26,7 @@ from .models import (
     OptionData,
     OptionDefinition,
     Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -302,6 +303,35 @@ class ClientClassImportForm(NetBoxModelImportForm):
             "next_server",
             "server_hostname",
             "boot_file_name",
+            "tags",
+        )
+
+
+class SubnetPoolImportForm(NetBoxModelImportForm):
+    subnet = CSVModelChoiceField(
+        queryset=Subnet.objects.all(),
+        to_field_name="pk",
+        help_text="Subnet ID",
+    )
+    ip_range = CSVModelChoiceField(
+        queryset=IPRange.objects.all(),
+        to_field_name="pk",
+        help_text="IP Range ID",
+    )
+    client_class = CSVModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Restricting client class name",
+    )
+
+    class Meta:
+        model = SubnetPool
+        fields = (
+            "subnet",
+            "ip_range",
+            "client_class",
+            "description",
             "tags",
         )
 
@@ -888,6 +918,104 @@ class ClientClassFilterForm(NetBoxModelFilterSetForm):
 class SubnetFilterForm(NetBoxModelFilterSetForm):
     model = Subnet
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all(), required=False)
+
+
+class SubnetPoolForm(NetBoxModelForm):
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all())
+    ip_range = DynamicModelChoiceField(
+        queryset=IPRange.objects.all(),
+        help_text="IP Range that defines this pool's address boundaries",
+    )
+    client_class = DynamicModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        help_text="Client class that restricts which clients can use this pool (KEA client-class)",
+    )
+    evaluate_additional_classes = DynamicModelMultipleChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        help_text="Additional client classes to evaluate for clients in this pool (KEA evaluate-additional-classes)",
+    )
+    option_data = DynamicModelMultipleChoiceField(
+        queryset=OptionData.objects.all(),
+        required=False,
+        help_text="DHCP options specific to this pool",
+    )
+
+    fieldsets = (
+        FieldSet("subnet", "ip_range", name="Pool Assignment"),
+        FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
+        FieldSet("option_data", name="DHCP Options"),
+        FieldSet("description", name="Description"),
+    )
+
+    class Meta:
+        model = SubnetPool
+        fields = (
+            "subnet",
+            "ip_range",
+            "client_class",
+            "evaluate_additional_classes",
+            "option_data",
+            "description",
+            "tags",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Determine the subnet from existing instance or initial data (query params)
+        subnet_obj = None
+        if self.instance and self.instance.subnet_id:
+            subnet_obj = self.instance.subnet
+        elif self.initial.get("subnet"):
+            try:
+                subnet_obj = Subnet.objects.get(pk=self.initial["subnet"])
+            except (Subnet.DoesNotExist, ValueError):
+                pass
+
+        # Filter ip_range to only show child ranges of the subnet's prefix
+        if subnet_obj:
+            self.fields["ip_range"].queryset = IPRange.objects.filter(
+                pk__in=subnet_obj.prefix.get_child_ranges().values_list("pk", flat=True)
+            )
+
+    def clean_option_data(self):
+        """Validate that no two option data entries have the same space and code."""
+        option_data = self.cleaned_data.get("option_data")
+        validate_unique_option_data_space_code(option_data)
+        return option_data
+
+    def clean(self):
+        super().clean()
+        subnet = self.cleaned_data.get("subnet")
+        ip_range = self.cleaned_data.get("ip_range")
+        client_class = self.cleaned_data.get("client_class")
+        evaluate_additional = self.cleaned_data.get("evaluate_additional_classes")
+
+        # Validate IP range belongs to subnet's prefix
+        if subnet and ip_range:
+            child_range_ids = set(subnet.prefix.get_child_ranges().values_list("pk", flat=True))
+            if ip_range.pk not in child_range_ids:
+                raise ValidationError({"ip_range": "The selected IP range must be a child of this subnet's prefix."})
+
+        # Validate client_class not in evaluate_additional_classes
+        if client_class and evaluate_additional:
+            if client_class in evaluate_additional:
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
+                )
+
+        return self.cleaned_data
+
+
+class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
+    model = SubnetPool
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all(), required=False)
+    client_class = DynamicModelChoiceField(queryset=ClientClass.objects.all(), required=False)
 
 
 # DHCPHARelationship Forms

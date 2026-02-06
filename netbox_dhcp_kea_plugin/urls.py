@@ -183,6 +183,25 @@ urlpatterns = (
         views.SubnetReservationsView.as_view(),
         name="subnet_reservations",
     ),
+    path(
+        "subnets/<int:pk>/pools/",
+        views.SubnetPoolsView.as_view(),
+        name="subnet_pools",
+    ),
+    # SubnetPool
+    path("subnet-pools/", views.SubnetPoolListView.as_view(), name="subnetpool_list"),
+    path("subnet-pools/add/", views.SubnetPoolEditView.as_view(), name="subnetpool_add"),
+    path("subnet-pools/import/", views.SubnetPoolImportView.as_view(), name="subnetpool_bulk_import"),
+    path("subnet-pools/delete/", views.SubnetPoolBulkDeleteView.as_view(), name="subnetpool_bulk_delete"),
+    path("subnet-pools/<int:pk>/", views.SubnetPoolView.as_view(), name="subnetpool"),
+    path("subnet-pools/<int:pk>/edit/", views.SubnetPoolEditView.as_view(), name="subnetpool_edit"),
+    path("subnet-pools/<int:pk>/delete/", views.SubnetPoolDeleteView.as_view(), name="subnetpool_delete"),
+    path(
+        "subnet-pools/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="subnetpool_changelog",
+        kwargs={"model": models.SubnetPool},
+    ),
     # DHCPHARelationship
     path("ha-relationships/", views.DHCPHARelationshipListView.as_view(), name="dhcpharelationship_list"),
     path("ha-relationships/add/", views.DHCPHARelationshipEditView.as_view(), name="dhcpharelationship_add"),

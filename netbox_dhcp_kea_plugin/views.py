@@ -7,6 +7,7 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
+from .models import SubnetPool
 
 
 # Hook Views
@@ -652,6 +653,7 @@ class SubnetView(generic.ObjectView):
 
         return {
             "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
+            "pool_count": instance.subnet_pools.count(),
         }
 
 
@@ -751,6 +753,68 @@ def get_reservation_count(obj):
     return len(obj.get_reservations())
 
 
+def get_pool_count(obj):
+    """Calculate the number of configured SubnetPools for a Subnet."""
+    return obj.subnet_pools.count()
+
+
+@register_model_view(models.Subnet, name="pools", path="pools")
+class SubnetPoolsView(generic.ObjectView):
+    queryset = models.Subnet.objects.select_related("prefix")
+    template_name = "netbox_dhcp_kea_plugin/subnet_pools.html"
+    tab = ViewTab(
+        label="Pools",
+        badge=get_pool_count,
+        permission="netbox_dhcp_kea_plugin.view_subnetpool",
+    )
+
+    def get(self, request, pk):
+        subnet = self.get_object(pk=pk)
+        pools = subnet.get_pools()
+
+        # Get IP ranges and their SubnetPool configs
+        ip_ranges = subnet.prefix.get_child_ranges().filter(mark_utilized=False)
+        pool_configs = {
+            sp.ip_range_id: sp
+            for sp in SubnetPool.objects.filter(subnet=subnet, ip_range__in=ip_ranges)
+            .select_related("client_class", "ip_range")
+            .prefetch_related("evaluate_additional_classes", "option_data")
+        }
+
+        # Build enriched pool data for the template
+        pool_data = []
+        for ip_range in ip_ranges:
+            start_ip = str(ip_range.start_address).split("/")[0]
+            end_ip = str(ip_range.end_address).split("/")[0]
+            subnet_pool = pool_configs.get(ip_range.pk)
+            pool_data.append(
+                {
+                    "ip_range": ip_range,
+                    "pool_range": f"{start_ip} - {end_ip}",
+                    "subnet_pool": subnet_pool,
+                    "client_class": subnet_pool.client_class if subnet_pool else None,
+                    "additional_classes": list(subnet_pool.evaluate_additional_classes.all()) if subnet_pool else [],
+                    "option_data": list(subnet_pool.option_data.all()) if subnet_pool else [],
+                }
+            )
+
+        # Also include computed pools (from available IPs) that don't have IP ranges
+        has_ip_ranges = ip_ranges.exists()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": subnet,
+                "pool_data": pool_data,
+                "pools": pools,
+                "has_ip_ranges": has_ip_ranges,
+                "pool_config_count": len(pool_configs),
+                "tab": self.tab,
+            },
+        )
+
+
 @register_model_view(models.Subnet, name="reservations", path="reservations")
 class SubnetReservationsView(generic.ObjectView):
     queryset = models.Subnet.objects.select_related("prefix")
@@ -776,3 +840,42 @@ class SubnetReservationsView(generic.ObjectView):
                 "tab": self.tab,
             },
         )
+
+
+# SubnetPool Views
+class SubnetPoolView(generic.ObjectView):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class").prefetch_related(
+        "evaluate_additional_classes", "option_data"
+    )
+
+    def get_extra_context(self, request, instance):
+        return {
+            "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
+        }
+
+
+class SubnetPoolListView(generic.ObjectListView):
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class")
+    table = tables.SubnetPoolTable
+    filterset = filtersets.SubnetPoolFilterSet
+    filterset_form = forms.SubnetPoolFilterForm
+
+
+class SubnetPoolEditView(generic.ObjectEditView):
+    queryset = SubnetPool.objects.all()
+    form = forms.SubnetPoolForm
+
+
+class SubnetPoolDeleteView(generic.ObjectDeleteView):
+    queryset = SubnetPool.objects.all()
+
+
+class SubnetPoolBulkDeleteView(generic.BulkDeleteView):
+    queryset = SubnetPool.objects.all()
+    filterset = filtersets.SubnetPoolFilterSet
+    table = tables.SubnetPoolTable
+
+
+class SubnetPoolImportView(generic.BulkImportView):
+    queryset = SubnetPool.objects.all()
+    model_form = forms.SubnetPoolImportForm

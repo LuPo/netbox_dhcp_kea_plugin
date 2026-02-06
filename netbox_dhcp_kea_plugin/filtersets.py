@@ -11,6 +11,7 @@ from .models import (
     OptionData,
     OptionDefinition,
     Subnet,
+    SubnetPool,
     VendorOptionSpace,
 )
 
@@ -138,6 +139,20 @@ class SubnetFilterSet(NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(prefix__prefix__icontains=value))
+
+
+class SubnetPoolFilterSet(NetBoxModelFilterSet):
+    subnet = django_filters.ModelChoiceFilter(queryset=Subnet.objects.all(), label="Subnet")
+    client_class = django_filters.ModelChoiceFilter(queryset=ClientClass.objects.all(), label="Client Class")
+
+    class Meta:
+        model = SubnetPool
+        fields = ["id", "subnet", "ip_range", "client_class"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(description__icontains=value) | Q(subnet__prefix__prefix__icontains=value))
 
 
 class DHCPHARelationshipFilterSet(NetBoxModelFilterSet):
