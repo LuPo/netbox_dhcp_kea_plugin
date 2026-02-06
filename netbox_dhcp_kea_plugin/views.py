@@ -1,7 +1,7 @@
 import json
 
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import redirect, render
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
@@ -616,20 +616,40 @@ class ClientClassServersView(generic.ObjectView):
         )
 
 
+def _get_subnet_count_for_class(obj):
+    """Count subnets where the client class is used as restricting or evaluate-additional."""
+    from .models import Subnet
+
+    return Subnet.objects.filter(Q(client_class=obj) | Q(evaluate_additional_classes=obj)).distinct().count()
+
+
 @register_model_view(models.ClientClass, name="prefixes", path="prefixes")
 class ClientClassPrefixesView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related("prefix_configs__prefix", "prefix_configs__server")
+    queryset = models.ClientClass.objects.prefetch_related(
+        "subnet_restrictions__prefix",
+        "subnet_restrictions__server",
+        "subnet_evaluations__prefix",
+        "subnet_evaluations__server",
+    )
     template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
     tab = ViewTab(
         label="Subnets",
-        badge=lambda obj: "⚠️" if obj.prefix_configs.count() == 0 else obj.prefix_configs.count(),
+        badge=lambda obj: _get_subnet_count_for_class(obj),
         visible=lambda obj: obj.only_in_additional_list,
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
     def get(self, request, pk):
         client_class = self.get_object(pk=pk)
-        prefix_configs = client_class.prefix_configs.select_related("prefix", "server").all()
+        # Subnets where this class is the restricting client_class
+        restricting_subnets = client_class.subnet_restrictions.select_related("prefix", "server").all()
+        # Subnets where this class is in evaluate_additional_classes
+        evaluation_subnets = client_class.subnet_evaluations.select_related("prefix", "server").all()
+        # Combine and deduplicate
+        all_subnet_ids = set(restricting_subnets.values_list("pk", flat=True)) | set(
+            evaluation_subnets.values_list("pk", flat=True)
+        )
+        prefix_configs = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
 
         return render(
             request,
@@ -644,8 +664,8 @@ class ClientClassPrefixesView(generic.ObjectView):
 
 # Subnet Views
 class SubnetView(generic.ObjectView):
-    queryset = models.Subnet.objects.select_related("prefix", "server").prefetch_related(
-        "option_data", "client_classes"
+    queryset = models.Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
+        "option_data", "evaluate_additional_classes"
     )
 
     def get_extra_context(self, request, instance):

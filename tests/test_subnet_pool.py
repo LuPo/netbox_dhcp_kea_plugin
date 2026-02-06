@@ -698,7 +698,7 @@ class TestSubnetToKeaDictWithPools:
 
         return (
             Subnet.objects.select_related("prefix", "server")
-            .prefetch_related("option_data", "client_classes")
+            .prefetch_related("option_data", "evaluate_additional_classes")
             .get(pk=subnet.pk)
         )
 

@@ -621,20 +621,33 @@ class TestSubnetReservations:
                 mock_option_data.all.return_value = []
                 with patch.object(Subnet, "option_data", new_callable=PropertyMock) as mock_opt:
                     mock_opt.return_value = mock_option_data
-                    # Mock client_classes to return empty queryset
-                    mock_client_classes = MagicMock()
-                    mock_client_classes.all.return_value = []
-                    with patch.object(Subnet, "client_classes", new_callable=PropertyMock) as mock_cc:
-                        mock_cc.return_value = mock_client_classes
-                        # Mock get_router_ip to return None
-                        with patch.object(config, "get_router_ip", return_value=None):
-                            # Mock get_kea_reservations to return reservations
-                            mock_reservations = [
-                                {"ip-address": "192.168.1.10", "hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"},
-                                {"ip-address": "192.168.1.20", "hw-address": "11:22:33:44:55:66", "hostname": "host2"},
-                            ]
-                            with patch.object(config, "get_kea_reservations", return_value=mock_reservations):
-                                result = config.to_kea_dict()
+                    # Mock evaluate_additional_classes to return empty queryset
+                    mock_eval_classes = MagicMock()
+                    mock_eval_classes.all.return_value = []
+                    with patch.object(Subnet, "evaluate_additional_classes", new_callable=PropertyMock) as mock_ec:
+                        mock_ec.return_value = mock_eval_classes
+                        # Mock client_class to return None
+                        with patch.object(Subnet, "client_class", new_callable=PropertyMock) as mock_cc:
+                            mock_cc.return_value = None
+                            # Ensure client_class_id is None so the FK check doesn't fire
+                            config.client_class_id = None
+                            # Mock get_router_ip to return None
+                            with patch.object(config, "get_router_ip", return_value=None):
+                                # Mock get_kea_reservations to return reservations
+                                mock_reservations = [
+                                    {
+                                        "ip-address": "192.168.1.10",
+                                        "hw-address": "aa:bb:cc:dd:ee:ff",
+                                        "hostname": "host1",
+                                    },
+                                    {
+                                        "ip-address": "192.168.1.20",
+                                        "hw-address": "11:22:33:44:55:66",
+                                        "hostname": "host2",
+                                    },
+                                ]
+                                with patch.object(config, "get_kea_reservations", return_value=mock_reservations):
+                                    result = config.to_kea_dict()
 
         assert "reservations" in result
         assert len(result["reservations"]) == 2
@@ -663,12 +676,15 @@ class TestSubnetReservations:
                 mock_option_data.all.return_value = []
                 with patch.object(Subnet, "option_data", new_callable=PropertyMock) as mock_opt:
                     mock_opt.return_value = mock_option_data
-                    mock_client_classes = MagicMock()
-                    mock_client_classes.all.return_value = []
-                    with patch.object(Subnet, "client_classes", new_callable=PropertyMock) as mock_cc:
-                        mock_cc.return_value = mock_client_classes
-                        with patch.object(config, "get_router_ip", return_value=None):
-                            with patch.object(config, "get_kea_reservations", return_value=[]):
-                                result = config.to_kea_dict()
+                    mock_eval_classes = MagicMock()
+                    mock_eval_classes.all.return_value = []
+                    with patch.object(Subnet, "evaluate_additional_classes", new_callable=PropertyMock) as mock_ec:
+                        mock_ec.return_value = mock_eval_classes
+                        with patch.object(Subnet, "client_class", new_callable=PropertyMock) as mock_cc:
+                            mock_cc.return_value = None
+                            config.client_class_id = None
+                            with patch.object(config, "get_router_ip", return_value=None):
+                                with patch.object(config, "get_kea_reservations", return_value=[]):
+                                    result = config.to_kea_dict()
 
         assert "reservations" not in result

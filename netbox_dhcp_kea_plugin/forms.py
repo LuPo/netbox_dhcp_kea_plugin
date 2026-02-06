@@ -351,12 +351,19 @@ class SubnetImportForm(NetBoxModelImportForm):
         to_field_name="name",
         help_text="DHCP server name",
     )
+    client_class = CSVModelChoiceField(
+        queryset=ClientClass.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Restricting client class name (KEA client-class)",
+    )
 
     class Meta:
         model = Subnet
         fields = (
             "prefix",
             "server",
+            "client_class",
             "valid_lifetime",
             "max_lifetime",
             "routers_option_offset",
@@ -734,11 +741,15 @@ class SubnetForm(NetBoxModelForm):
         required=False,
         help_text="Option data for this subnet",
     )
-    client_classes = DynamicModelMultipleChoiceField(
+    client_class = DynamicModelChoiceField(
         queryset=ClientClass.objects.all(),
         required=False,
-        query_params={"only_in_additional_list": True},
-        help_text="Client classes to evaluate additionally for this subnet (only classes with 'Only in additional list' enabled)",
+        help_text="Client class that restricts which clients can use this subnet (KEA client-class)",
+    )
+    evaluate_additional_classes = DynamicModelMultipleChoiceField(
+        queryset=ClientClass.objects.all(),
+        required=False,
+        help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
     )
     routers_option_offset = forms.IntegerField(
         required=False,
@@ -751,7 +762,7 @@ class SubnetForm(NetBoxModelForm):
         FieldSet("prefix", "server", name="Prefix Assignment"),
         FieldSet("valid_lifetime", "max_lifetime", name="Lease Timing"),
         FieldSet("routers_option_offset", "option_data", name="DHCP Options"),
-        FieldSet("client_classes", name="Client Classes"),
+        FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
     )
 
     class Meta:
@@ -763,7 +774,8 @@ class SubnetForm(NetBoxModelForm):
             "max_lifetime",
             "routers_option_offset",
             "option_data",
-            "client_classes",
+            "client_class",
+            "evaluate_additional_classes",
             "tags",
         )
 
@@ -778,6 +790,23 @@ class SubnetForm(NetBoxModelForm):
         option_data = self.cleaned_data.get("option_data")
         validate_unique_option_data_space_code(option_data)
         return option_data
+
+    def clean(self):
+        super().clean()
+        client_class = self.cleaned_data.get("client_class")
+        evaluate_additional = self.cleaned_data.get("evaluate_additional_classes")
+
+        # Validate client_class not in evaluate_additional_classes
+        if client_class and evaluate_additional:
+            if client_class in evaluate_additional:
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
+                )
+
+        return self.cleaned_data
 
     def clean_server(self):
         """Redirect non-primary HA servers to their primary.
@@ -917,6 +946,7 @@ class ClientClassFilterForm(NetBoxModelFilterSetForm):
 
 class SubnetFilterForm(NetBoxModelFilterSetForm):
     model = Subnet
+    client_class = DynamicModelChoiceField(queryset=ClientClass.objects.all(), required=False)
     server = DynamicModelChoiceField(queryset=DHCPServer.objects.all(), required=False)
 
 

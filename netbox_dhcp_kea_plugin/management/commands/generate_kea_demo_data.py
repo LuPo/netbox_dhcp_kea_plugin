@@ -1310,7 +1310,7 @@ class Command(BaseCommand):
                         config.option_data.set(options_to_add)
                     if client_classes:
                         classes_to_add = random.sample(client_classes, min(random.randint(0, 2), len(client_classes)))
-                        config.client_classes.set(classes_to_add)
+                        config.evaluate_additional_classes.set(classes_to_add)
 
                 created_configs.append(config)
                 status = "Created" if created else "Already exists"

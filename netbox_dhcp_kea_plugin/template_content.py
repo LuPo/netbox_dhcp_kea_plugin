@@ -23,8 +23,8 @@ class PrefixDHCPInfo(PluginTemplateExtension):
 
         try:
             dhcp_config = (
-                Subnet.objects.select_related("server")
-                .prefetch_related("option_data", "client_classes")
+                Subnet.objects.select_related("server", "client_class")
+                .prefetch_related("option_data", "evaluate_additional_classes")
                 .get(prefix=obj)
             )
 

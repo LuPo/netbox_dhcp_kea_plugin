@@ -130,10 +130,11 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
 
 class SubnetFilterSet(NetBoxModelFilterSet):
     server = django_filters.ModelChoiceFilter(queryset=DHCPServer.objects.all(), label="DHCP Server")
+    client_class = django_filters.ModelChoiceFilter(queryset=ClientClass.objects.all(), label="Client Class")
 
     class Meta:
         model = Subnet
-        fields = ["id", "prefix", "server"]
+        fields = ["id", "prefix", "server", "client_class"]
 
     def search(self, queryset, name, value):
         if not value.strip():

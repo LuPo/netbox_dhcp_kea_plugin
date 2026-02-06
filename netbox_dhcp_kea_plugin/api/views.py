@@ -99,7 +99,9 @@ class ClientClassViewSet(NetBoxModelViewSet):
 
 
 class SubnetViewSet(NetBoxModelViewSet):
-    queryset = Subnet.objects.select_related("prefix", "server").prefetch_related("option_data", "client_classes")
+    queryset = Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
+        "option_data", "evaluate_additional_classes"
+    )
     serializer_class = SubnetSerializer
     filterset_class = filtersets.SubnetFilterSet
 

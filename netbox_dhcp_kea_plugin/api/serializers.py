@@ -262,7 +262,8 @@ class SubnetSerializer(NetBoxModelSerializer):
     prefix = NestedPrefixSerializer()
     server = NestedDHCPServerSerializer()
     option_data = OptionDataSerializer(many=True, read_only=True)
-    client_classes = ClientClassSerializer(many=True, read_only=True)
+    client_class = NestedClientClassSerializer(read_only=True)
+    evaluate_additional_classes = NestedClientClassSerializer(many=True, read_only=True)
     router_ip = serializers.SerializerMethodField()
 
     class Meta:
@@ -278,7 +279,8 @@ class SubnetSerializer(NetBoxModelSerializer):
             "routers_option_offset",
             "router_ip",
             "option_data",
-            "client_classes",
+            "client_class",
+            "evaluate_additional_classes",
             "tags",
             "custom_fields",
             "created",

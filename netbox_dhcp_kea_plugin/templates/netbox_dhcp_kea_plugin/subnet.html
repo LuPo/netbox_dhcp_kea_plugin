@@ -73,15 +73,35 @@
             </div>
         </div>
         {% endif %}
-        {% if object.client_classes.exists %}
+        {% if object.client_class or object.evaluate_additional_classes.exists %}
         <div class="card">
             <h5 class="card-header">Client Classes</h5>
             <div class="card-body">
-                <ul>
-                    {% for client_class in object.client_classes.all %}
-                    <li><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></li>
-                    {% endfor %}
-                </ul>
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Restricting Client Class</th>
+                        <td>
+                            {% if object.client_class %}
+                                <a href="{{ object.client_class.get_absolute_url }}">{{ object.client_class.name }}</a>
+                                <br><small class="text-muted">Only clients matching this class can use this subnet</small>
+                            {% else %}
+                                <span class="text-muted">None (all clients allowed)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if object.evaluate_additional_classes.exists %}
+                    <tr>
+                        <th>Evaluate Additional Classes</th>
+                        <td>
+                            <ul class="list-unstyled mb-0">
+                                {% for client_class in object.evaluate_additional_classes.all %}
+                                <li><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
             </div>
         </div>
         {% endif %}

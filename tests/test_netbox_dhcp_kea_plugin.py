@@ -295,8 +295,8 @@ class TestDHCPServer:
             server=dhcp_server,
             valid_lifetime=3600,
         )
-        prefix_config.client_classes.add(scoped_class)
-        prefix_config.client_classes.add(normal_class)
+        prefix_config.evaluate_additional_classes.add(scoped_class)
+        prefix_config.evaluate_additional_classes.add(normal_class)
 
         kea_dict = dhcp_server.to_kea_dict()
         dhcp4 = kea_dict["Dhcp4"]
@@ -322,7 +322,7 @@ class TestDHCPServer:
             "Normal class should not have only-in-additional-list flag"
         )
 
-        # Only classes with only_in_additional_list=True should appear in subnet's evaluate-additional-classes
+        # All classes in evaluate_additional_classes should appear in subnet's evaluate-additional-classes
         subnets = dhcp4.get("subnet4", [])
         assert len(subnets) == 1
         subnet = subnets[0]
@@ -333,6 +333,6 @@ class TestDHCPServer:
 
         eval_classes = subnet.get("evaluate-additional-classes", [])
         assert "ScopedClass" in eval_classes, "Scoped class should appear in subnet's evaluate-additional-classes"
-        assert "NormalClass" not in eval_classes, (
-            "Normal class should NOT appear in subnet's evaluate-additional-classes (only_in_additional_list=False)"
+        assert "NormalClass" in eval_classes, (
+            "Normal class should appear in subnet's evaluate-additional-classes (it was added to the M2M)"
         )

@@ -19,12 +19,18 @@
                 <td class="text-muted">None configured</td>
             </tr>
             {% endfor %}
-            {% if dhcp_config.client_classes.exists %}
+            {% if dhcp_config.client_class %}
             <tr>
-                <th>Client Classes</th>
+                <th>Restricting Class</th>
+                <td><a href="{{ dhcp_config.client_class.get_absolute_url }}">{{ dhcp_config.client_class.name }}</a></td>
+            </tr>
+            {% endif %}
+            {% if dhcp_config.evaluate_additional_classes.exists %}
+            <tr>
+                <th>Evaluate Additional Classes</th>
                 <td>
                     <ul class="list-unstyled mb-0">
-                        {% for client_class in dhcp_config.client_classes.all %}
+                        {% for client_class in dhcp_config.evaluate_additional_classes.all %}
                         <li><a href="{{ client_class.get_absolute_url }}">{{ client_class.name }}</a></li>
                         {% endfor %}
                     </ul>

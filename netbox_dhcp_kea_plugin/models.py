@@ -395,8 +395,9 @@ class DHCPServer(NetBoxModel):
 
         Returns:
             list: List of ClientClass instances that have only_in_additional_list=True
-                  but are not referenced in any subnet's evaluate-additional-classes
-                  or any pool's client_class / evaluate_additional_classes.
+                  but are not referenced in any subnet's client_class,
+                  evaluate_additional_classes, or any pool's client_class /
+                  evaluate_additional_classes.
         """
         # Skip validation for non-primary HA servers - they inherit configs from primary
         if not self.is_ha_primary():
@@ -411,7 +412,8 @@ class DHCPServer(NetBoxModel):
         # Get all classes referenced in subnets and pools (use effective prefix configs for HA)
         used_class_ids = set()
         for prefix_config in self.get_effective_prefix_configs():
-            for cc in prefix_config.client_classes.all():
+            # Subnet-level: restricting client_class + evaluate_additional_classes
+            for cc in prefix_config.get_all_subnet_client_classes():
                 used_class_ids.add(cc.id)
             # Also check pool-level client classes
             for cc in prefix_config.get_all_pool_client_classes():
@@ -540,7 +542,8 @@ class DHCPServer(NetBoxModel):
                 all_option_data.add(opt)
                 if opt.vendor_option_space:
                     vendor_spaces.add(opt.vendor_option_space)
-            for cc in prefix_config.client_classes.all():
+            # Subnet-level client classes (restricting + evaluate-additional)
+            for cc in prefix_config.get_all_subnet_client_classes():
                 for opt in cc.option_data.all():
                     all_option_data.add(opt)
                     if opt.vendor_option_space:
@@ -579,7 +582,8 @@ class DHCPServer(NetBoxModel):
         # The only-in-additional-list flag tells KEA not to auto-evaluate them globally
         all_client_classes = set()
         for prefix_config in effective_prefix_configs:
-            for cc in prefix_config.client_classes.all():
+            # Subnet-level: restricting client_class + evaluate_additional_classes
+            for cc in prefix_config.get_all_subnet_client_classes():
                 all_client_classes.add(cc)
             # Include client classes from pool-level configurations
             for cc in prefix_config.get_all_pool_client_classes():
@@ -1316,7 +1320,20 @@ class Subnet(NetBoxModel):
         related_name="prefix_configs",
         help_text="Option data for this subnet",
     )
-    client_classes = models.ManyToManyField(ClientClass, blank=True, related_name="prefix_configs")
+    client_class = models.ForeignKey(
+        ClientClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subnet_restrictions",
+        help_text="Client class that restricts which clients can use this subnet (KEA client-class)",
+    )
+    evaluate_additional_classes = models.ManyToManyField(
+        ClientClass,
+        blank=True,
+        related_name="subnet_evaluations",
+        help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
+    )
     valid_lifetime = models.PositiveIntegerField(default=3600, help_text="Lease valid lifetime in seconds")
     max_lifetime = models.PositiveIntegerField(default=7200, help_text="Maximum lease lifetime in seconds")
     routers_option_offset = models.PositiveIntegerField(
@@ -1347,6 +1364,17 @@ class Subnet(NetBoxModel):
             if self.routers_option_offset > max_offset:
                 raise ValidationError(
                     {"routers_option_offset": f"Offset must be between 0 and {max_offset} for this prefix."}
+                )
+
+        # Validate that client_class is not also in evaluate_additional_classes
+        # (can only check after save for M2M, so this is a best-effort check)
+        if self.pk and self.client_class_id:
+            if self.evaluate_additional_classes.filter(pk=self.client_class_id).exists():
+                raise ValidationError(
+                    {
+                        "client_class": "The restricting client class should not also appear in "
+                        "evaluate-additional-classes."
+                    }
                 )
 
     def get_router_ip(self):
@@ -1575,6 +1603,22 @@ class Subnet(NetBoxModel):
                 client_classes.add(cc)
         return client_classes
 
+    def get_all_subnet_client_classes(self):
+        """Get all ClientClass instances used at the subnet level.
+
+        Includes both the restricting client_class (if set) and all
+        evaluate_additional_classes.
+
+        Returns:
+            set: Set of ClientClass instances from subnet-level config.
+        """
+        client_classes = set()
+        if self.client_class:
+            client_classes.add(self.client_class)
+        for cc in self.evaluate_additional_classes.all():
+            client_classes.add(cc)
+        return client_classes
+
     def to_kea_dict(self):
         """Return a dictionary representation for KEA subnet configuration"""
         prefix = self.prefix.prefix
@@ -1605,10 +1649,14 @@ class Subnet(NetBoxModel):
         if option_data_list:
             result["option-data"] = option_data_list
 
-        # Add client-classes if any (only those with only_in_additional_list=True)
-        client_class_names = [cc.name for cc in self.client_classes.filter(only_in_additional_list=True)]
-        if client_class_names:
-            result["evaluate-additional-classes"] = client_class_names
+        # Add restricting client-class if set
+        if self.client_class:
+            result["client-class"] = self.client_class.name
+
+        # Add evaluate-additional-classes
+        additional_class_names = [cc.name for cc in self.evaluate_additional_classes.all()]
+        if additional_class_names:
+            result["evaluate-additional-classes"] = additional_class_names
 
         # Add reservations from assigned IP addresses
         reservations = self.get_kea_reservations()

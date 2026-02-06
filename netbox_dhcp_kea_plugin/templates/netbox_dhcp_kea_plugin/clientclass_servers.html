@@ -25,7 +25,7 @@
                             <td>
                                 <a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a>
                             </td>
-                            <td>{% include 'utilities/templatetags/badge.html' with object=server field='status' %}</td>
+                            <td>{% badge server.get_status_display bg_color=server.get_status_color %}</td>
                             <td>{{ server.description|placeholder }}</td>
                         </tr>
                         {% endfor %}
