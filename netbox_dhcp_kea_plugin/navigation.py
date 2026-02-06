@@ -117,6 +117,20 @@ subnet_menu_item = PluginMenuItem(
     ),
 )
 
+subnet_pools_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:subnetpool_list",
+    link_text="Subnet Pools",
+    permissions=["netbox_dhcp_kea_plugin.view_subnetpool"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:subnetpool_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_subnetpool"],
+        ),
+    ),
+)
+
 dhcpharelationship_menu_item = PluginMenuItem(
     link="plugins:netbox_dhcp_kea_plugin:dhcpharelationship_list",
     link_text="HA Relationships",
@@ -141,6 +155,7 @@ if top_level_menu:
                 (
                     dhcpserver_menu_item,
                     subnet_menu_item,
+                    subnet_pools_menu_item,
                     clientclass_menu_item,
                 ),
             ),
@@ -170,6 +185,7 @@ else:
     menu_items = (
         dhcpserver_menu_item,
         subnet_menu_item,
+        subnet_pools_menu_item,
         clientclass_menu_item,
         dhcpharelationship_menu_item,
         hook_menu_item,
