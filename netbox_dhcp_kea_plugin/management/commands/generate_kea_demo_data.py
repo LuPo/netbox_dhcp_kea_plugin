@@ -39,6 +39,8 @@ from netbox_dhcp_kea_plugin.models import (
     ClientClass,
     DHCPHARelationship,
     DHCPServer,
+    Hook,
+    HookGroup,
     OptionData,
     OptionDefinition,
     PrefixDHCPConfig,
@@ -123,6 +125,15 @@ class Command(BaseCommand):
             return
 
         # Delete in order to respect foreign key constraints
+
+        # Delete demo HookGroups (clear M2M relations first)
+        demo_hook_groups = HookGroup.objects.filter(tags=demo_tag)
+        count = demo_hook_groups.count()
+        for hg in list(demo_hook_groups):
+            hg.hooks.clear()
+            hg.servers.clear()
+            hg.delete()
+        self.stdout.write(f"  - Deleted {count} HookGroup objects")
 
         # First, delete PrefixDHCPConfigs that are tagged OR reference demo-tagged servers
         demo_servers = DHCPServer.objects.filter(tags=demo_tag)
@@ -1116,6 +1127,84 @@ class Command(BaseCommand):
 
         return created_servers
 
+    def create_hook_groups(self, servers, demo_tag, dry_run=False):
+        """Create demo HookGroups with standard hooks and assign to servers.
+
+        Creates sample hook groups that demonstrate common KEA hook configurations:
+        - A "Basic DHCP4 Hooks" group with essential hooks for DHCPv4
+        - A "HA Hooks" group for High Availability setups
+        """
+        self.stdout.write("\nCreating HookGroup objects...")
+
+        # Define hook group configurations
+        hook_group_configs = [
+            {
+                "name": "Basic DHCP4 Hooks",
+                "description": "Essential hooks for DHCPv4 operations including lease commands and statistics",
+                "library_path": "/usr/lib/x86_64-linux-gnu/kea/hooks",
+                "hook_names": ["Lease Commands", "Statistics Commands", "High Availability"],
+            },
+            {
+                "name": "Extended DHCP4 Hooks",
+                "description": "Additional hooks for advanced DHCPv4 features",
+                "library_path": "/usr/lib/x86_64-linux-gnu/kea/hooks",
+                "hook_names": ["Host Commands", "Subnet Commands", "Config Backend Commands"],
+            },
+        ]
+
+        created_groups = []
+        for config in hook_group_configs:
+            if dry_run:
+                self.stdout.write(f"  [DRY-RUN] Would create HookGroup: {config['name']}")
+                continue
+
+            try:
+                hook_group, created = HookGroup.objects.get_or_create(
+                    name=config["name"],
+                    defaults={
+                        "description": config["description"],
+                        "library_path": config["library_path"],
+                    },
+                )
+
+                if created:
+                    self.tag_object(hook_group, demo_tag)
+
+                    # Add standard hooks to the group
+                    for hook_name in config["hook_names"]:
+                        try:
+                            hook = Hook.objects.get(name=hook_name)
+                            hook_group.hooks.add(hook)
+                            self.stdout.write(f"    Added hook '{hook_name}' to '{config['name']}'")
+                        except Hook.DoesNotExist:
+                            self.stdout.write(self.style.WARNING(f"    Hook '{hook_name}' not found - skipping"))
+
+                    self.stdout.write(f"  Created: {hook_group.name}")
+                else:
+                    self.stdout.write(f"  Already exists: {hook_group.name}")
+
+                created_groups.append(hook_group)
+
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"  Failed to create {config['name']}: {e}"))
+
+        # Assign first hook group to the first server (if any)
+        if created_groups and servers and not dry_run:
+            first_group = created_groups[0]
+            # servers is a list of (server, role) tuples
+            first_server = servers[0][0] if isinstance(servers[0], tuple) else servers[0]
+            first_group.servers.add(first_server)
+            self.stdout.write(f"  Assigned '{first_group.name}' to server '{first_server.name}'")
+
+            # If we have a second group and more servers, assign it to another server
+            if len(created_groups) > 1 and len(servers) > 1:
+                second_group = created_groups[1]
+                second_server = servers[1][0] if isinstance(servers[1], tuple) else servers[1]
+                second_group.servers.add(second_server)
+                self.stdout.write(f"  Assigned '{second_group.name}' to server '{second_server.name}'")
+
+        return created_groups
+
     def assign_servers_to_ha(self, servers_with_roles, ha_relationships, dry_run=False):
         """Assign DHCP servers to HA relationships.
 
@@ -1340,6 +1429,13 @@ class Command(BaseCommand):
             dry_run=dry_run,
         )
 
+        # Create hook groups and assign to servers
+        hook_groups = self.create_hook_groups(
+            servers,
+            demo_tag,
+            dry_run=dry_run,
+        )
+
         # Summary
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Demo data generation complete!"))
@@ -1353,3 +1449,4 @@ class Command(BaseCommand):
             self.stdout.write(f"  - DHCP Servers: {len(servers)}")
             self.stdout.write(f"  - HA Relationships: {len(ha_relationships)}")
             self.stdout.write(f"  - Prefix Configs: {len(prefix_configs)}")
+            self.stdout.write(f"  - Hook Groups: {len(hook_groups)}")

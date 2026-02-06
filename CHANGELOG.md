@@ -6,6 +6,7 @@
 - **Hook Support**
   - New `Hook` and `HookGroup` models for managing KEA hook libraries
   - Views and UI for configuring hook libraries on DHCP servers
+  - Demo data generation now includes sample HookGroups with standard hooks assigned to servers
 
 - **Option Definition Improvements**
   - Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering
