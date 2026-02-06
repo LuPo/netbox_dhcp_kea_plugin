@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.3.0 (2026-02-06)
+
+### Added
+- **Subnet Pool Model**
+  - New `SubnetPool` model for pool-level DHCP configuration, annotating NetBox `IPRange` objects with KEA pool-level settings
+  - Pool-level `client_class` FK for restricting which clients can obtain addresses from a pool (KEA `client-class`)
+  - Pool-level `evaluate_additional_classes` M2M for triggering client class evaluation at pool scope (KEA `evaluate-additional-classes`)
+  - Pool-level `option_data` M2M for pool-specific DHCP options (KEA `option-data`)
+  - `pool_range` property for consistent template-friendly display of pool address ranges
+  - Full CRUD views, forms, serializers, filters, and tables for SubnetPool management
+  - Database migration (`0009`) creates the SubnetPool model
+
+- **Subnet Client Class Restriction**
+  - New `client_class` FK on `Subnet` model for a single restricting client class (KEA `client-class`)
+  - Separates the restricting class concept from additional evaluated classes, aligning with KEA semantics
+  - Database migration (`0010`) adds the field and renames the existing M2M
+
+- **KEA Client Class Validation**
+  - Subnet-level: raises `ValidationError` if restricting `client_class` has `only_in_additional_list=True` (subnet would be permanently unreachable since no higher scope triggers evaluation)
+  - Pool-level: raises `ValidationError` if restricting `client_class` has `only_in_additional_list=True` and the parent subnet does not include the class in `evaluate_additional_classes`
+  - Cross-field validation: restricting `client_class` cannot also appear in `evaluate_additional_classes` on the same object (both model and form level)
+
+- **Server-Level Misconfiguration Detection**
+  - New `DHCPServer.get_unreachable_subnet_restrictions()` method to find subnets with unreachable restricting classes
+  - New `DHCPServer.get_unreachable_pool_restrictions()` method to find pools with unreachable restricting classes
+  - HA-aware: standby/secondary servers return empty lists (they inherit config from the primary)
+  - Danger alert cards on DHCP Server detail page listing unreachable subnets and pools with explanations and links
+
+- **Demo Data Generation for Subnet Pools**
+  - `generate_kea_demo_data` command now creates IP Ranges and SubnetPool configurations
+  - Demonstrates correct KEA patterns: normal global classes as restrictions, `only_in_additional_list` classes with proper subnet-level evaluation, and pool-level `evaluate-additional-classes`
+  - Demo cleanup handles SubnetPool and IPRange objects
+
+- **Test Coverage**
+  - New unit tests for SubnetPool behavior, Subnet client class validations, server-level unreachable restriction helpers, and KEA output consistency (247 tests passing)
+
+### Changed
+- **BREAKING**: Renamed `client_classes` M2M field on `Subnet` to `evaluate_additional_classes` to align with KEA terminology
+  - API consumers must update field references from `client_classes` to `evaluate_additional_classes`
+  - Database migration (`0010`) handles the rename automatically
+- `Subnet.get_all_subnet_client_classes()` and new `Subnet.get_all_pool_client_classes()` helpers collect client classes across both subnet and pool scopes
+- `DHCPServer.to_kea_dict()` now includes pool-level client classes in the generated KEA configuration
+- `DHCPServer.get_unused_only_in_additional_list_classes()` now also checks pool-level class references
+
+### Fixed
+- Pool address range display mismatch between list view and detail view (detail view was including subnet mask on addresses)
+
 ## 0.2.5 (2026-02-06)
 
 ### Changed
