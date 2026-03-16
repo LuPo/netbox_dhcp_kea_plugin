@@ -930,3 +930,319 @@ class TestHARoleChangeProtection:
         old_primary.save()
 
         assert old_primary.ha_role == "standby"
+
+
+@pytest.mark.django_db
+class TestResolveHALibraryPath:
+    """Tests for DHCPServer._resolve_ha_library_path().
+
+    This method determines the full library path for HA-injected hooks
+    (libdhcp_ha.so, libdhcp_lease_cmds.so) by inspecting hook groups
+    assigned to the server instead of using hardcoded paths.
+    """
+
+    def test_no_hook_groups_uses_default_path(self, dhcp_server_factory):
+        """Without any hook groups, the default /usr/lib64/kea/hooks is used."""
+        server = dhcp_server_factory()
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/usr/lib64/kea/hooks/libdhcp_ha.so"
+
+    def test_single_hook_group_uses_group_library_path(self, dhcp_server_factory):
+        """A single hook group's library_path is used as the base path."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group = HookGroup.objects.create(
+            name="custom-hooks",
+            library_path="/opt/kea/lib/hooks",
+        )
+        group.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/opt/kea/lib/hooks/libdhcp_ha.so"
+
+    def test_single_hook_group_with_default_path(self, dhcp_server_factory):
+        """A single hook group with default library_path."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group = HookGroup.objects.create(
+            name="default-hooks",
+            library_path="/usr/lib64/kea/hooks",
+        )
+        group.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_lease_cmds.so")
+
+        assert path == "/usr/lib64/kea/hooks/libdhcp_lease_cmds.so"
+
+    def test_hook_group_containing_matching_hook_uses_hook_path(self, dhcp_server_factory):
+        """When a hook group explicitly contains the requested hook, use that hook's resolved path."""
+        from netbox_dhcp_kea_plugin.models import Hook, HookGroup
+
+        server = dhcp_server_factory()
+
+        ha_hook = Hook.objects.create(
+            name="HA Hook",
+            library_name="libdhcp_ha.so",
+            allowed_processes=["kea-dhcp4"],
+        )
+        group = HookGroup.objects.create(
+            name="ha-group",
+            library_path="/custom/path/hooks",
+        )
+        group.hooks.add(ha_hook)
+        group.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/custom/path/hooks/libdhcp_ha.so"
+
+    def test_multiple_groups_same_library_path(self, dhcp_server_factory):
+        """Multiple groups with the same library_path use that shared path."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group1 = HookGroup.objects.create(
+            name="group-a",
+            library_path="/opt/kea/hooks",
+        )
+        group2 = HookGroup.objects.create(
+            name="group-b",
+            library_path="/opt/kea/hooks",
+        )
+        group1.servers.add(server)
+        group2.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/opt/kea/hooks/libdhcp_ha.so"
+
+    def test_multiple_groups_different_library_paths_falls_back_to_default(self, dhcp_server_factory):
+        """Multiple groups with different library_paths and no matching hook falls back to default."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group1 = HookGroup.objects.create(
+            name="group-x",
+            library_path="/opt/kea/hooks",
+        )
+        group2 = HookGroup.objects.create(
+            name="group-y",
+            library_path="/usr/local/lib/kea/hooks",
+        )
+        group1.servers.add(server)
+        group2.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/usr/lib64/kea/hooks/libdhcp_ha.so"
+
+    def test_multiple_groups_different_paths_but_matching_hook_uses_hook_group(self, dhcp_server_factory):
+        """Multiple groups with different paths but one contains the hook — use that group's path."""
+        from netbox_dhcp_kea_plugin.models import Hook, HookGroup
+
+        server = dhcp_server_factory()
+
+        ha_hook = Hook.objects.create(
+            name="HA Hook Explicit",
+            library_name="libdhcp_ha.so",
+            allowed_processes=["kea-dhcp4"],
+        )
+
+        group1 = HookGroup.objects.create(
+            name="misc-hooks",
+            library_path="/opt/kea/hooks",
+        )
+        group2 = HookGroup.objects.create(
+            name="ha-hooks",
+            library_path="/usr/local/lib/kea/hooks",
+        )
+        group2.hooks.add(ha_hook)
+        group1.servers.add(server)
+        group2.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/usr/local/lib/kea/hooks/libdhcp_ha.so"
+
+    def test_trailing_slash_in_library_path_is_handled(self, dhcp_server_factory):
+        """Trailing slashes in library_path are stripped properly."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group = HookGroup.objects.create(
+            name="trailing-slash-group",
+            library_path="/opt/kea/hooks/",
+        )
+        group.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        assert path == "/opt/kea/hooks/libdhcp_ha.so"
+
+    def test_empty_library_path_uses_filename_only(self, dhcp_server_factory):
+        """A hook group with empty library_path results in just the filename."""
+        from netbox_dhcp_kea_plugin.models import HookGroup
+
+        server = dhcp_server_factory()
+        group = HookGroup.objects.create(
+            name="no-path-group",
+            library_path="",
+        )
+        group.servers.add(server)
+
+        path = server._resolve_ha_library_path("libdhcp_ha.so")
+
+        # Empty string is falsy, so distinct_paths has one entry ("")
+        # base becomes "" after rstrip, result is "/libdhcp_ha.so"
+        # This matches the Hook.get_library_path behavior: empty base returns just library_name
+        assert "libdhcp_ha.so" in path
+
+
+@pytest.mark.django_db
+class TestToKeaDictHAHooksLibraryPaths:
+    """Tests that to_kea_dict uses resolved library paths for HA hooks."""
+
+    def test_ha_hooks_use_hook_group_library_path(self, dhcp_server_factory):
+        """HA hooks in to_kea_dict should use the hook group's library_path."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, HookGroup
+
+        relationship = DHCPHARelationship.objects.create(
+            name="ha-path-test",
+            mode="hot-standby",
+        )
+        server1 = dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_url="http://192.168.1.1:8000/",
+        )
+        dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_url="http://192.168.1.2:8000/",
+        )
+
+        group = HookGroup.objects.create(
+            name="custom-path-group",
+            library_path="/opt/custom/kea/hooks",
+        )
+        group.servers.add(server1)
+
+        kea_config = server1.to_kea_dict()
+        hooks = kea_config["Dhcp4"]["hooks-libraries"]
+
+        ha_hook = next(h for h in hooks if "libdhcp_ha.so" in h["library"])
+        lease_hook = next(h for h in hooks if "libdhcp_lease_cmds.so" in h["library"])
+
+        assert ha_hook["library"] == "/opt/custom/kea/hooks/libdhcp_ha.so"
+        assert lease_hook["library"] == "/opt/custom/kea/hooks/libdhcp_lease_cmds.so"
+
+    def test_ha_hooks_default_path_without_hook_groups(self, dhcp_server_factory):
+        """Without hook groups, HA hooks use the default /usr/lib64/kea/hooks path."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="ha-default-path-test",
+            mode="hot-standby",
+        )
+        server1 = dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_url="http://192.168.1.1:8000/",
+        )
+        dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_url="http://192.168.1.2:8000/",
+        )
+
+        kea_config = server1.to_kea_dict()
+        hooks = kea_config["Dhcp4"]["hooks-libraries"]
+
+        ha_hook = next(h for h in hooks if "libdhcp_ha.so" in h["library"])
+        lease_hook = next(h for h in hooks if "libdhcp_lease_cmds.so" in h["library"])
+
+        assert ha_hook["library"] == "/usr/lib64/kea/hooks/libdhcp_ha.so"
+        assert lease_hook["library"] == "/usr/lib64/kea/hooks/libdhcp_lease_cmds.so"
+
+    def test_ha_hook_not_duplicated_when_in_hook_group(self, dhcp_server_factory):
+        """If the HA hook is already provided by a hook group, it should be replaced (not duplicated)."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Hook, HookGroup
+
+        relationship = DHCPHARelationship.objects.create(
+            name="ha-dedup-test",
+            mode="hot-standby",
+        )
+        server1 = dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_url="http://192.168.1.1:8000/",
+        )
+        dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_url="http://192.168.1.2:8000/",
+        )
+
+        ha_hook = Hook.objects.create(
+            name="HA Hook Dedup",
+            library_name="libdhcp_ha.so",
+            allowed_processes=["kea-dhcp4"],
+        )
+        group = HookGroup.objects.create(
+            name="ha-dedup-group",
+            library_path="/opt/kea/hooks",
+        )
+        group.hooks.add(ha_hook)
+        group.servers.add(server1)
+
+        kea_config = server1.to_kea_dict()
+        hooks = kea_config["Dhcp4"]["hooks-libraries"]
+
+        # The HA hook should appear exactly once (the one with parameters)
+        ha_hooks = [h for h in hooks if "libdhcp_ha.so" in h["library"]]
+        assert len(ha_hooks) == 1
+        assert "parameters" in ha_hooks[0]
+        assert "high-availability" in ha_hooks[0]["parameters"]
+
+    def test_lease_cmds_not_duplicated_when_in_hook_group(self, dhcp_server_factory):
+        """If lease_cmds is already provided by a hook group, it should not be added again."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, Hook, HookGroup
+
+        relationship = DHCPHARelationship.objects.create(
+            name="ha-lease-dedup-test",
+            mode="hot-standby",
+        )
+        server1 = dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_url="http://192.168.1.1:8000/",
+        )
+        dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_url="http://192.168.1.2:8000/",
+        )
+
+        lease_hook = Hook.objects.create(
+            name="Lease Cmds Dedup",
+            library_name="libdhcp_lease_cmds.so",
+            allowed_processes=["kea-dhcp4"],
+        )
+        group = HookGroup.objects.create(
+            name="lease-dedup-group",
+            library_path="/opt/kea/hooks",
+        )
+        group.hooks.add(lease_hook)
+        group.servers.add(server1)
+
+        kea_config = server1.to_kea_dict()
+        hooks = kea_config["Dhcp4"]["hooks-libraries"]
+
+        lease_hooks = [h for h in hooks if "libdhcp_lease_cmds.so" in h["library"]]
+        assert len(lease_hooks) == 1
+        assert lease_hooks[0]["library"] == "/opt/kea/hooks/libdhcp_lease_cmds.so"

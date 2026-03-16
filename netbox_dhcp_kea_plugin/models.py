@@ -121,8 +121,8 @@ class HookGroup(NetBoxModel):
     library_path = models.CharField(
         max_length=255,
         blank=True,
-        default="/usr/lib/kea/hooks",
-        help_text="Base path where hook libraries are installed (e.g., /usr/lib/kea/hooks). "
+        default="/usr/lib64/kea/hooks",
+        help_text="Base path where hook libraries are installed (e.g., /usr/lib64/kea/hooks). "
         "Leave empty to use only the library filename.",
     )
     hooks = models.ManyToManyField(
@@ -572,6 +572,61 @@ class DHCPServer(NetBoxModel):
 
         return hooks_libraries
 
+    def _resolve_ha_library_path(self, library_name):
+        """Resolve the full library path for an HA-injected hook.
+
+        When HA is enabled, the HA hook (``libdhcp_ha.so``) and its
+        prerequisite (``libdhcp_lease_cmds.so``) must be added to the
+        configuration.  Instead of hardcoding ``/usr/lib64/kea/hooks`` this
+        method determines the correct base path by inspecting the hook
+        groups assigned to this server:
+
+        1. If one of the assigned hook groups already contains a ``Hook``
+           whose ``library_name`` matches *library_name*, the full path
+           produced by that group (``library_path`` + ``library_name``) is
+           returned.  This way, a hook that is explicitly managed through a
+           group always uses that group's ``library_path``.
+        2. Otherwise, if the server has **exactly one** hook group, that
+           group's ``library_path`` is used as the base path.  This covers
+           the common case where all hooks on a server share the same
+           install location.
+        3. If multiple groups with **different** ``library_path`` values
+           exist and none of them contains the requested hook, the method
+           falls back to the default path ``/usr/lib64/kea/hooks``.
+
+        Args:
+            library_name: Library filename (e.g. ``libdhcp_ha.so``).
+
+        Returns:
+            str: Fully-qualified library path for use in KEA configuration.
+        """
+        default_base = "/usr/lib64/kea/hooks"
+        hook_groups = list(self.hook_groups.prefetch_related("hooks").all())
+
+        if not hook_groups:
+            # No hook groups assigned — use the default path.
+            base = default_base.rstrip("/")
+            lib = library_name.lstrip("/")
+            return f"{base}/{lib}"
+
+        # 1. Check if any assigned group already contains this hook by library_name.
+        for group in hook_groups:
+            for hook in group.hooks.all():
+                if hook.library_name == library_name:
+                    return hook.get_library_path(group.library_path)
+
+        # 2. Collect distinct library_path values across all groups.
+        distinct_paths = {g.library_path for g in hook_groups}
+
+        if len(distinct_paths) == 1:
+            base = distinct_paths.pop().rstrip("/")
+        else:
+            # 3. Multiple differing paths and no explicit hook — fall back to default.
+            base = default_base.rstrip("/")
+
+        lib = library_name.lstrip("/")
+        return f"{base}/{lib}"
+
     def to_kea_dict(self):
         """Return a complete KEA Dhcp4 configuration dictionary for this server.
 
@@ -714,13 +769,13 @@ class DHCPServer(NetBoxModel):
             seen_libraries = {h.get("library") for h in hooks_libraries}
 
             # Add lease_cmds hook if not already present (required for HA)
-            lease_cmds_lib = "/usr/lib/kea/hooks/libdhcp_lease_cmds.so"
+            lease_cmds_lib = self._resolve_ha_library_path("libdhcp_lease_cmds.so")
             if lease_cmds_lib not in seen_libraries:
                 hooks_libraries.append({"library": lease_cmds_lib})
                 seen_libraries.add(lease_cmds_lib)
 
             # Add HA hook with configuration
-            ha_lib = "/usr/lib/kea/hooks/libdhcp_ha.so"
+            ha_lib = self._resolve_ha_library_path("libdhcp_ha.so")
             # Remove any existing HA hook entry (we need to add our configured one)
             hooks_libraries = [h for h in hooks_libraries if h.get("library") != ha_lib]
             hooks_libraries.append(

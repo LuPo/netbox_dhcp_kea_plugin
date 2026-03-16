@@ -1155,13 +1155,13 @@ class Command(BaseCommand):
             {
                 "name": "Basic DHCP4 Hooks",
                 "description": "Essential hooks for DHCPv4 operations including lease commands and statistics",
-                "library_path": "/usr/lib/x86_64-linux-gnu/kea/hooks",
+                "library_path": "/usr/lib64/kea/hooks",
                 "hook_names": ["Lease Commands", "Statistics Commands", "High Availability"],
             },
             {
                 "name": "Extended DHCP4 Hooks",
                 "description": "Additional hooks for advanced DHCPv4 features",
-                "library_path": "/usr/lib/x86_64-linux-gnu/kea/hooks",
+                "library_path": "/usr/lib64/kea/hooks",
                 "hook_names": ["Host Commands", "Subnet Commands", "Config Backend Commands"],
             },
         ]
