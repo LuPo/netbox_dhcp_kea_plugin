@@ -12,6 +12,8 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StorkAgentGroup,
+    StorkServer,
     Subnet,
     SubnetPool,
     VendorOptionSpace,
@@ -349,6 +351,79 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
             "http_listener_threads",
             "http_client_threads",
             "description",
+            "servers",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+
+class NestedStorkServerSerializer(WritableNestedSerializer):
+    class Meta:
+        model = StorkServer
+        fields = ["id", "url", "display", "name"]
+
+
+class StorkServerSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:storkserver-detail")
+    ip_address = IPAddressSerializer(nested=True, read_only=True)
+    agent_groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StorkServer
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "ip_address",
+            "status",
+            "rest_port",
+            "rest_base_url",
+            "use_tls",
+            "db_host",
+            "db_port",
+            "db_name",
+            "db_ssl_mode",
+            "enable_metrics",
+            "grafana_url",
+            "default_agent_registration",
+            "stork_version",
+            "agent_groups",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+    def get_agent_groups(self, obj):
+        return [{"id": g.id, "name": g.name, "operating_mode": g.operating_mode} for g in obj.agent_groups.all()]
+
+
+class StorkAgentGroupSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_dhcp_kea_plugin-api:storkagentgroup-detail"
+    )
+    stork_server = NestedStorkServerSerializer(read_only=True)
+    servers = NestedDHCPServerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = StorkAgentGroup
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "stork_server",
+            "operating_mode",
+            "agent_port",
+            "prometheus_exporter_address",
+            "prometheus_exporter_port",
+            "prometheus_per_subnet_stats",
+            "skip_tls_cert_verification",
             "servers",
             "tags",
             "custom_fields",

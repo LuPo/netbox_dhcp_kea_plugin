@@ -9,6 +9,8 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StorkAgentGroup,
+    StorkServer,
     Subnet,
     SubnetPool,
     VendorOptionSpace,
@@ -550,4 +552,85 @@ class HookGroupTable(NetBoxTable):
             "actions",
         )
         default_columns = ("name", "library_path", "hooks_count", "servers_count", "description")
+        exclude = ("id",)
+
+
+class StorkServerTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    status = tables.Column(verbose_name="Status")
+    ip_address = tables.Column(linkify=True, verbose_name="IP Address")
+    rest_port = tables.Column(verbose_name="REST Port")
+    use_tls = BooleanColumn(verbose_name="TLS")
+    enable_metrics = BooleanColumn(verbose_name="Metrics")
+    stork_version = tables.Column(verbose_name="Version")
+    description = tables.Column(verbose_name="Description")
+    agent_groups_count = tables.Column(
+        verbose_name="Agent Groups",
+        accessor="agent_groups__count",
+        orderable=False,
+        linkify=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = StorkServer
+        fields = (
+            "pk",
+            "name",
+            "status",
+            "ip_address",
+            "rest_port",
+            "use_tls",
+            "enable_metrics",
+            "stork_version",
+            "description",
+            "agent_groups_count",
+            "actions",
+        )
+        default_columns = (
+            "name",
+            "status",
+            "ip_address",
+            "rest_port",
+            "use_tls",
+            "stork_version",
+            "agent_groups_count",
+        )
+        exclude = ("id",)
+
+
+class StorkAgentGroupTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    stork_server = tables.Column(linkify=True, verbose_name="Stork Server")
+    operating_mode = tables.Column(verbose_name="Mode")
+    agent_port = tables.Column(verbose_name="Agent Port")
+    prometheus_exporter_port = tables.Column(verbose_name="Exporter Port")
+    description = tables.Column(verbose_name="Description")
+    servers_count = tables.Column(
+        verbose_name="Servers",
+        accessor="servers__count",
+        orderable=False,
+        linkify=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = StorkAgentGroup
+        fields = (
+            "pk",
+            "name",
+            "stork_server",
+            "operating_mode",
+            "agent_port",
+            "prometheus_exporter_port",
+            "description",
+            "servers_count",
+            "actions",
+        )
+        default_columns = (
+            "name",
+            "stork_server",
+            "operating_mode",
+            "agent_port",
+            "prometheus_exporter_port",
+            "servers_count",
+        )
         exclude = ("id",)

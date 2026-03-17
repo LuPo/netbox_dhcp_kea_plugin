@@ -97,6 +97,38 @@
                             {% endif %}
                         </td>
                     </tr>
+                    <tr>
+                        <th>Stork Agent Groups</th>
+                        <td>
+                            {% if object.stork_agent_groups.all %}
+                            {% for group in object.stork_agent_groups.all %}
+                            <a href="{{ group.get_absolute_url }}">{{ group.name }}</a>
+                            <small class="text-muted">({{ group.get_operating_mode_display }})</small>{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Stork Server</th>
+                        <td>
+                            {% with stork_groups=object.stork_agent_groups.all %}
+                            {% if stork_groups %}
+                            {% for group in stork_groups %}
+                            {% if group.stork_server %}
+                            <a href="{{ group.stork_server.get_absolute_url }}">{{ group.stork_server.name }}</a>
+                            <small class="text-muted">
+                                (<a href="{{ group.stork_server.url }}" target="_blank">{{ group.stork_server.url }}</a>)
+                            </small>{% if not forloop.last %}<br>{% endif %}
+                            {% endif %}
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>

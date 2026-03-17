@@ -10,6 +10,8 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StorkAgentGroup,
+    StorkServer,
     Subnet,
     SubnetPool,
     VendorOptionSpace,
@@ -212,6 +214,43 @@ class HookGroupFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = HookGroup
         fields = ["id", "name", "library_path"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class StorkServerFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = StorkServer
+        fields = ["id", "name", "status", "use_tls", "enable_metrics", "db_ssl_mode"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(description__icontains=value) | Q(stork_version__icontains=value)
+        )
+
+
+class StorkAgentGroupFilterSet(NetBoxModelFilterSet):
+    stork_server = django_filters.ModelChoiceFilter(
+        queryset=StorkServer.objects.all(),
+        label="Stork Server",
+    )
+    servers = django_filters.ModelChoiceFilter(
+        queryset=DHCPServer.objects.all(),
+        label="DHCP Server",
+    )
+    operating_mode = django_filters.ChoiceFilter(
+        choices=StorkAgentGroup.OPERATING_MODE_CHOICES,
+        label="Operating Mode",
+    )
+
+    class Meta:
+        model = StorkAgentGroup
+        fields = ["id", "name", "stork_server", "operating_mode"]
 
     def search(self, queryset, name, value):
         if not value.strip():

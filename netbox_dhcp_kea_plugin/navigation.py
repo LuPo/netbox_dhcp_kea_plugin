@@ -145,6 +145,34 @@ dhcpharelationship_menu_item = PluginMenuItem(
     ),
 )
 
+storkserver_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:storkserver_list",
+    link_text="Stork Servers",
+    permissions=["netbox_dhcp_kea_plugin.view_storkserver"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:storkserver_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_storkserver"],
+        ),
+    ),
+)
+
+storkagentgroup_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:storkagentgroup_list",
+    link_text="Stork Agent Groups",
+    permissions=["netbox_dhcp_kea_plugin.view_storkagentgroup"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:storkagentgroup_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_storkagentgroup"],
+        ),
+    ),
+)
+
 
 if top_level_menu:
     menu = PluginMenu(
@@ -162,6 +190,13 @@ if top_level_menu:
             (
                 "High Availability",
                 (dhcpharelationship_menu_item,),
+            ),
+            (
+                "Stork Monitoring",
+                (
+                    storkserver_menu_item,
+                    storkagentgroup_menu_item,
+                ),
             ),
             (
                 "Hook Libraries",
@@ -188,6 +223,8 @@ else:
         subnet_pools_menu_item,
         clientclass_menu_item,
         dhcpharelationship_menu_item,
+        storkserver_menu_item,
+        storkagentgroup_menu_item,
         hook_menu_item,
         hookgroup_menu_item,
         optiondefinition_menu_item,

@@ -14,6 +14,8 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StorkAgentGroup,
+    StorkServer,
     Subnet,
     SubnetPool,
     VendorOptionSpace,
@@ -26,6 +28,8 @@ from .serializers import (
     HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
+    StorkAgentGroupSerializer,
+    StorkServerSerializer,
     SubnetPoolSerializer,
     SubnetSerializer,
     VendorOptionSpaceSerializer,
@@ -248,3 +252,15 @@ class DHCPHARelationshipViewSet(NetBoxModelViewSet):
     queryset = DHCPHARelationship.objects.prefetch_related("servers")
     serializer_class = DHCPHARelationshipSerializer
     filterset_class = filtersets.DHCPHARelationshipFilterSet
+
+
+class StorkServerViewSet(NetBoxModelViewSet):
+    queryset = StorkServer.objects.prefetch_related("agent_groups")
+    serializer_class = StorkServerSerializer
+    filterset_class = filtersets.StorkServerFilterSet
+
+
+class StorkAgentGroupViewSet(NetBoxModelViewSet):
+    queryset = StorkAgentGroup.objects.prefetch_related("stork_server", "servers")
+    serializer_class = StorkAgentGroupSerializer
+    filterset_class = filtersets.StorkAgentGroupFilterSet

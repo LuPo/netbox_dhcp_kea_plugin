@@ -16,6 +16,8 @@ router.register("client-classes", views.ClientClassViewSet)
 router.register("subnets", views.SubnetViewSet)
 router.register("subnet-pools", views.SubnetPoolViewSet)
 router.register("ha-relationships", views.DHCPHARelationshipViewSet)
+router.register("stork-servers", views.StorkServerViewSet)
+router.register("stork-agent-groups", views.StorkAgentGroupViewSet)
 
 urlpatterns = router.urls + [
     # Lookup DHCP relay config by prefix

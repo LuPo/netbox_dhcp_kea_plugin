@@ -1,0 +1,40 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        {% if agent_groups %}
+        <div class="card">
+            <h5 class="card-header">Agent Groups</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Operating Mode</th>
+                            <th>Agent Port</th>
+                            <th>Exporter Port</th>
+                            <th>Servers</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in agent_groups %}
+                        <tr>
+                            <td><a href="{{ group.get_absolute_url }}">{{ group.name }}</a></td>
+                            <td>{{ group.get_operating_mode_display }}</td>
+                            <td>{{ group.agent_port }}</td>
+                            <td>{{ group.prometheus_exporter_port|default:"—" }}</td>
+                            <td>{{ group.servers.count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No agent groups are associated with this Stork server.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

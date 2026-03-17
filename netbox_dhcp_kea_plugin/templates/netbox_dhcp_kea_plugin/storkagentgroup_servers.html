@@ -1,0 +1,46 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load render_table from django_tables2 %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        {% if servers %}
+        <div class="card">
+            <h5 class="card-header">Assigned DHCP Servers</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Server</th>
+                            <th>IP Address</th>
+                            <th>Status</th>
+                            <th>HA Relationship</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in servers %}
+                        <tr>
+                            <td><a href="{{ server.get_absolute_url }}">{{ server.name }}</a></td>
+                            <td><a href="{{ server.ip_address.get_absolute_url }}">{{ server.ip_address }}</a></td>
+                            <td>{% badge server.get_status_display bg_color=server.get_status_color %}</td>
+                            <td>
+                                {% if server.ha_relationship %}
+                                <a href="{{ server.ha_relationship.get_absolute_url }}">{{ server.ha_relationship.name }}</a>
+                                ({{ server.get_ha_role_display }})
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No DHCP servers are assigned to this agent group.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

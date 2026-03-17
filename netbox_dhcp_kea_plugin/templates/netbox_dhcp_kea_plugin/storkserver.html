@@ -1,0 +1,134 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Stork Server</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status</th>
+                        <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
+                    </tr>
+                    <tr>
+                        <th>IP Address</th>
+                        <td>
+                            {% if object.ip_address %}
+                            <a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+                            {% if object.ip_address.assigned_object %}
+                            <br><small class="text-muted">
+                                Assigned to:
+                                <a href="{{ object.ip_address.assigned_object.parent_object.get_absolute_url }}">{{ object.ip_address.assigned_object.parent_object }}</a>
+                                ({{ object.ip_address.assigned_object }})
+                            </small>
+                            {% endif %}
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Stork URL</th>
+                        <td><a href="{{ object.url }}" target="_blank">{{ object.url }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Version</th>
+                        <td>{{ object.stork_version|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">REST API Settings</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>REST Port</th>
+                        <td>{{ object.rest_port }}</td>
+                    </tr>
+                    <tr>
+                        <th>Base URL</th>
+                        <td>{{ object.rest_base_url }}</td>
+                    </tr>
+                    <tr>
+                        <th>TLS Enabled</th>
+                        <td>
+                            {% if object.use_tls %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Metrics Endpoint</th>
+                        <td>
+                            {% if object.enable_metrics %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Database Connection</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>DB Host</th>
+                        <td>{{ object.db_host }}</td>
+                    </tr>
+                    <tr>
+                        <th>DB Port</th>
+                        <td>{{ object.db_port }}</td>
+                    </tr>
+                    <tr>
+                        <th>DB Name</th>
+                        <td>{{ object.db_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>DB SSL Mode</th>
+                        <td>{{ object.get_db_ssl_mode_display }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Integration</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Agent Registration</th>
+                        <td>{{ object.get_default_agent_registration_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Grafana URL</th>
+                        <td>
+                            {% if object.grafana_url %}
+                            <a href="{{ object.grafana_url }}" target="_blank">{{ object.grafana_url }}</a>
+                            {% else %}
+                            <span class="text-muted">Not configured</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

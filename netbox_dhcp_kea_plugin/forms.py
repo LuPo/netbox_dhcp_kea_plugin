@@ -25,6 +25,8 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StorkAgentGroup,
+    StorkServer,
     Subnet,
     SubnetPool,
     VendorOptionSpace,
@@ -1354,4 +1356,196 @@ class HookGroupImportForm(NetBoxModelImportForm):
             "description",
             "library_path",
             "tags",
+        )
+
+
+# --- StorkServer Forms ---
+
+
+class StorkServerForm(NetBoxModelForm):
+    ip_address = DynamicModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        help_text="IP address of the Stork server (from NetBox IPAM)",
+    )
+
+    class Meta:
+        model = StorkServer
+        fields = (
+            "name",
+            "description",
+            "ip_address",
+            "status",
+            "rest_port",
+            "rest_base_url",
+            "use_tls",
+            "db_host",
+            "db_port",
+            "db_name",
+            "db_ssl_mode",
+            "enable_metrics",
+            "grafana_url",
+            "default_agent_registration",
+            "stork_version",
+            "tags",
+        )
+        fieldsets = (
+            FieldSet(
+                "name",
+                "description",
+                "ip_address",
+                "status",
+                "stork_version",
+                "tags",
+                name="General",
+            ),
+            FieldSet(
+                "rest_port",
+                "rest_base_url",
+                "use_tls",
+                name="REST API",
+            ),
+            FieldSet(
+                "db_host",
+                "db_port",
+                "db_name",
+                "db_ssl_mode",
+                name="Database",
+            ),
+            FieldSet(
+                "enable_metrics",
+                "grafana_url",
+                name="Monitoring & Integration",
+            ),
+            FieldSet(
+                "default_agent_registration",
+                name="Agent Registration",
+            ),
+        )
+
+
+class StorkServerFilterForm(NetBoxModelFilterSetForm):
+    model = StorkServer
+    status = forms.ChoiceField(
+        choices=[("", "---------")] + list(DeviceStatusChoices),
+        required=False,
+    )
+    use_tls = forms.NullBooleanField(required=False)
+    enable_metrics = forms.NullBooleanField(required=False)
+
+
+class StorkServerImportForm(NetBoxModelImportForm):
+    class Meta:
+        model = StorkServer
+        fields = (
+            "name",
+            "description",
+            "ip_address",
+            "status",
+            "rest_port",
+            "rest_base_url",
+            "use_tls",
+            "db_host",
+            "db_port",
+            "db_name",
+            "db_ssl_mode",
+            "enable_metrics",
+            "grafana_url",
+            "default_agent_registration",
+            "stork_version",
+        )
+
+
+# --- StorkAgentGroup Forms ---
+
+
+class StorkAgentGroupForm(NetBoxModelForm):
+    stork_server = DynamicModelChoiceField(
+        queryset=StorkServer.objects.all(),
+        required=False,
+        help_text="Stork server these agents report to (required unless Prometheus-only mode)",
+    )
+    servers = DynamicModelMultipleChoiceField(
+        queryset=DHCPServer.objects.all(),
+        required=False,
+        help_text="DHCP servers that use this agent configuration",
+    )
+
+    class Meta:
+        model = StorkAgentGroup
+        fields = (
+            "name",
+            "description",
+            "stork_server",
+            "operating_mode",
+            "agent_port",
+            "prometheus_exporter_address",
+            "prometheus_exporter_port",
+            "prometheus_per_subnet_stats",
+            "skip_tls_cert_verification",
+            "tags",
+        )
+        fieldsets = (
+            FieldSet(
+                "name",
+                "description",
+                "stork_server",
+                "operating_mode",
+                "tags",
+                name="General",
+            ),
+            FieldSet(
+                "servers",
+                name="DHCP Servers",
+            ),
+            FieldSet(
+                "agent_port",
+                "skip_tls_cert_verification",
+                name="Agent gRPC Settings",
+            ),
+            FieldSet(
+                "prometheus_exporter_address",
+                "prometheus_exporter_port",
+                "prometheus_per_subnet_stats",
+                name="Prometheus Exporter",
+            ),
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.initial["servers"] = self.instance.servers.all()
+
+    def save(self, *args, **kwargs):
+        instance = super().save(*args, **kwargs)
+        # Handle servers (direct ManyToMany on StorkAgentGroup)
+        if "servers" in self.cleaned_data:
+            instance.servers.set(self.cleaned_data["servers"])
+        return instance
+
+
+class StorkAgentGroupFilterForm(NetBoxModelFilterSetForm):
+    model = StorkAgentGroup
+    stork_server = DynamicModelChoiceField(
+        queryset=StorkServer.objects.all(),
+        required=False,
+    )
+    operating_mode = forms.ChoiceField(
+        choices=[("", "---------")] + list(StorkAgentGroup.OPERATING_MODE_CHOICES),
+        required=False,
+    )
+
+
+class StorkAgentGroupImportForm(NetBoxModelImportForm):
+    class Meta:
+        model = StorkAgentGroup
+        fields = (
+            "name",
+            "description",
+            "stork_server",
+            "operating_mode",
+            "agent_port",
+            "prometheus_exporter_address",
+            "prometheus_exporter_port",
+            "prometheus_per_subnet_stats",
+            "skip_tls_cert_verification",
         )

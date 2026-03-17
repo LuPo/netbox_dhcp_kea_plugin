@@ -2192,3 +2192,267 @@ class DHCPHARelationship(NetBoxModel):
             migrated["options"] += 1
 
         return migrated
+
+
+class StorkServer(NetBoxModel):
+    """ISC Stork Server instance for centralized monitoring and management of KEA DHCP servers.
+
+    The Stork Server provides a web UI and REST API for monitoring KEA DHCP operations,
+    viewing leases, managing configurations, and integrating with Prometheus/Grafana.
+    Stork Agents running alongside KEA servers connect back to this server.
+    """
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Name of this Stork server instance",
+    )
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+    )
+    status = models.CharField(
+        verbose_name=_("status"),
+        max_length=50,
+        choices=DeviceStatusChoices,
+        default=DeviceStatusChoices.STATUS_ACTIVE,
+        help_text="Operational status of this Stork server",
+    )
+
+    # --- Network / Connectivity ---
+    ip_address = models.ForeignKey(
+        IPAddress,
+        on_delete=models.PROTECT,
+        related_name="stork_servers",
+        help_text="IP address of the Stork server (from NetBox IPAM)",
+    )
+    rest_port = models.PositiveIntegerField(
+        default=8080,
+        help_text="Port for the Stork REST API and Web UI (default: 8080)",
+    )
+    rest_base_url = models.CharField(
+        max_length=255,
+        blank=True,
+        default="/",
+        help_text="Base URL path if Stork UI is served from a subdirectory (e.g., /stork/)",
+    )
+    use_tls = models.BooleanField(
+        default=False,
+        help_text="Whether the Stork server REST API uses TLS/SSL",
+    )
+
+    # --- Database Connection (useful for Ansible deployment) ---
+    db_host = models.CharField(
+        max_length=255,
+        default="localhost",
+        help_text="PostgreSQL database host for Stork",
+    )
+    db_port = models.PositiveIntegerField(
+        default=5432,
+        help_text="PostgreSQL database port",
+    )
+    db_name = models.CharField(
+        max_length=100,
+        default="stork",
+        help_text="PostgreSQL database name",
+    )
+    DB_SSL_MODE_CHOICES = (
+        ("disable", "Disable"),
+        ("require", "Require"),
+        ("verify-ca", "Verify CA"),
+        ("verify-full", "Verify Full"),
+    )
+    db_ssl_mode = models.CharField(
+        max_length=20,
+        choices=DB_SSL_MODE_CHOICES,
+        default="disable",
+        help_text="SSL mode for the database connection",
+    )
+
+    # --- Prometheus / Metrics ---
+    enable_metrics = models.BooleanField(
+        default=False,
+        help_text="Enable the Prometheus /metrics endpoint on the Stork server",
+    )
+
+    # --- Grafana Integration ---
+    grafana_url = models.URLField(
+        blank=True,
+        help_text="URL of the Grafana instance integrated with this Stork server",
+    )
+
+    # --- Agent Registration ---
+    AGENT_AUTH_CHOICES = (
+        ("agent-token", "Agent Token (manual approval in UI)"),
+        ("server-token", "Server Token (auto-approval)"),
+    )
+    default_agent_registration = models.CharField(
+        max_length=20,
+        choices=AGENT_AUTH_CHOICES,
+        default="agent-token",
+        help_text="Default method for registering new Stork agents",
+    )
+
+    # --- Versioning ---
+    stork_version = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Installed Stork server version (e.g., 1.18.0)",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Stork Server"
+        verbose_name_plural = "Stork Servers"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:storkserver", args=[self.pk])
+
+    def get_status_color(self):
+        """Return the color associated with the current status for badge display."""
+        return DeviceStatusChoices.colors.get(self.status, "secondary")
+
+    @property
+    def url(self):
+        """Construct the full Stork server URL."""
+        scheme = "https" if self.use_tls else "http"
+        ip = str(self.ip_address).split("/")[0]  # strip CIDR notation
+        base = self.rest_base_url.rstrip("/")
+        return f"{scheme}://{ip}:{self.rest_port}{base}"
+
+
+class StorkAgentGroup(NetBoxModel):
+    """Configuration profile for Stork Agents running alongside KEA DHCP servers.
+
+    Rather than creating individual agent records for each KEA server, this model
+    defines a shared configuration profile (agent port, exporter settings, operating
+    mode) that applies to all assigned DHCP servers. This follows the same pattern
+    as HookGroup — a configuration group linked to many servers.
+
+    The Stork Agent runs on the same machine as KEA and serves two roles:
+    1. Communication with the Stork Server (gRPC) for monitoring/management
+    2. Prometheus exporter that converts KEA statistics into Prometheus metrics
+
+    These roles can be enabled independently via the operating_mode field.
+    """
+
+    OPERATING_MODE_CHOICES = (
+        ("both", "Stork + Prometheus"),
+        ("prometheus-only", "Prometheus Only"),
+        ("stork-only", "Stork Only"),
+    )
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Name of this Stork agent configuration group",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of this agent group configuration",
+    )
+
+    # --- Stork Server association (optional — not needed for prometheus-only mode) ---
+    stork_server = models.ForeignKey(
+        StorkServer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="agent_groups",
+        help_text="The Stork server these agents report to (not required for Prometheus-only mode)",
+    )
+
+    # --- Operating Mode ---
+    operating_mode = models.CharField(
+        max_length=20,
+        choices=OPERATING_MODE_CHOICES,
+        default="both",
+        help_text="Agent operating mode: both roles, Prometheus exporter only, or Stork communication only",
+    )
+
+    # --- Agent gRPC settings ---
+    agent_port = models.PositiveIntegerField(
+        default=8080,
+        help_text="Port the Stork agent listens on for gRPC connections from the server (default: 8080)",
+    )
+
+    # --- Prometheus Exporter settings ---
+    # These are optional: only required when operating_mode includes Prometheus
+    # (i.e., "both" or "prometheus-only"). The Stork Agent exposes a single
+    # Prometheus exporter endpoint regardless of whether it exports KEA or BIND9 stats.
+    prometheus_exporter_address = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="IP address or hostname for the Prometheus exporter to listen on (e.g., 0.0.0.0). "
+        "Required when operating mode includes Prometheus.",
+    )
+    prometheus_exporter_port = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Port for the Prometheus statistics exporter (e.g., 9547). "
+        "Required when operating mode includes Prometheus.",
+    )
+    prometheus_per_subnet_stats = models.BooleanField(
+        default=True,
+        help_text="Enable per-subnet statistics export to Prometheus (disable for very large networks)",
+    )
+
+    # --- TLS / Security ---
+    skip_tls_cert_verification = models.BooleanField(
+        default=False,
+        help_text="Skip TLS certificate verification when the agent connects to Kea over TLS with self-signed certificates",
+    )
+
+    # --- DHCP Servers (M2M) ---
+    servers = models.ManyToManyField(
+        "DHCPServer",
+        blank=True,
+        related_name="stork_agent_groups",
+        help_text="DHCP servers that use this Stork agent configuration",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Stork Agent Group"
+        verbose_name_plural = "Stork Agent Groups"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:storkagentgroup", args=[self.pk])
+
+    def clean(self):
+        """Validate conditional field requirements based on operating mode."""
+        super().clean()
+        errors = {}
+
+        # Stork Server is required when operating mode includes Stork communication
+        if self.operating_mode in ("both", "stork-only") and not self.stork_server:
+            errors["stork_server"] = "A Stork Server is required when operating mode includes Stork communication."
+
+        # Prometheus exporter address and port are required when mode includes Prometheus
+        if self.operating_mode in ("both", "prometheus-only"):
+            if not self.prometheus_exporter_address:
+                errors["prometheus_exporter_address"] = (
+                    "Prometheus exporter address is required when operating mode includes Prometheus."
+                )
+            if not self.prometheus_exporter_port:
+                errors["prometheus_exporter_port"] = (
+                    "Prometheus exporter port is required when operating mode includes Prometheus."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def server_url(self):
+        """Return the Stork server URL if configured, for agent registration."""
+        if self.stork_server:
+            return self.stork_server.url
+        return None

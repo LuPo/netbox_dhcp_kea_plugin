@@ -1,0 +1,93 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Stork Agent Group</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Operating Mode</th>
+                        <td>{{ object.get_operating_mode_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Stork Server</th>
+                        <td>
+                            {% if object.stork_server %}
+                            <a href="{{ object.stork_server.get_absolute_url }}">{{ object.stork_server.name }}</a>
+                            {% else %}
+                            <span class="text-muted">None (Prometheus-only mode)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th>Servers</th>
+                        <td>{{ object.servers.count }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Agent gRPC Settings</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Agent Port</th>
+                        <td>{{ object.agent_port }}</td>
+                    </tr>
+                    <tr>
+                        <th>TLS Cert Verification</th>
+                        <td>
+                            {% if not bject.skip_tls_cert_verification %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-check-bold text-failure"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        {% if object.operating_mode != 'stork-only' %}
+        <div class="card">
+            <h5 class="card-header">Prometheus Exporter</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Listen Address</th>
+                        <td>{{ object.prometheus_exporter_address|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Port</th>
+                        <td>{{ object.prometheus_exporter_port|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Per-Subnet Stats</th>
+                        <td>
+                            {% if object.prometheus_per_subnet_stats %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-check-bold text-failure"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

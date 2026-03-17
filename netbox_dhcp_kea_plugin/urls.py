@@ -226,4 +226,46 @@ urlpatterns = (
         name="dhcpharelationship_changelog",
         kwargs={"model": models.DHCPHARelationship},
     ),
+    # StorkServer URLs
+    path("stork-servers/", views.StorkServerListView.as_view(), name="storkserver_list"),
+    path("stork-servers/add/", views.StorkServerEditView.as_view(), name="storkserver_add"),
+    path("stork-servers/import/", views.StorkServerImportView.as_view(), name="storkserver_bulk_import"),
+    path("stork-servers/delete/", views.StorkServerBulkDeleteView.as_view(), name="storkserver_bulk_delete"),
+    path("stork-servers/<int:pk>/", views.StorkServerView.as_view(), name="storkserver"),
+    path("stork-servers/<int:pk>/edit/", views.StorkServerEditView.as_view(), name="storkserver_edit"),
+    path("stork-servers/<int:pk>/delete/", views.StorkServerDeleteView.as_view(), name="storkserver_delete"),
+    path(
+        "stork-servers/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="storkserver_changelog",
+        kwargs={"model": models.StorkServer},
+    ),
+    path(
+        "stork-servers/<int:pk>/agent-groups/",
+        views.StorkServerAgentGroupsView.as_view(),
+        name="storkserver_agent_groups",
+    ),
+    # StorkAgentGroup URLs
+    path("stork-agent-groups/", views.StorkAgentGroupListView.as_view(), name="storkagentgroup_list"),
+    path("stork-agent-groups/add/", views.StorkAgentGroupEditView.as_view(), name="storkagentgroup_add"),
+    path("stork-agent-groups/import/", views.StorkAgentGroupImportView.as_view(), name="storkagentgroup_bulk_import"),
+    path(
+        "stork-agent-groups/delete/", views.StorkAgentGroupBulkDeleteView.as_view(), name="storkagentgroup_bulk_delete"
+    ),
+    path("stork-agent-groups/<int:pk>/", views.StorkAgentGroupView.as_view(), name="storkagentgroup"),
+    path("stork-agent-groups/<int:pk>/edit/", views.StorkAgentGroupEditView.as_view(), name="storkagentgroup_edit"),
+    path(
+        "stork-agent-groups/<int:pk>/delete/", views.StorkAgentGroupDeleteView.as_view(), name="storkagentgroup_delete"
+    ),
+    path(
+        "stork-agent-groups/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="storkagentgroup_changelog",
+        kwargs={"model": models.StorkAgentGroup},
+    ),
+    path(
+        "stork-agent-groups/<int:pk>/servers/",
+        views.StorkAgentGroupServersView.as_view(),
+        name="storkagentgroup_servers",
+    ),
 )

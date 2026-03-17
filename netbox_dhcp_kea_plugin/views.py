@@ -924,3 +924,135 @@ class SubnetPoolBulkDeleteView(generic.BulkDeleteView):
 class SubnetPoolImportView(generic.BulkImportView):
     queryset = SubnetPool.objects.all()
     model_form = forms.SubnetPoolImportForm
+
+
+# --- Stork Server Views ---
+
+
+class StorkServerView(generic.ObjectView):
+    queryset = models.StorkServer.objects.prefetch_related("agent_groups")
+
+
+class StorkServerListView(generic.ObjectListView):
+    queryset = models.StorkServer.objects.annotate(
+        agent_groups_count=Count("agent_groups", distinct=True),
+    )
+    table = tables.StorkServerTable
+    filterset = filtersets.StorkServerFilterSet
+    filterset_form = forms.StorkServerFilterForm
+
+
+class StorkServerEditView(generic.ObjectEditView):
+    queryset = models.StorkServer.objects.all()
+    form = forms.StorkServerForm
+
+
+class StorkServerDeleteView(generic.ObjectDeleteView):
+    queryset = models.StorkServer.objects.all()
+
+
+class StorkServerBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.StorkServer.objects.all()
+    filterset = filtersets.StorkServerFilterSet
+    table = tables.StorkServerTable
+
+
+class StorkServerImportView(generic.BulkImportView):
+    queryset = models.StorkServer.objects.all()
+    model_form = forms.StorkServerImportForm
+
+
+def get_storkserver_agent_groups_count(obj):
+    """Get the number of agent groups for a Stork server."""
+    return obj.agent_groups.count()
+
+
+@register_model_view(models.StorkServer, name="agent_groups", path="agent-groups")
+class StorkServerAgentGroupsView(generic.ObjectView):
+    queryset = models.StorkServer.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/storkserver_agent_groups.html"
+    tab = ViewTab(
+        label="Agent Groups",
+        badge=get_storkserver_agent_groups_count,
+        permission="netbox_dhcp_kea_plugin.view_storkserver",
+    )
+
+    def get(self, request, pk):
+        stork_server = self.get_object(pk=pk)
+        agent_groups = stork_server.agent_groups.all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": stork_server,
+                "agent_groups": agent_groups,
+                "tab": self.tab,
+            },
+        )
+
+
+# --- Stork Agent Group Views ---
+
+
+class StorkAgentGroupView(generic.ObjectView):
+    queryset = models.StorkAgentGroup.objects.prefetch_related("stork_server", "servers")
+
+
+class StorkAgentGroupListView(generic.ObjectListView):
+    queryset = models.StorkAgentGroup.objects.annotate(
+        servers_count=Count("servers", distinct=True),
+    )
+    table = tables.StorkAgentGroupTable
+    filterset = filtersets.StorkAgentGroupFilterSet
+    filterset_form = forms.StorkAgentGroupFilterForm
+
+
+class StorkAgentGroupEditView(generic.ObjectEditView):
+    queryset = models.StorkAgentGroup.objects.all()
+    form = forms.StorkAgentGroupForm
+
+
+class StorkAgentGroupDeleteView(generic.ObjectDeleteView):
+    queryset = models.StorkAgentGroup.objects.all()
+
+
+class StorkAgentGroupBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.StorkAgentGroup.objects.all()
+    filterset = filtersets.StorkAgentGroupFilterSet
+    table = tables.StorkAgentGroupTable
+
+
+class StorkAgentGroupImportView(generic.BulkImportView):
+    queryset = models.StorkAgentGroup.objects.all()
+    model_form = forms.StorkAgentGroupImportForm
+
+
+def get_storkagentgroup_servers_count(obj):
+    """Get the number of servers in a Stork agent group."""
+    return obj.servers.count()
+
+
+@register_model_view(models.StorkAgentGroup, name="servers", path="servers")
+class StorkAgentGroupServersView(generic.ObjectView):
+    queryset = models.StorkAgentGroup.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_servers.html"
+    tab = ViewTab(
+        label="Servers",
+        badge=get_storkagentgroup_servers_count,
+        permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
+    )
+
+    def get(self, request, pk):
+        agent_group = self.get_object(pk=pk)
+        servers = agent_group.servers.all()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": agent_group,
+                "servers": servers,
+                "tab": self.tab,
+            },
+        )
