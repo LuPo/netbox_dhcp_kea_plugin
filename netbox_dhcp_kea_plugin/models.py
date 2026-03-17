@@ -2323,6 +2323,81 @@ class StorkServer(NetBoxModel):
         """Return the color associated with the current status for badge display."""
         return DeviceStatusChoices.colors.get(self.status, "secondary")
 
+    def to_config_dict(self):
+        """Return a Stork Server configuration dictionary.
+
+        Generates the configuration for the Stork Server including
+        REST API settings, database connection, metrics, and
+        associated agent groups with their DHCP servers.
+        """
+        ip = str(self.ip_address).split("/")[0]
+        config = {
+            "stork-server": {
+                "name": self.name,
+                "status": self.status,
+                "rest-host": ip,
+                "rest-port": self.rest_port,
+                "rest-base-url": self.rest_base_url,
+                "use-tls": self.use_tls,
+                "url": self.url,
+                "database": {
+                    "host": self.db_host,
+                    "port": self.db_port,
+                    "name": self.db_name,
+                    "ssl-mode": self.db_ssl_mode,
+                },
+                "metrics": {
+                    "enabled": self.enable_metrics,
+                },
+                "agent-registration": {
+                    "default-method": self.default_agent_registration,
+                },
+            }
+        }
+
+        if self.grafana_url:
+            config["stork-server"]["grafana-url"] = self.grafana_url
+
+        if self.stork_version:
+            config["stork-server"]["version"] = self.stork_version
+
+        # Include all agent groups and their assigned DHCP servers
+        agent_groups = []
+        for group in self.agent_groups.prefetch_related("servers"):
+            group_dict = {
+                "name": group.name,
+                "operating-mode": group.operating_mode,
+                "agent-port": group.agent_port,
+                "skip-tls-cert-verification": group.skip_tls_cert_verification,
+            }
+
+            if group.operating_mode in ("both", "prometheus-only"):
+                group_dict["prometheus-exporter"] = {
+                    "address": group.prometheus_exporter_address,
+                    "port": group.prometheus_exporter_port,
+                    "per-subnet-stats": group.prometheus_per_subnet_stats,
+                }
+
+            servers = []
+            for server in group.servers.all():
+                server_ip = str(server.ip_address).split("/")[0]
+                servers.append(
+                    {
+                        "name": server.name,
+                        "address": server_ip,
+                        "status": server.status,
+                    }
+                )
+            if servers:
+                group_dict["servers"] = servers
+
+            agent_groups.append(group_dict)
+
+        if agent_groups:
+            config["stork-server"]["agent-groups"] = agent_groups
+
+        return config
+
     @property
     def url(self):
         """Construct the full Stork server URL."""
@@ -2449,6 +2524,64 @@ class StorkAgentGroup(NetBoxModel):
 
         if errors:
             raise ValidationError(errors)
+
+    def to_env_content(self, server=None):
+        """Generate Stork Agent environment variable file content.
+
+        Produces the content for /etc/stork/agent.env used by the
+        stork-agent systemd service.  When *server* is given the
+        STORK_AGENT_HOST line is set to that server's IP; otherwise
+        a ``<AGENT_HOST_IP>`` placeholder is emitted.
+
+        Args:
+            server: Optional DHCPServer instance whose IP address will
+                    be used for STORK_AGENT_HOST.
+
+        Returns:
+            str: The environment file content.
+        """
+        lines = []
+
+        # --- Agent host / port ---
+        if server:
+            host_ip = str(server.ip_address).split("/")[0]
+        else:
+            host_ip = "<AGENT_HOST_IP>"
+
+        lines.append("### the IP or hostname to listen on for incoming Stork server connections")
+        lines.append(f"STORK_AGENT_HOST={host_ip}")
+        lines.append("")
+        lines.append("### the TCP port to listen on for incoming Stork server connections")
+        lines.append(f"STORK_AGENT_PORT={self.agent_port}")
+        lines.append("")
+
+        # --- Prometheus exporter settings ---
+        if self.operating_mode in ("both", "prometheus-only"):
+            lines.append("### settings for exporting stats to Prometheus")
+            lines.append("### the IP or hostname on which the agent exports Kea statistics to Prometheus")
+            lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS={self.prometheus_exporter_address}")
+            lines.append("### the port on which the agent exports Kea statistics to Prometheus")
+            lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_PORT={self.prometheus_exporter_port}")
+            lines.append("## enable or disable collecting per-subnet stats from Kea")
+            per_subnet = "true" if self.prometheus_per_subnet_stats else "false"
+            lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_PER_SUBNET_STATS={per_subnet}")
+            lines.append("")
+
+        # --- Stork Server URL ---
+        if self.stork_server:
+            lines.append(
+                "### Stork Server URL used by the agent to send REST commands to the server during agent registration"
+            )
+            lines.append(f"STORK_AGENT_SERVER_URL={self.stork_server.url}")
+            lines.append("")
+
+        # --- Skip TLS cert verification ---
+        if self.skip_tls_cert_verification:
+            lines.append("### Skip TLS certificate verification for connections to Kea over TLS")
+            lines.append("STORK_AGENT_SKIP_TLS_CERT_VERIFICATION=true")
+            lines.append("")
+
+        return "\n".join(lines)
 
     @property
     def server_url(self):

@@ -259,8 +259,48 @@ class StorkServerViewSet(NetBoxModelViewSet):
     serializer_class = StorkServerSerializer
     filterset_class = filtersets.StorkServerFilterSet
 
+    @action(detail=True, methods=["get"], url_path="config")
+    def config(self, request, pk=None):
+        """
+        Return the Stork Server configuration.
+
+        This endpoint generates a configuration dictionary including
+        REST API settings, database connection, metrics, and
+        associated agent groups with their DHCP servers.
+        """
+        server = self.get_object()
+        return Response(server.to_config_dict())
+
 
 class StorkAgentGroupViewSet(NetBoxModelViewSet):
     queryset = StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
     serializer_class = StorkAgentGroupSerializer
     filterset_class = filtersets.StorkAgentGroupFilterSet
+
+    @action(detail=True, methods=["get"], url_path="config")
+    def config(self, request, pk=None):
+        """
+        Return the Stork Agent environment file for this agent group.
+
+        By default returns a generic template with a placeholder for
+        STORK_AGENT_HOST.  Pass ``?server=<id>`` to generate an env file
+        with the concrete IP address of a specific DHCP server.
+
+        Returns plain-text content suitable for /etc/stork/agent.env.
+        """
+        from django.http import HttpResponse
+
+        agent_group = self.get_object()
+        server = None
+        server_id = request.query_params.get("server")
+        if server_id:
+            try:
+                server = agent_group.servers.get(pk=int(server_id))
+            except (ValueError, DHCPServer.DoesNotExist):
+                return Response(
+                    {"error": f"Server {server_id} is not assigned to this agent group."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        env_content = agent_group.to_env_content(server=server)
+        return HttpResponse(env_content, content_type="text/plain")

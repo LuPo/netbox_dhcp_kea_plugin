@@ -245,6 +245,11 @@ urlpatterns = (
         views.StorkServerAgentGroupsView.as_view(),
         name="storkserver_agent_groups",
     ),
+    path(
+        "stork-servers/<int:pk>/config/",
+        views.StorkServerConfigView.as_view(),
+        name="storkserver_config",
+    ),
     # StorkAgentGroup URLs
     path("stork-agent-groups/", views.StorkAgentGroupListView.as_view(), name="storkagentgroup_list"),
     path("stork-agent-groups/add/", views.StorkAgentGroupEditView.as_view(), name="storkagentgroup_add"),
@@ -267,5 +272,10 @@ urlpatterns = (
         "stork-agent-groups/<int:pk>/servers/",
         views.StorkAgentGroupServersView.as_view(),
         name="storkagentgroup_servers",
+    ),
+    path(
+        "stork-agent-groups/<int:pk>/config/",
+        views.StorkAgentGroupConfigView.as_view(),
+        name="storkagentgroup_config",
     ),
 )

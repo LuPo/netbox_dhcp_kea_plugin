@@ -992,6 +992,40 @@ class StorkServerAgentGroupsView(generic.ObjectView):
         )
 
 
+@register_model_view(models.StorkServer, name="config", path="config")
+class StorkServerConfigView(generic.ObjectView):
+    queryset = models.StorkServer.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/storkserver_config.html"
+    tab = ViewTab(
+        label="Configuration",
+        permission="netbox_dhcp_kea_plugin.view_storkserver",
+    )
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        server = self.get_object(pk=pk)
+        config = server.to_config_dict()
+        config_json = json.dumps(config, indent=4)
+
+        if request.GET.get("export") == "stork-server-config":
+            response = HttpResponse(config_json, content_type="application/json")
+            filename = f"{server.name}_stork-server-config.json"
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": server,
+                "tab": self.tab,
+                "config": config,
+                "config_json": config_json,
+            },
+        )
+
+
 # --- Stork Agent Group Views ---
 
 
@@ -1054,5 +1088,46 @@ class StorkAgentGroupServersView(generic.ObjectView):
                 "object": agent_group,
                 "servers": servers,
                 "tab": self.tab,
+            },
+        )
+
+
+@register_model_view(models.StorkAgentGroup, name="config", path="config")
+class StorkAgentGroupConfigView(generic.ObjectView):
+    queryset = models.StorkAgentGroup.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_config.html"
+    tab = ViewTab(
+        label="Configuration",
+        permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
+    )
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        agent_group = self.get_object(pk=pk)
+
+        # Download env file for a specific server: ?server=<id>
+        server_id = request.GET.get("server")
+        if server_id:
+            try:
+                server = agent_group.servers.select_related("ip_address").get(pk=int(server_id))
+                env_content = agent_group.to_env_content(server=server)
+                response = HttpResponse(env_content, content_type="text/plain")
+                filename = f"{server.name}_stork-agent.env"
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+            except (ValueError, models.DHCPServer.DoesNotExist):
+                pass
+
+        # Display generic template with placeholder
+        env_content = agent_group.to_env_content()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": agent_group,
+                "tab": self.tab,
+                "env_content": env_content,
             },
         )

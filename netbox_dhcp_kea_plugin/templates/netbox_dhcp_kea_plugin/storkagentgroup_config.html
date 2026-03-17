@@ -1,0 +1,39 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load builtins.tags %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card mb-3">
+            <h2 class="card-header d-flex justify-content-between">
+                <code>/api/plugins/netbox_dhcp_kea_plugin/stork-agent-groups/{{ object.pk }}/config/</code>
+                <div>
+                    {% copy_content "stork-agent-env" %}
+                </div>
+            </h2>
+            <pre class="card-body mb-0"><code class="language-bash" id="stork-agent-env">{{ env_content }}</code></pre>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <small class="text-muted">
+                    <i class="mdi mdi-information-outline"></i>
+                    Use <code>?server=&lt;id&gt;</code> on the API endpoint to replace <code>&lt;AGENT_HOST_IP&gt;</code> with the KEA server's IP address and download the resolved env file.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    hljs.highlightAll();
+});
+</script>
+{% endblock %}
