@@ -2,8 +2,20 @@ from ipam.models import Prefix
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class PlainTextRenderer(BaseRenderer):
+    media_type = "text/plain"
+    format = "text"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if isinstance(data, str):
+            return data.encode(self.charset or "utf-8")
+        return data
+
 
 from .. import filtersets
 from ..models import (
@@ -277,7 +289,7 @@ class StorkAgentGroupViewSet(NetBoxModelViewSet):
     serializer_class = StorkAgentGroupSerializer
     filterset_class = filtersets.StorkAgentGroupFilterSet
 
-    @action(detail=True, methods=["get"], url_path="config")
+    @action(detail=True, methods=["get"], url_path="config", renderer_classes=[PlainTextRenderer])
     def config(self, request, pk=None):
         """
         Return the Stork Agent environment file for this agent group.
@@ -288,8 +300,6 @@ class StorkAgentGroupViewSet(NetBoxModelViewSet):
 
         Returns plain-text content suitable for /etc/stork/agent.env.
         """
-        from django.http import HttpResponse
-
         agent_group = self.get_object()
         server = None
         server_id = request.query_params.get("server")
@@ -298,9 +308,9 @@ class StorkAgentGroupViewSet(NetBoxModelViewSet):
                 server = agent_group.servers.get(pk=int(server_id))
             except (ValueError, DHCPServer.DoesNotExist):
                 return Response(
-                    {"error": f"Server {server_id} is not assigned to this agent group."},
+                    f"Server {server_id} is not assigned to this agent group.",
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
         env_content = agent_group.to_env_content(server=server)
-        return HttpResponse(env_content, content_type="text/plain")
+        return Response(env_content)
