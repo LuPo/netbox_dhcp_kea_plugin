@@ -1405,6 +1405,7 @@ class StorkServerForm(NetBoxModelForm):
             "grafana_url",
             "default_agent_registration",
             "stork_version",
+            "log_level",
             "tags",
         )
         fieldsets = (
@@ -1414,6 +1415,7 @@ class StorkServerForm(NetBoxModelForm):
                 "ip_address",
                 "status",
                 "stork_version",
+                "log_level",
                 "tags",
                 name="General",
             ),
@@ -1471,6 +1473,7 @@ class StorkServerImportForm(NetBoxModelImportForm):
             "grafana_url",
             "default_agent_registration",
             "stork_version",
+            "log_level",
         )
 
 
@@ -1496,6 +1499,7 @@ class StorkAgentGroupForm(NetBoxModelForm):
             "prometheus_exporter_port",
             "prometheus_per_subnet_stats",
             "skip_tls_cert_verification",
+            "log_level",
             "tags",
         )
         fieldsets = (
@@ -1517,6 +1521,10 @@ class StorkAgentGroupForm(NetBoxModelForm):
                 "prometheus_exporter_port",
                 "prometheus_per_subnet_stats",
                 name="Prometheus Exporter",
+            ),
+            FieldSet(
+                "log_level",
+                name="Logging",
             ),
         )
 
@@ -1551,4 +1559,5 @@ class StorkAgentGroupImportForm(NetBoxModelImportForm):
             "prometheus_exporter_port",
             "prometheus_per_subnet_stats",
             "skip_tls_cert_verification",
+            "log_level",
         )

@@ -2202,6 +2202,14 @@ class DHCPHARelationship(NetBoxModel):
         return migrated
 
 
+STORK_LOG_LEVEL_CHOICES = (
+    ("DEBUG", "Debug"),
+    ("INFO", "Info"),
+    ("WARN", "Warning"),
+    ("ERROR", "Error"),
+)
+
+
 class StorkServer(NetBoxModel):
     """ISC Stork Server instance for centralized monitoring and management of KEA DHCP servers.
 
@@ -2308,6 +2316,14 @@ class StorkServer(NetBoxModel):
         help_text="Installed Stork server version (e.g., 1.18.0)",
     )
 
+    # --- Logging ---
+    log_level = models.CharField(
+        max_length=10,
+        choices=STORK_LOG_LEVEL_CHOICES,
+        default="INFO",
+        help_text="Logging level for the Stork server (DEBUG, INFO, WARN, ERROR)",
+    )
+
     class Meta:
         ordering = ("name",)
         verbose_name = "Stork Server"
@@ -2362,6 +2378,12 @@ class StorkServer(NetBoxModel):
         lines.append("### the server to Prometheus.")
         enable_metrics = "true" if self.enable_metrics else "false"
         lines.append(f"STORK_SERVER_ENABLE_METRICS={enable_metrics}")
+        lines.append("")
+
+        # --- Logging ---
+        lines.append("### Logging parameters")
+        lines.append("### Set logging level. Supported values are: DEBUG, INFO, WARN, ERROR")
+        lines.append(f"STORK_LOG_LEVEL={self.log_level}")
         lines.append("")
 
         return "\n".join(lines)
@@ -2459,6 +2481,14 @@ class StorkAgentGroup(NetBoxModel):
         help_text="Skip TLS certificate verification when the agent connects to Kea over TLS with self-signed certificates",
     )
 
+    # --- Logging ---
+    log_level = models.CharField(
+        max_length=10,
+        choices=STORK_LOG_LEVEL_CHOICES,
+        default="INFO",
+        help_text="Logging level for the Stork agent (DEBUG, INFO, WARN, ERROR)",
+    )
+
     class Meta:
         ordering = ("name",)
         verbose_name = "Stork Agent Group"
@@ -2548,6 +2578,12 @@ class StorkAgentGroup(NetBoxModel):
             lines.append("### Skip TLS certificate verification for connections to Kea over TLS")
             lines.append("STORK_AGENT_SKIP_TLS_CERT_VERIFICATION=true")
             lines.append("")
+
+        # --- Logging ---
+        lines.append("### Logging parameters")
+        lines.append("### Set logging level. Supported values are: DEBUG, INFO, WARN, ERROR")
+        lines.append(f"STORK_LOG_LEVEL={self.log_level}")
+        lines.append("")
 
         return "\n".join(lines)
 

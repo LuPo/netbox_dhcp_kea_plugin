@@ -45,6 +45,10 @@
                         <th>Version</th>
                         <td>{{ object.stork_version|placeholder }}</td>
                     </tr>
+                    <tr>
+                        <th>Log Level</th>
+                        <td>{{ object.get_log_level_display }}</td>
+                    </tr>
                 </table>
             </div>
         </div>
