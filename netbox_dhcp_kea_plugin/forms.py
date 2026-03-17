@@ -9,6 +9,7 @@ from netbox.forms import (
     NetBoxModelForm,
     NetBoxModelImportForm,
 )
+from netbox.plugins.utils import get_plugin_config
 from utilities.forms.fields import (
     CSVChoiceField,
     CSVModelChoiceField,
@@ -281,6 +282,12 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         assume_scheme="https",
         help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            if "stork_agent_group" in self.fields:
+                del self.fields["stork_agent_group"]
 
     class Meta:
         model = DHCPServer
@@ -594,6 +601,12 @@ class DHCPServerForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Hide stork_agent_group when Stork is disabled in plugin settings
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            if "stork_agent_group" in self.fields:
+                del self.fields["stork_agent_group"]
+
         # Populate client_classes from reverse relation
         if self.instance.pk:
             self.initial["client_classes"] = self.instance.client_classes.all()
@@ -871,6 +884,13 @@ class SubnetForm(NetBoxModelForm):
 class DHCPServerFilterForm(NetBoxModelFilterSetForm):
     model = DHCPServer
     name = forms.CharField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            if "stork_agent_group" in self.fields:
+                del self.fields["stork_agent_group"]
+
     status = forms.MultipleChoiceField(
         choices=DeviceStatusChoices,
         required=False,

@@ -1,5 +1,6 @@
 from django.urls import path
 from netbox.api.routers import NetBoxRouter
+from netbox.plugins.utils import get_plugin_config
 
 from . import views
 
@@ -16,8 +17,9 @@ router.register("client-classes", views.ClientClassViewSet)
 router.register("subnets", views.SubnetViewSet)
 router.register("subnet-pools", views.SubnetPoolViewSet)
 router.register("ha-relationships", views.DHCPHARelationshipViewSet)
-router.register("stork-servers", views.StorkServerViewSet)
-router.register("stork-agent-groups", views.StorkAgentGroupViewSet)
+if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+    router.register("stork-servers", views.StorkServerViewSet)
+    router.register("stork-agent-groups", views.StorkAgentGroupViewSet)
 
 urlpatterns = router.urls + [
     # Lookup DHCP relay config by prefix

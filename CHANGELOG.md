@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.1 (2026-03-18)
+
+### Added
+- **Stork Monitoring Integration**
+  - New `StorkServer` model for managing ISC Stork monitoring server instances
+  - New `StorkAgentGroup` model for configuring Stork agent groups linked to DHCP servers
+  - `StorkServer.to_env_content()` generates environment files suitable for `/etc/stork/server.env`
+  - `StorkAgentGroup.to_env_content()` generates environment files suitable for `/etc/stork/agent.env`
+  - Configurable `log_level` field (DEBUG, INFO, WARN, ERROR) on both Stork models, defaulting to INFO
+  - Prometheus exporter settings per agent group (address, port, per-subnet stats)
+  - TLS and authentication options for Stork server connections
+  - Full CRUD views, forms, serializers, filters, tables, and templates for both Stork models
+
+- **Stork Configuration API Endpoints**
+  - `GET /api/plugins/netbox-dhcp-kea-plugin/stork-servers/{id}/config/` returns plain-text server env file
+  - `GET /api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/{id}/config/` returns generic agent env template with `<AGENT_HOST_IP>` placeholder
+  - `GET /api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/{id}/config/?server={id}` returns resolved agent env file with concrete DHCP server IP
+  - Custom `PlainTextRenderer` for DRF ensures `Accept: text/plain` works correctly (e.g. Ansible `uri` module)
+
+- **Stork Optionality (`enable_stork` Setting)**
+  - New plugin setting `enable_stork` (default: `True`) to toggle all Stork features
+  - When disabled: Stork menu items, form fields, filter fields, API endpoints, and UI elements are all hidden
+  - Gating applied across navigation, forms (`DHCPServerForm`, `DHCPServerFilterForm`, `DHCPServerImportForm`), filtersets (`DHCPServerFilterSet`), API serializers (`DHCPServerSerializer`), API URL routes, and UI URL routes
+
+- **Plugin Settings Documentation**
+  - Added `enable_stork` to README configuration section
+  - Added plugin settings reference table to README
+  - Added Stork configuration generation and Ansible integration examples to README
+  - Added Stork API endpoints to REST API reference table
+
+### Changed
+- **BREAKING**: Converted `StorkAgentGroup.servers` from ManyToMany to `DHCPServer.stork_agent_group` ForeignKey — each DHCP server can now belong to at most one Stork agent group
+  - Data migration (`0015`) copies existing M2M assignments to the new FK column (first group by PK wins if a server belonged to multiple groups)
+  - Migration (`0016`) adds `log_level` fields to both Stork models
+
 ## 0.3.0 (2026-02-06)
 
 ### Added

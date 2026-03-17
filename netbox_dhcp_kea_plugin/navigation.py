@@ -3,6 +3,7 @@ from netbox.plugins.utils import get_plugin_config
 
 menu_name = get_plugin_config("netbox_dhcp_kea_plugin", "menu_name")
 top_level_menu = get_plugin_config("netbox_dhcp_kea_plugin", "top_level_menu")
+enable_stork = get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork")
 
 # Define menu items
 hook_menu_item = PluginMenuItem(
@@ -174,60 +175,77 @@ storkagentgroup_menu_item = PluginMenuItem(
 )
 
 
+# Build menu groups, conditionally including Stork
+_menu_groups = [
+    (
+        "Server Configuration",
+        (
+            dhcpserver_menu_item,
+            subnet_menu_item,
+            subnet_pools_menu_item,
+            clientclass_menu_item,
+        ),
+    ),
+    (
+        "High Availability",
+        (dhcpharelationship_menu_item,),
+    ),
+]
+
+if enable_stork:
+    _menu_groups.append(
+        (
+            "Stork Monitoring",
+            (
+                storkserver_menu_item,
+                storkagentgroup_menu_item,
+            ),
+        ),
+    )
+
+_menu_groups.extend(
+    [
+        (
+            "Hook Libraries",
+            (
+                hook_menu_item,
+                hookgroup_menu_item,
+            ),
+        ),
+        (
+            "Option Definition",
+            (
+                optiondefinition_menu_item,
+                optiondata_menu_item,
+                vendoroptionspace_menu_item,
+            ),
+        ),
+    ]
+)
+
 if top_level_menu:
     menu = PluginMenu(
         label=menu_name,
-        groups=(
-            (
-                "Server Configuration",
-                (
-                    dhcpserver_menu_item,
-                    subnet_menu_item,
-                    subnet_pools_menu_item,
-                    clientclass_menu_item,
-                ),
-            ),
-            (
-                "High Availability",
-                (dhcpharelationship_menu_item,),
-            ),
-            (
-                "Stork Monitoring",
-                (
-                    storkserver_menu_item,
-                    storkagentgroup_menu_item,
-                ),
-            ),
-            (
-                "Hook Libraries",
-                (
-                    hook_menu_item,
-                    hookgroup_menu_item,
-                ),
-            ),
-            (
-                "Option Definition",
-                (
-                    optiondefinition_menu_item,
-                    optiondata_menu_item,
-                    vendoroptionspace_menu_item,
-                ),
-            ),
-        ),
+        groups=tuple(_menu_groups),
         icon_class="mdi mdi-bird",
     )
 else:
-    menu_items = (
+    _flat_items = [
         dhcpserver_menu_item,
         subnet_menu_item,
         subnet_pools_menu_item,
         clientclass_menu_item,
         dhcpharelationship_menu_item,
-        storkserver_menu_item,
-        storkagentgroup_menu_item,
-        hook_menu_item,
-        hookgroup_menu_item,
-        optiondefinition_menu_item,
-        optiondata_menu_item,
-        vendoroptionspace_menu_item,
+    ]
+    if enable_stork:
+        _flat_items.extend([storkserver_menu_item, storkagentgroup_menu_item])
+    _flat_items.extend(
+        [
+            hook_menu_item,
+            hookgroup_menu_item,
+            optiondefinition_menu_item,
+            optiondata_menu_item,
+            vendoroptionspace_menu_item,
+        ]
     )
+    menu_items = tuple(_flat_items)

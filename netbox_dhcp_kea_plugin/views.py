@@ -329,6 +329,8 @@ class DHCPServerView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
 
     def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
         # Get configuration summary counts
         kea_config = instance.to_kea_dict()
         dhcp4 = kea_config.get("Dhcp4", {})
@@ -358,6 +360,7 @@ class DHCPServerView(generic.ObjectView):
             "unconditional_global_classes": unconditional_global_classes,
             "unreachable_subnets": unreachable_subnets,
             "unreachable_pools": unreachable_pools,
+            "enable_stork": get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"),
         }
 
 

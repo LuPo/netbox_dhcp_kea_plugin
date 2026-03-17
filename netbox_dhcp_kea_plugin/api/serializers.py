@@ -2,6 +2,7 @@ from dcim.api.serializers_.manufacturers import ManufacturerSerializer
 from ipam.api.serializers import IPAddressSerializer, IPRangeSerializer, ServiceSerializer, ServiceTemplateSerializer
 from ipam.models import Prefix
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
+from netbox.plugins.utils import get_plugin_config
 from rest_framework import serializers
 
 from ..models import (
@@ -231,6 +232,11 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            self.fields.pop("stork_agent_group", None)
 
     def get_ha_relationship(self, obj):
         if obj.ha_relationship:

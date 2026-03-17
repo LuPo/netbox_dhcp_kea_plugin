@@ -1,6 +1,7 @@
 import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
+from netbox.plugins.utils import get_plugin_config
 
 from .models import (
     ClientClass,
@@ -26,6 +27,12 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
     stork_agent_group = django_filters.ModelChoiceFilter(
         queryset=StorkAgentGroup.objects.all(), label="Stork Agent Group"
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            if "stork_agent_group" in self.filters:
+                del self.filters["stork_agent_group"]
 
     class Meta:
         model = DHCPServer
