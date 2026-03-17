@@ -1531,6 +1531,11 @@ class StorkAgentGroupFilterForm(NetBoxModelFilterSetForm):
         choices=[("", "---------")] + list(StorkAgentGroup.OPERATING_MODE_CHOICES),
         required=False,
     )
+    server = DynamicModelChoiceField(
+        queryset=DHCPServer.objects.all(),
+        required=False,
+        label="DHCP Server",
+    )
 
 
 class StorkAgentGroupImportForm(NetBoxModelImportForm):

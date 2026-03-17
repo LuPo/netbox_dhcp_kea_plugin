@@ -246,10 +246,15 @@ class StorkAgentGroupFilterSet(NetBoxModelFilterSet):
         choices=StorkAgentGroup.OPERATING_MODE_CHOICES,
         label="Operating Mode",
     )
+    server = django_filters.ModelChoiceFilter(
+        field_name="servers",
+        queryset=DHCPServer.objects.all(),
+        label="DHCP Server",
+    )
 
     class Meta:
         model = StorkAgentGroup
-        fields = ["id", "name", "stork_server", "operating_mode"]
+        fields = ["id", "name", "stork_server", "operating_mode", "server"]
 
     def search(self, queryset, name, value):
         if not value.strip():
