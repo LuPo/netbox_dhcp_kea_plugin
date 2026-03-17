@@ -68,6 +68,12 @@ class NestedClientClassSerializer(WritableNestedSerializer):
         fields = ["id", "url", "display", "name"]
 
 
+class NestedStorkAgentGroupSerializer(WritableNestedSerializer):
+    class Meta:
+        model = StorkAgentGroup
+        fields = ["id", "url", "display", "name", "operating_mode"]
+
+
 class HookSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:hook-detail")
 
@@ -198,6 +204,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
     service = ServiceSerializer(nested=True, read_only=True)
     option_data = OptionDataSerializer(many=True, read_only=True)
     ha_relationship = serializers.SerializerMethodField()
+    stork_agent_group = NestedStorkAgentGroupSerializer(read_only=True)
 
     class Meta:
         model = DHCPServer
@@ -218,6 +225,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "stork_agent_group",
             "tags",
             "custom_fields",
             "created",
@@ -407,7 +415,7 @@ class StorkAgentGroupSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_dhcp_kea_plugin-api:storkagentgroup-detail"
     )
     stork_server = NestedStorkServerSerializer(read_only=True)
-    servers = NestedDHCPServerSerializer(many=True, read_only=True)
+    servers = serializers.SerializerMethodField()
 
     class Meta:
         model = StorkAgentGroup
@@ -430,3 +438,7 @@ class StorkAgentGroupSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
+
+    def get_servers(self, obj):
+        servers = obj.servers.all()
+        return NestedDHCPServerSerializer(servers, many=True, context=self.context).data

@@ -996,7 +996,7 @@ class StorkServerAgentGroupsView(generic.ObjectView):
 
 
 class StorkAgentGroupView(generic.ObjectView):
-    queryset = models.StorkAgentGroup.objects.prefetch_related("stork_server", "servers")
+    queryset = models.StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
 
 
 class StorkAgentGroupListView(generic.ObjectListView):

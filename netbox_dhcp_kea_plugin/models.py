@@ -249,6 +249,14 @@ class DHCPServer(NetBoxModel):
         blank=True,
         help_text="Password for HTTP basic authentication in HA (optional)",
     )
+    stork_agent_group = models.ForeignKey(
+        "StorkAgentGroup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servers",
+        help_text="Stork agent group configuration for this DHCP server",
+    )
 
     class Meta:
         ordering = ("name",)
@@ -2406,14 +2414,6 @@ class StorkAgentGroup(NetBoxModel):
     skip_tls_cert_verification = models.BooleanField(
         default=False,
         help_text="Skip TLS certificate verification when the agent connects to Kea over TLS with self-signed certificates",
-    )
-
-    # --- DHCP Servers (M2M) ---
-    servers = models.ManyToManyField(
-        "DHCPServer",
-        blank=True,
-        related_name="stork_agent_groups",
-        help_text="DHCP servers that use this Stork agent configuration",
     )
 
     class Meta:

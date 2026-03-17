@@ -79,7 +79,7 @@ class OptionDataViewSet(NetBoxModelViewSet):
 
 
 class DHCPServerViewSet(NetBoxModelViewSet):
-    queryset = DHCPServer.objects.all()
+    queryset = DHCPServer.objects.select_related("stork_agent_group")
     serializer_class = DHCPServerSerializer
     filterset_class = filtersets.DHCPServerFilterSet
 
@@ -261,6 +261,6 @@ class StorkServerViewSet(NetBoxModelViewSet):
 
 
 class StorkAgentGroupViewSet(NetBoxModelViewSet):
-    queryset = StorkAgentGroup.objects.prefetch_related("stork_server", "servers")
+    queryset = StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
     serializer_class = StorkAgentGroupSerializer
     filterset_class = filtersets.StorkAgentGroupFilterSet

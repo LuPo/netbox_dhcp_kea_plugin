@@ -250,6 +250,12 @@ class OptionDataImportForm(NetBoxModelImportForm):
 
 
 class DHCPServerImportForm(NetBoxModelImportForm):
+    stork_agent_group = CSVModelChoiceField(
+        queryset=StorkAgentGroup.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Name of the Stork Agent Group (optional)",
+    )
     ip_address = CSVModelChoiceField(
         queryset=IPAddress.objects.all(),
         to_field_name="address",
@@ -290,6 +296,7 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "stork_agent_group",
             "tags",
         )
 
@@ -541,6 +548,11 @@ class DHCPServerForm(NetBoxModelForm):
         required=False,
         help_text="Hook groups to apply to this DHCP server",
     )
+    stork_agent_group = DynamicModelChoiceField(
+        queryset=StorkAgentGroup.objects.all(),
+        required=False,
+        help_text="Stork agent group configuration for this DHCP server",
+    )
 
     class Meta:
         model = DHCPServer
@@ -551,6 +563,7 @@ class DHCPServerForm(NetBoxModelForm):
             "status",
             "service_template",
             "option_data",
+            "stork_agent_group",
             "ha_relationship",
             "ha_role",
             "ha_url",
@@ -567,6 +580,7 @@ class DHCPServerForm(NetBoxModelForm):
                 "status",
                 "service_template",
                 "option_data",
+                "stork_agent_group",
                 "tags",
                 name="General",
             ),
@@ -881,6 +895,11 @@ class DHCPServerFilterForm(NetBoxModelFilterSetForm):
                 ("false", "No"),
             ]
         ),
+    )
+    stork_agent_group = DynamicModelChoiceField(
+        queryset=StorkAgentGroup.objects.all(),
+        required=False,
+        label="Stork Agent Group",
     )
 
 
@@ -1464,11 +1483,6 @@ class StorkAgentGroupForm(NetBoxModelForm):
         required=False,
         help_text="Stork server these agents report to (required unless Prometheus-only mode)",
     )
-    servers = DynamicModelMultipleChoiceField(
-        queryset=DHCPServer.objects.all(),
-        required=False,
-        help_text="DHCP servers that use this agent configuration",
-    )
 
     class Meta:
         model = StorkAgentGroup
@@ -1494,10 +1508,6 @@ class StorkAgentGroupForm(NetBoxModelForm):
                 name="General",
             ),
             FieldSet(
-                "servers",
-                name="DHCP Servers",
-            ),
-            FieldSet(
                 "agent_port",
                 "skip_tls_cert_verification",
                 name="Agent gRPC Settings",
@@ -1509,18 +1519,6 @@ class StorkAgentGroupForm(NetBoxModelForm):
                 name="Prometheus Exporter",
             ),
         )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance.pk:
-            self.initial["servers"] = self.instance.servers.all()
-
-    def save(self, *args, **kwargs):
-        instance = super().save(*args, **kwargs)
-        # Handle servers (direct ManyToMany on StorkAgentGroup)
-        if "servers" in self.cleaned_data:
-            instance.servers.set(self.cleaned_data["servers"])
-        return instance
 
 
 class StorkAgentGroupFilterForm(NetBoxModelFilterSetForm):

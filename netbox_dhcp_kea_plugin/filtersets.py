@@ -23,10 +23,13 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
         queryset=DHCPHARelationship.objects.all(), label="HA Relationship"
     )
     ha_role = django_filters.ChoiceFilter(choices=DHCPServer.HA_ROLE_CHOICES, label="HA Role")
+    stork_agent_group = django_filters.ModelChoiceFilter(
+        queryset=StorkAgentGroup.objects.all(), label="Stork Agent Group"
+    )
 
     class Meta:
         model = DHCPServer
-        fields = ["id", "name", "status", "ha_relationship", "ha_role", "ha_auto_failover"]
+        fields = ["id", "name", "status", "ha_relationship", "ha_role", "ha_auto_failover", "stork_agent_group"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -238,10 +241,6 @@ class StorkAgentGroupFilterSet(NetBoxModelFilterSet):
     stork_server = django_filters.ModelChoiceFilter(
         queryset=StorkServer.objects.all(),
         label="Stork Server",
-    )
-    servers = django_filters.ModelChoiceFilter(
-        queryset=DHCPServer.objects.all(),
-        label="DHCP Server",
     )
     operating_mode = django_filters.ChoiceFilter(
         choices=StorkAgentGroup.OPERATING_MODE_CHOICES,

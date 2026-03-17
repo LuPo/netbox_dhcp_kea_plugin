@@ -98,13 +98,11 @@
                         </td>
                     </tr>
                     <tr>
-                        <th>Stork Agent Groups</th>
+                        <th>Stork Agent Group</th>
                         <td>
-                            {% if object.stork_agent_groups.all %}
-                            {% for group in object.stork_agent_groups.all %}
-                            <a href="{{ group.get_absolute_url }}">{{ group.name }}</a>
-                            <small class="text-muted">({{ group.get_operating_mode_display }})</small>{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
+                            {% if object.stork_agent_group %}
+                            <a href="{{ object.stork_agent_group.get_absolute_url }}">{{ object.stork_agent_group.name }}</a>
+                            <small class="text-muted">({{ object.stork_agent_group.get_operating_mode_display }})</small>
                             {% else %}
                             <span class="text-muted">None</span>
                             {% endif %}
@@ -113,20 +111,14 @@
                     <tr>
                         <th>Stork Server</th>
                         <td>
-                            {% with stork_groups=object.stork_agent_groups.all %}
-                            {% if stork_groups %}
-                            {% for group in stork_groups %}
-                            {% if group.stork_server %}
-                            <a href="{{ group.stork_server.get_absolute_url }}">{{ group.stork_server.name }}</a>
+                            {% if object.stork_agent_group and object.stork_agent_group.stork_server %}
+                            <a href="{{ object.stork_agent_group.stork_server.get_absolute_url }}">{{ object.stork_agent_group.stork_server.name }}</a>
                             <small class="text-muted">
-                                (<a href="{{ group.stork_server.url }}" target="_blank">{{ group.stork_server.url }}</a>)
-                            </small>{% if not forloop.last %}<br>{% endif %}
-                            {% endif %}
-                            {% endfor %}
+                                (<a href="{{ object.stork_agent_group.stork_server.url }}" target="_blank">{{ object.stork_agent_group.stork_server.url }}</a>)
+                            </small>
                             {% else %}
                             <span class="text-muted">—</span>
                             {% endif %}
-                            {% endwith %}
                         </td>
                     </tr>
                 </table>
