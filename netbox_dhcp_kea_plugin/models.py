@@ -2323,80 +2323,48 @@ class StorkServer(NetBoxModel):
         """Return the color associated with the current status for badge display."""
         return DeviceStatusChoices.colors.get(self.status, "secondary")
 
-    def to_config_dict(self):
-        """Return a Stork Server configuration dictionary.
+    def to_env_content(self):
+        """Generate Stork Server environment variable file content.
 
-        Generates the configuration for the Stork Server including
-        REST API settings, database connection, metrics, and
-        associated agent groups with their DHCP servers.
+        Produces the content for /etc/stork/server.env used by the
+        stork-server systemd service.
+
+        Returns:
+            str: The environment file content.
         """
+        lines = []
         ip = str(self.ip_address).split("/")[0]
-        config = {
-            "stork-server": {
-                "name": self.name,
-                "status": self.status,
-                "rest-host": ip,
-                "rest-port": self.rest_port,
-                "rest-base-url": self.rest_base_url,
-                "use-tls": self.use_tls,
-                "url": self.url,
-                "database": {
-                    "host": self.db_host,
-                    "port": self.db_port,
-                    "name": self.db_name,
-                    "ssl-mode": self.db_ssl_mode,
-                },
-                "metrics": {
-                    "enabled": self.enable_metrics,
-                },
-                "agent-registration": {
-                    "default-method": self.default_agent_registration,
-                },
-            }
-        }
 
-        if self.grafana_url:
-            config["stork-server"]["grafana-url"] = self.grafana_url
+        # --- Database settings ---
+        lines.append("### database settings")
+        lines.append("### the address of a PostgreSQL database")
+        lines.append(f"STORK_DATABASE_HOST={self.db_host}")
+        lines.append("### the port of a PostgreSQL database")
+        lines.append(f"STORK_DATABASE_PORT={self.db_port}")
+        lines.append("### the name of a database")
+        lines.append(f"STORK_DATABASE_NAME={self.db_name}")
+        lines.append("### the SSL mode for connecting to the database")
+        lines.append(f"STORK_DATABASE_SSLMODE={self.db_ssl_mode}")
+        lines.append("")
 
-        if self.stork_version:
-            config["stork-server"]["version"] = self.stork_version
+        # --- REST API settings ---
+        lines.append("### REST API settings")
+        lines.append("### the IP address on which the server listens")
+        lines.append(f"STORK_REST_HOST={ip}")
+        lines.append("### the port number on which the server listens")
+        lines.append(f"STORK_REST_PORT={self.rest_port}")
+        lines.append("### the directory with static files served in the UI")
+        lines.append("STORK_REST_STATIC_FILES_DIR=/usr/share/stork/www")
+        lines.append("")
 
-        # Include all agent groups and their assigned DHCP servers
-        agent_groups = []
-        for group in self.agent_groups.prefetch_related("servers"):
-            group_dict = {
-                "name": group.name,
-                "operating-mode": group.operating_mode,
-                "agent-port": group.agent_port,
-                "skip-tls-cert-verification": group.skip_tls_cert_verification,
-            }
+        # --- Metrics ---
+        lines.append("### enable Prometheus /metrics HTTP endpoint for exporting metrics from")
+        lines.append("### the server to Prometheus.")
+        enable_metrics = "true" if self.enable_metrics else "false"
+        lines.append(f"STORK_SERVER_ENABLE_METRICS={enable_metrics}")
+        lines.append("")
 
-            if group.operating_mode in ("both", "prometheus-only"):
-                group_dict["prometheus-exporter"] = {
-                    "address": group.prometheus_exporter_address,
-                    "port": group.prometheus_exporter_port,
-                    "per-subnet-stats": group.prometheus_per_subnet_stats,
-                }
-
-            servers = []
-            for server in group.servers.all():
-                server_ip = str(server.ip_address).split("/")[0]
-                servers.append(
-                    {
-                        "name": server.name,
-                        "address": server_ip,
-                        "status": server.status,
-                    }
-                )
-            if servers:
-                group_dict["servers"] = servers
-
-            agent_groups.append(group_dict)
-
-        if agent_groups:
-            config["stork-server"]["agent-groups"] = agent_groups
-
-        return config
+        return "\n".join(lines)
 
     @property
     def url(self):

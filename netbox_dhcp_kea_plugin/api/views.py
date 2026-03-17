@@ -271,17 +271,15 @@ class StorkServerViewSet(NetBoxModelViewSet):
     serializer_class = StorkServerSerializer
     filterset_class = filtersets.StorkServerFilterSet
 
-    @action(detail=True, methods=["get"], url_path="config")
+    @action(detail=True, methods=["get"], url_path="config", renderer_classes=[PlainTextRenderer])
     def config(self, request, pk=None):
         """
-        Return the Stork Server configuration.
+        Return the Stork Server environment file.
 
-        This endpoint generates a configuration dictionary including
-        REST API settings, database connection, metrics, and
-        associated agent groups with their DHCP servers.
+        Returns plain-text content suitable for /etc/stork/server.env.
         """
         server = self.get_object()
-        return Response(server.to_config_dict())
+        return Response(server.to_env_content())
 
 
 class StorkAgentGroupViewSet(NetBoxModelViewSet):

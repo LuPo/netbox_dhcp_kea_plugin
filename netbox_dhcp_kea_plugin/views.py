@@ -1005,12 +1005,11 @@ class StorkServerConfigView(generic.ObjectView):
         from django.http import HttpResponse
 
         server = self.get_object(pk=pk)
-        config = server.to_config_dict()
-        config_json = json.dumps(config, indent=4)
+        env_content = server.to_env_content()
 
         if request.GET.get("export") == "stork-server-config":
-            response = HttpResponse(config_json, content_type="application/json")
-            filename = f"{server.name}_stork-server-config.json"
+            response = HttpResponse(env_content, content_type="text/plain")
+            filename = f"{server.name}_stork-server.env"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
             return response
 
@@ -1020,8 +1019,7 @@ class StorkServerConfigView(generic.ObjectView):
             {
                 "object": server,
                 "tab": self.tab,
-                "config": config,
-                "config_json": config_json,
+                "env_content": env_content,
             },
         )
 

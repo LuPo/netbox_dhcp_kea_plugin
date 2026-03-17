@@ -5,7 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -18,10 +18,10 @@
                     <a href="?export=stork-server-config" class="btn btn-sm btn-primary" role="button">
                         <i class="mdi mdi-download" aria-hidden="true"></i> Download
                     </a>
-                    {% copy_content "stork-config" %}
+                    {% copy_content "stork-server-env" %}
                 </div>
             </h2>
-            <pre class="card-body"><code class="language-json" id="stork-config">{{ config_json }}</code></pre>
+            <pre class="card-body mb-0"><code class="language-bash" id="stork-server-env">{{ env_content }}</code></pre>
         </div>
     </div>
 </div>
