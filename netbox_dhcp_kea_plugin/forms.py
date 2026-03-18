@@ -282,6 +282,28 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         assume_scheme="https",
         help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
     )
+    ctrl_socket_http_enabled = forms.BooleanField(
+        required=False,
+        help_text="Enable HTTP control socket",
+    )
+    ctrl_socket_http_address = forms.CharField(
+        max_length=255,
+        required=False,
+        help_text="HTTP socket address (e.g., 127.0.0.1)",
+    )
+    ctrl_socket_http_port = forms.IntegerField(
+        required=False,
+        help_text="HTTP socket port (e.g., 8000)",
+    )
+    ctrl_socket_unix_enabled = forms.BooleanField(
+        required=False,
+        help_text="Enable Unix control socket",
+    )
+    ctrl_socket_unix_path = forms.CharField(
+        max_length=255,
+        required=False,
+        help_text="Unix socket path (e.g., /var/run/kea/kea-dhcp4-socket)",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -304,6 +326,11 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "stork_agent_group",
+            "ctrl_socket_http_enabled",
+            "ctrl_socket_http_address",
+            "ctrl_socket_http_port",
+            "ctrl_socket_unix_enabled",
+            "ctrl_socket_unix_path",
             "tags",
         )
 
@@ -571,6 +598,11 @@ class DHCPServerForm(NetBoxModelForm):
             "service_template",
             "option_data",
             "stork_agent_group",
+            "ctrl_socket_http_enabled",
+            "ctrl_socket_http_address",
+            "ctrl_socket_http_port",
+            "ctrl_socket_unix_enabled",
+            "ctrl_socket_unix_path",
             "ha_relationship",
             "ha_role",
             "ha_url",
@@ -592,6 +624,14 @@ class DHCPServerForm(NetBoxModelForm):
                 name="General",
             ),
             FieldSet("hook_groups", name="Hook Libraries"),
+            FieldSet(
+                "ctrl_socket_http_enabled",
+                "ctrl_socket_http_address",
+                "ctrl_socket_http_port",
+                "ctrl_socket_unix_enabled",
+                "ctrl_socket_unix_path",
+                name="Control Sockets",
+            ),
             FieldSet("ha_relationship", "ha_role", "ha_url", "ha_auto_failover", name="High Availability"),
             FieldSet("ha_basic_auth_user", "ha_basic_auth_password", name="HA Authentication"),
         )
@@ -920,6 +960,28 @@ class DHCPServerFilterForm(NetBoxModelFilterSetForm):
         queryset=StorkAgentGroup.objects.all(),
         required=False,
         label="Stork Agent Group",
+    )
+    ctrl_socket_http_enabled = forms.NullBooleanField(
+        required=False,
+        label="HTTP Control Socket",
+        widget=forms.Select(
+            choices=[
+                ("", "---------"),
+                ("true", "Yes"),
+                ("false", "No"),
+            ]
+        ),
+    )
+    ctrl_socket_unix_enabled = forms.NullBooleanField(
+        required=False,
+        label="Unix Control Socket",
+        widget=forms.Select(
+            choices=[
+                ("", "---------"),
+                ("true", "Yes"),
+                ("false", "No"),
+            ]
+        ),
     )
 
 

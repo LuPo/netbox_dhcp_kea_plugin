@@ -258,6 +258,41 @@ class DHCPServer(NetBoxModel):
         help_text="Stork agent group configuration for this DHCP server",
     )
 
+    # Control Socket - HTTP
+    ctrl_socket_http_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Enable HTTP control socket",
+        help_text="Enable the HTTP control socket for this KEA server",
+    )
+    ctrl_socket_http_address = models.CharField(
+        max_length=255,
+        default="127.0.0.1",
+        blank=True,
+        verbose_name="HTTP socket address",
+        help_text="IP address for the HTTP control socket (e.g., 127.0.0.1)",
+    )
+    ctrl_socket_http_port = models.PositiveIntegerField(
+        default=8000,
+        null=True,
+        blank=True,
+        verbose_name="HTTP socket port",
+        help_text="Port number for the HTTP control socket (e.g., 8000)",
+    )
+
+    # Control Socket - Unix
+    ctrl_socket_unix_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Enable Unix control socket",
+        help_text="Enable the Unix domain socket for this KEA server",
+    )
+    ctrl_socket_unix_path = models.CharField(
+        max_length=255,
+        default="/var/run/kea/kea-dhcp4-socket",
+        blank=True,
+        verbose_name="Unix socket path",
+        help_text="File path for the Unix domain socket (e.g., /var/run/kea/kea-dhcp4-socket)",
+    )
+
     class Meta:
         ordering = ("name",)
         verbose_name = "DHCP Server"
@@ -349,6 +384,22 @@ class DHCPServer(NetBoxModel):
                 raise ValidationError({"ha_role": "HA role is required when server is part of an HA relationship."})
             if not self.ha_url:
                 raise ValidationError({"ha_url": "HA URL is required when server is part of an HA relationship."})
+
+        # Validate control socket configuration
+        if self.ctrl_socket_http_enabled:
+            if not self.ctrl_socket_http_address:
+                raise ValidationError(
+                    {"ctrl_socket_http_address": "HTTP socket address is required when HTTP control socket is enabled."}
+                )
+            if not self.ctrl_socket_http_port:
+                raise ValidationError(
+                    {"ctrl_socket_http_port": "HTTP socket port is required when HTTP control socket is enabled."}
+                )
+        if self.ctrl_socket_unix_enabled:
+            if not self.ctrl_socket_unix_path:
+                raise ValidationError(
+                    {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
+                )
 
         # If changing from primary to another role, check for orphaned configs
         if self.pk:
@@ -635,6 +686,30 @@ class DHCPServer(NetBoxModel):
         lib = library_name.lstrip("/")
         return f"{base}/{lib}"
 
+    def get_control_sockets(self):
+        """Return the control-sockets list for KEA configuration.
+
+        Returns a list of control socket dictionaries based on enabled socket types.
+        Returns an empty list if no control sockets are enabled.
+        """
+        sockets = []
+        if self.ctrl_socket_http_enabled:
+            sockets.append(
+                {
+                    "socket-type": "http",
+                    "socket-address": self.ctrl_socket_http_address,
+                    "socket-port": self.ctrl_socket_http_port,
+                }
+            )
+        if self.ctrl_socket_unix_enabled:
+            sockets.append(
+                {
+                    "socket-type": "unix",
+                    "socket-name": self.ctrl_socket_unix_path,
+                }
+            )
+        return sockets
+
     def to_kea_dict(self):
         """Return a complete KEA Dhcp4 configuration dictionary for this server.
 
@@ -652,6 +727,11 @@ class DHCPServer(NetBoxModel):
         }
 
         dhcp4 = result["Dhcp4"]
+
+        # Add control sockets if configured
+        control_sockets = self.get_control_sockets()
+        if control_sockets:
+            dhcp4["control-sockets"] = control_sockets
 
         # Use effective methods that respect HA configuration
         effective_subnet_items = self.get_effective_subnet_items()

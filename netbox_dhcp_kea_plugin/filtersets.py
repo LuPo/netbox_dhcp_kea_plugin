@@ -36,7 +36,17 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = DHCPServer
-        fields = ["id", "name", "status", "ha_relationship", "ha_role", "ha_auto_failover", "stork_agent_group"]
+        fields = [
+            "id",
+            "name",
+            "status",
+            "ha_relationship",
+            "ha_role",
+            "ha_auto_failover",
+            "stork_agent_group",
+            "ctrl_socket_http_enabled",
+            "ctrl_socket_unix_enabled",
+        ]
 
     def search(self, queryset, name, value):
         if not value.strip():

@@ -123,6 +123,28 @@
                         </td>
                     </tr>
                     {% endif %}
+                    <tr>
+                        <th>HTTP Control Socket</th>
+                        <td>
+                            {% if object.ctrl_socket_http_enabled %}
+                            <span class="badge bg-success">Enabled</span>
+                            <br><small class="text-muted">{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</small>
+                            {% else %}
+                            <span class="text-muted">Disabled</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Unix Control Socket</th>
+                        <td>
+                            {% if object.ctrl_socket_unix_enabled %}
+                            <span class="badge bg-success">Enabled</span>
+                            <br><small class="text-muted">{{ object.ctrl_socket_unix_path }}</small>
+                            {% else %}
+                            <span class="text-muted">Disabled</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>

@@ -271,6 +271,8 @@ class DHCPServerTable(NetBoxTable):
     ha_role = RawValueColumn(field_name="ha_role", verbose_name="HA Role")
     ha_url = tables.Column(verbose_name="HA URL")
     ha_auto_failover = BooleanColumn(verbose_name="HA Auto Failover")
+    ctrl_socket_http_enabled = BooleanColumn(verbose_name="HTTP Socket")
+    ctrl_socket_unix_enabled = BooleanColumn(verbose_name="Unix Socket")
 
     class Meta(NetBoxTable.Meta):
         model = DHCPServer
@@ -286,6 +288,8 @@ class DHCPServerTable(NetBoxTable):
             "ha_role",
             "ha_url",
             "ha_auto_failover",
+            "ctrl_socket_http_enabled",
+            "ctrl_socket_unix_enabled",
             "actions",
         )
         default_columns = ("name", "description", "ip_address", "status", "ha_relationship", "ha_role")
