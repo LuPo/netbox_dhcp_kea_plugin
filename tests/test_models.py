@@ -450,6 +450,7 @@ class TestSubnetReservations:
         assert kea_res["hw-address"] == "aa:bb:cc:dd:ee:ff"
         assert kea_res["hostname"] == "test-device"
         assert metadata["is_primary"] is True
+        assert metadata["has_hw_address"] is True
 
     def test_get_reservations_includes_oob_ip_with_interface_name(self):
         """Test get_reservations includes OOB IPs with interface name in hostname."""
@@ -497,9 +498,9 @@ class TestSubnetReservations:
         assert len(result) == 1
         kea_res, metadata = result[0]
         assert kea_res["ip-address"] == "10.0.0.5"
-        # Interface name should be cleaned: / -> -, . -> -
         assert kea_res["hostname"] == "oob-device_mgmt0-1"
         assert metadata["is_oob"] is True
+        assert metadata["has_hw_address"] is True
 
     def test_get_reservations_uses_dns_name_for_hostname(self):
         """Test get_reservations uses first part of dns_name for hostname."""
@@ -594,6 +595,7 @@ class TestSubnetReservations:
         assert len(result) == 1
         assert isinstance(result[0], dict)
         assert "ip-address" in result[0]
+        assert "hw-address" in result[0]
         # Should not contain metadata
         assert "is_primary" not in result[0]
 
@@ -688,3 +690,131 @@ class TestSubnetReservations:
                                     result = config.to_kea_dict()
 
         assert "reservations" not in result
+
+    def test_get_reservations_includes_ip_without_mac(self):
+        """Test get_reservations includes IPs without MAC address but marks them."""
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        from django.contrib.contenttypes.models import ContentType
+
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        config = Subnet()
+        mock_prefix = MagicMock()
+
+        mock_interface = MagicMock()
+        mock_interface.name = "eth0"
+        mock_interface.primary_mac_address = None
+        mock_interface.mac_address = None
+
+        mock_device = MagicMock()
+        mock_device.name = "no-mac-device"
+        mock_interface.parent_object = mock_device
+
+        mock_ip_address = MagicMock()
+        mock_ip_address.ip = "192.168.1.50"
+
+        mock_ip = MagicMock()
+        mock_ip.assigned_object_type = MagicMock()
+        mock_ip.assigned_object_type_id = 999
+        mock_ip.is_primary_ip = True
+        mock_ip.is_oob_ip = False
+        mock_ip.assigned_object = mock_interface
+        mock_ip.address = mock_ip_address
+        mock_ip.dns_name = ""
+
+        mock_prefix.get_child_ips.return_value = [mock_ip]
+
+        with patch.object(Subnet, "prefix", new_callable=PropertyMock) as mock_prefix_prop:
+            mock_prefix_prop.return_value = mock_prefix
+            with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+                mock_ct.DoesNotExist = ContentType.DoesNotExist
+                mock_ct.objects.get.side_effect = ContentType.DoesNotExist("Not found")
+                result = config.get_reservations()
+
+        assert len(result) == 1
+        kea_res, metadata = result[0]
+        assert kea_res["ip-address"] == "192.168.1.50"
+        assert "hw-address" not in kea_res
+        assert kea_res["hostname"] == "no-mac-device"
+        assert metadata["has_hw_address"] is False
+
+    def test_get_kea_reservations_excludes_entries_without_hw_address(self):
+        """Test get_kea_reservations filters out reservations without hw-address.
+
+        KEA requires either hw-address or duid for a valid reservation.
+        Entries without either cause kea-dhcp4.service validation to fail.
+        """
+        from unittest.mock import MagicMock, PropertyMock, patch
+
+        from django.contrib.contenttypes.models import ContentType
+
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        config = Subnet()
+        mock_prefix = MagicMock()
+
+        # Interface WITH MAC
+        mock_interface_with_mac = MagicMock()
+        mock_interface_with_mac.name = "eth0"
+        mock_primary_mac = MagicMock()
+        mock_primary_mac.mac_address = "aa:bb:cc:dd:ee:ff"
+        mock_interface_with_mac.primary_mac_address = mock_primary_mac
+        mock_interface_with_mac.mac_address = None
+
+        mock_device1 = MagicMock()
+        mock_device1.name = "device-with-mac"
+        mock_interface_with_mac.parent_object = mock_device1
+
+        mock_ip_address1 = MagicMock()
+        mock_ip_address1.ip = "192.168.1.10"
+
+        mock_ip1 = MagicMock()
+        mock_ip1.assigned_object_type = MagicMock()
+        mock_ip1.assigned_object_type_id = 999
+        mock_ip1.is_primary_ip = True
+        mock_ip1.is_oob_ip = False
+        mock_ip1.assigned_object = mock_interface_with_mac
+        mock_ip1.address = mock_ip_address1
+        mock_ip1.dns_name = ""
+
+        # Interface WITHOUT MAC
+        mock_interface_no_mac = MagicMock()
+        mock_interface_no_mac.name = "eth1"
+        mock_interface_no_mac.primary_mac_address = None
+        mock_interface_no_mac.mac_address = None
+
+        mock_device2 = MagicMock()
+        mock_device2.name = "device-no-mac"
+        mock_interface_no_mac.parent_object = mock_device2
+
+        mock_ip_address2 = MagicMock()
+        mock_ip_address2.ip = "192.168.1.20"
+
+        mock_ip2 = MagicMock()
+        mock_ip2.assigned_object_type = MagicMock()
+        mock_ip2.assigned_object_type_id = 999
+        mock_ip2.is_primary_ip = True
+        mock_ip2.is_oob_ip = False
+        mock_ip2.assigned_object = mock_interface_no_mac
+        mock_ip2.address = mock_ip_address2
+        mock_ip2.dns_name = ""
+
+        mock_prefix.get_child_ips.return_value = [mock_ip1, mock_ip2]
+
+        with patch.object(Subnet, "prefix", new_callable=PropertyMock) as mock_prefix_prop:
+            mock_prefix_prop.return_value = mock_prefix
+            with patch("netbox_dhcp_kea_plugin.models.ContentType") as mock_ct:
+                mock_ct.DoesNotExist = ContentType.DoesNotExist
+                mock_ct.objects.get.side_effect = ContentType.DoesNotExist("Not found")
+
+                # get_reservations should return both
+                all_reservations = config.get_reservations()
+                assert len(all_reservations) == 2
+
+                # get_kea_reservations should only return the one with hw-address
+                kea_reservations = config.get_kea_reservations()
+
+        assert len(kea_reservations) == 1
+        assert kea_reservations[0]["ip-address"] == "192.168.1.10"
+        assert kea_reservations[0]["hw-address"] == "aa:bb:cc:dd:ee:ff"

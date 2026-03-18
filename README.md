@@ -63,6 +63,15 @@ DHCP servers can be configured with KEA control sockets for management access:
 - **Validation**: HA port and HTTP control socket port are validated to be different when both are active, preventing accidental port conflicts
 - **IP validation**: Both `ha_address` and `ctrl_socket_http_address` are validated as proper IP addresses (IPv4 or IPv6)
 
+### DHCP Reservations
+
+The plugin automatically discovers DHCP reservations from NetBox IP address assignments:
+
+- **Auto-discovery**: IP addresses assigned to interfaces (device or VM) that are marked as Primary IP or OOB IP are collected as KEA host reservations
+- **MAC address validation**: Only reservations with a `hw-address` (MAC address on the interface) are included in KEA configuration output — KEA requires either `hw-address` or `duid` for each reservation, and entries without either cause `kea-dhcp4.service` validation to fail
+- **UI warnings**: The reservations tab highlights entries without a MAC address in yellow with a warning, explaining they will be excluded from the generated config
+- **FHRP filtering**: FHRP group addresses are automatically excluded from reservations
+
 ### DHCP Relay Support
 
 The plugin provides DHCP relay target information for configuring `ip helper-address` on Layer 3 network devices:
@@ -84,7 +93,7 @@ The plugin provides DHCP relay target information for configuring `ip helper-add
 
 | NetBox Version | Plugin Version |
 |----------------|----------------|
-|     4.5        |      0.5.4     |
+|     4.5        |      0.5.5     |
 
 ## Installation
 
@@ -258,6 +267,7 @@ This returns a complete `Dhcp4` configuration dictionary including:
 - Global options
 - Client class definitions
 - Subnet configurations with pools
+- Host reservations (auto-discovered from NetBox IP assignments with MAC addresses)
 - Control sockets (if configured)
 - HA configuration (if applicable)
 

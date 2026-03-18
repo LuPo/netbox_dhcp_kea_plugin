@@ -24,16 +24,18 @@
                     </thead>
                     <tbody>
                         {% for kea_res, meta in reservations %}
-                        <tr>
+                        <tr{% if not meta.has_hw_address %} class="table-warning"{% endif %}>
                             <td>{{ kea_res.hostname }}</td>
                             <td>
                                 <a href="{{ meta.ip.get_absolute_url }}">{{ meta.ip.address.ip }}</a>
                             </td>
                             <td>
-                                {% if meta.interface.mac_address %}
+                                {% if meta.has_hw_address %}
                                 {{ meta.interface.mac_address|lower }}
                                 {% else %}
-                                <span class="text-muted">&mdash;</span>
+                                <span class="text-warning" title="No MAC address on interface — this reservation will be excluded from KEA configuration">
+                                    <i class="mdi mdi-alert-outline"></i> Missing
+                                </span>
                                 {% endif %}
                             </td>
                             <td>
@@ -53,6 +55,19 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                {% if skipped_count %}
+                <div class="alert alert-warning mt-3" role="alert">
+                    <h6 class="alert-heading"><i class="mdi mdi-alert-outline"></i> Reservations without MAC address</h6>
+                    <p class="mb-0">
+                        {{ skipped_count }} reservation{{ skipped_count|pluralize }} highlighted in yellow
+                        {{ skipped_count|pluralize:"has,have" }} no MAC address on {{ skipped_count|pluralize:"its,their" }}
+                        interface and will be <strong>excluded</strong> from the KEA configuration output.
+                        KEA requires either <code>hw-address</code> or <code>duid</code> for each reservation &mdash;
+                        without one of these identifiers, <code>kea-dhcp4.service</code> validation will fail.
+                        To include these reservations, assign a MAC address to the corresponding interface in NetBox.
+                    </p>
+                </div>
+                {% endif %}
                 {% else %}
                 <div class="text-muted">
                     <p>No reservations found in this prefix.</p>

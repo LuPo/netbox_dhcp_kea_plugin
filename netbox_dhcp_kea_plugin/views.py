@@ -870,6 +870,7 @@ class SubnetReservationsView(generic.ObjectView):
     def get(self, request, pk):
         config = self.get_object(pk=pk)
         reservations = config.get_reservations()
+        skipped_count = sum(1 for _, meta in reservations if not meta["has_hw_address"])
 
         return render(
             request,
@@ -878,6 +879,7 @@ class SubnetReservationsView(generic.ObjectView):
                 "object": config,
                 "reservations": reservations,
                 "reservation_count": len(reservations),
+                "skipped_count": skipped_count,
                 "kea_reservations": config.get_kea_reservations(),
                 "tab": self.tab,
             },

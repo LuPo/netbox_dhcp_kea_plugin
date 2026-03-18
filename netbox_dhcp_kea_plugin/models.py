@@ -1866,6 +1866,7 @@ class Subnet(NetBoxModel):
                 "interface": assigned_object,
                 "is_primary": ip.is_primary_ip,
                 "is_oob": ip.is_oob_ip,
+                "has_hw_address": bool(mac_address),
             }
 
             reservations.append((kea_reservation, metadata))
@@ -1875,10 +1876,15 @@ class Subnet(NetBoxModel):
     def get_kea_reservations(self):
         """Get DHCP reservations in KEA format only (without metadata).
 
+        Only includes reservations that have a hw-address (MAC address).
+        KEA requires either hw-address or duid for a valid reservation;
+        entries without either will cause kea-dhcp4.service validation
+        to fail.
+
         Returns a list of KEA reservation dictionaries suitable for
         including in the KEA configuration.
         """
-        return [r[0] for r in self.get_reservations()]
+        return [r[0] for r in self.get_reservations() if "hw-address" in r[0]]
 
     def get_all_pool_option_data(self):
         """Get all OptionData instances used across this subnet's pool configurations.

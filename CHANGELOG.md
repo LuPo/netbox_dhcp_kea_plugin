@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.5.4 (2026-03-18)
+## 0.5.5 (2026-03-18)
+
+### Added
+- **Stork Server `db_user` Field**
+  - New `db_user` field on `StorkServer` model (CharField, default: `"stork"`) for PostgreSQL database user name
+  - `to_env_content()` now outputs `STORK_DATABASE_USER_NAME` in the generated environment file
+  - Field included across serializer, forms (edit, import), detail template ("Database Connection" card), and tests
+  - Database migration (`0021`) adds the field
+
+- **DHCP Reservation MAC Address Validation**
+  - `get_kea_reservations()` now filters out reservations that lack a `hw-address` (MAC address), preventing `kea-dhcp4.service` validation failures — KEA requires either `hw-address` or `duid` for each reservation
+  - `get_reservations()` still returns all reservations (including those without MAC) for UI display, with a new `has_hw_address` metadata flag
+  - Subnet reservations template highlights MAC-less reservations in yellow with a warning icon and tooltip
+  - Warning alert below the reservations table explains why highlighted rows are excluded from KEA config and how to fix them (assign a MAC address to the interface in NetBox)
+  - KEA Reservations Configuration JSON panel now correctly reflects only valid (MAC-bearing) reservations
+
+- **Stork Server Form Default**
+  - `stork_version` field on `StorkServerForm` now pre-populates with `"stable"` when creating a new Stork server instance
 
 ### Changed
 - **Dynamic Control Socket Form Fields**
@@ -10,6 +27,7 @@
 
 ### Fixed
 - Orphaned "HTTP Socket" label remained visible in the DHCP Server edit form when "Unix" was selected as the control socket type
+- Reservations without a MAC address on their interface no longer cause `kea-dhcp4.service` config validation to fail
 
 ## 0.5.3 (2026-03-18)
 
