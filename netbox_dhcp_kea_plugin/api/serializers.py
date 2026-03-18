@@ -411,6 +411,7 @@ class StorkServerSerializer(NetBoxModelSerializer):
             "db_host",
             "db_port",
             "db_name",
+            "db_user",
             "db_ssl_mode",
             "enable_metrics",
             "grafana_url",

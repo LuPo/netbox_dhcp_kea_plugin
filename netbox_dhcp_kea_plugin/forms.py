@@ -1537,7 +1537,8 @@ class StorkServerForm(NetBoxModelForm):
         ),
         FieldSet(
             InlineFields("db_host", "db_port", label="Host / Port"),
-            InlineFields("db_name", "db_ssl_mode", label="Database / SSL Mode"),
+            InlineFields("db_name", "db_user", label="Database / User"),
+            "db_ssl_mode",
             name="Database",
         ),
         FieldSet(
@@ -1564,6 +1565,7 @@ class StorkServerForm(NetBoxModelForm):
             "db_host",
             "db_port",
             "db_name",
+            "db_user",
             "db_ssl_mode",
             "enable_metrics",
             "grafana_url",
@@ -1598,6 +1600,7 @@ class StorkServerImportForm(NetBoxModelImportForm):
             "db_host",
             "db_port",
             "db_name",
+            "db_user",
             "db_ssl_mode",
             "enable_metrics",
             "grafana_url",

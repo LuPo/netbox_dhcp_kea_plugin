@@ -2430,6 +2430,11 @@ class StorkServer(NetBoxModel):
         default="stork",
         help_text="PostgreSQL database name",
     )
+    db_user = models.CharField(
+        max_length=100,
+        default="stork",
+        help_text="PostgreSQL database user name",
+    )
     DB_SSL_MODE_CHOICES = (
         ("disable", "Disable"),
         ("require", "Require"),
@@ -2518,6 +2523,8 @@ class StorkServer(NetBoxModel):
         lines.append(f"STORK_DATABASE_PORT={self.db_port}")
         lines.append("### the name of a database")
         lines.append(f"STORK_DATABASE_NAME={self.db_name}")
+        lines.append("### the user name for connecting to the database")
+        lines.append(f"STORK_DATABASE_USER_NAME={self.db_user}")
         lines.append("### the SSL mode for connecting to the database")
         lines.append(f"STORK_DATABASE_SSLMODE={self.db_ssl_mode}")
         lines.append("")

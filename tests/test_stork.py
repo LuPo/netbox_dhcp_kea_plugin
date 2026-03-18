@@ -43,6 +43,7 @@ def stork_server(db, stork_server_ip):
         db_host="db.example.com",
         db_port=5432,
         db_name="stork",
+        db_user="stork_user",
         db_ssl_mode="disable",
         enable_metrics=True,
         grafana_url="http://grafana.example.com:3000",
@@ -69,6 +70,7 @@ def stork_server_tls(db):
         db_host="secure-db.example.com",
         db_port=5433,
         db_name="stork_prod",
+        db_user="stork_prod_user",
         db_ssl_mode="verify-full",
         enable_metrics=False,
         log_level="WARN",
@@ -185,6 +187,7 @@ class TestStorkServerModel:
         assert stork_server.db_host == "db.example.com"
         assert stork_server.db_port == 5432
         assert stork_server.db_name == "stork"
+        assert stork_server.db_user == "stork_user"
         assert stork_server.db_ssl_mode == "disable"
         assert stork_server.enable_metrics is True
         assert stork_server.grafana_url == "http://grafana.example.com:3000"
@@ -261,6 +264,7 @@ class TestStorkServerModel:
         assert server.db_host == "localhost"
         assert server.db_port == 5432
         assert server.db_name == "stork"
+        assert server.db_user == "stork"
         assert server.db_ssl_mode == "disable"
         assert server.enable_metrics is False
         assert server.grafana_url == ""
@@ -319,6 +323,7 @@ class TestStorkServerEnvContent:
         assert "STORK_DATABASE_HOST=db.example.com" in env
         assert "STORK_DATABASE_PORT=5432" in env
         assert "STORK_DATABASE_NAME=stork" in env
+        assert "STORK_DATABASE_USER_NAME=stork_user" in env
         assert "STORK_DATABASE_SSLMODE=disable" in env
 
     def test_env_contains_rest_settings(self, stork_server):
@@ -1332,6 +1337,7 @@ class TestStorkForms:
             "db_host": "localhost",
             "db_port": 5432,
             "db_name": "stork",
+            "db_user": "stork",
             "db_ssl_mode": "disable",
             "enable_metrics": False,
             "default_agent_registration": "agent-token",
