@@ -2457,8 +2457,9 @@ class StorkServer(NetBoxModel):
     # --- Versioning ---
     stork_version = models.CharField(
         max_length=20,
+        default="stable",
         blank=True,
-        help_text="Installed Stork server version (e.g., 1.18.0)",
+        help_text="Stork server version (e.g., 1.18.0 or 'stable')",
     )
 
     # --- Logging ---

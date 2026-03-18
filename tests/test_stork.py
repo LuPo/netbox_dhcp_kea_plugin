@@ -265,7 +265,7 @@ class TestStorkServerModel:
         assert server.enable_metrics is False
         assert server.grafana_url == ""
         assert server.default_agent_registration == "agent-token"
-        assert server.stork_version == ""
+        assert server.stork_version == "stable"
         assert server.log_level == "INFO"
 
     def test_log_level_choices(self, db):
