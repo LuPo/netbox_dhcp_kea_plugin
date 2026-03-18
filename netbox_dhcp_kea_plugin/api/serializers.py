@@ -205,6 +205,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
     service = ServiceSerializer(nested=True, read_only=True)
     option_data = OptionDataSerializer(many=True, read_only=True)
     ha_relationship = serializers.SerializerMethodField()
+    ha_url = serializers.SerializerMethodField()
     stork_agent_group = NestedStorkAgentGroupSerializer(read_only=True)
 
     class Meta:
@@ -222,6 +223,9 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "option_data",
             "ha_relationship",
             "ha_role",
+            "ha_address",
+            "ha_port",
+            "ha_tls",
             "ha_url",
             "ha_auto_failover",
             "ha_basic_auth_user",
@@ -242,6 +246,9 @@ class DHCPServerSerializer(NetBoxModelSerializer):
         super().__init__(*args, **kwargs)
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             self.fields.pop("stork_agent_group", None)
+
+    def get_ha_url(self, obj):
+        return obj.ha_url
 
     def get_ha_relationship(self, obj):
         if obj.ha_relationship:

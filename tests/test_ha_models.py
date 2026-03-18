@@ -116,7 +116,8 @@ class TestDHCPServerHAFields:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         assert server.ha_relationship == relationship
@@ -138,7 +139,8 @@ class TestDHCPServerHAFields:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         assert server.ha_role == "standby"
@@ -155,7 +157,8 @@ class TestDHCPServerHAFields:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="secondary",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         assert server.ha_role == "secondary"
@@ -172,7 +175,8 @@ class TestDHCPServerHAFields:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="backup",
-            ha_url="http://192.168.1.3:8000/",
+            ha_address="192.168.1.3",
+            ha_port=8000,
             ha_auto_failover=False,
         )
 
@@ -191,7 +195,8 @@ class TestDHCPServerHAFields:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
             ha_basic_auth_user="kea-admin",
             ha_basic_auth_password="secret123",
         )
@@ -228,14 +233,16 @@ class TestHARelationshipValidation:
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         # Add standby server
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Validation should pass
@@ -253,7 +260,8 @@ class TestHARelationshipValidation:
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         # Should be invalid - missing standby
@@ -271,13 +279,15 @@ class TestHARelationshipValidation:
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="secondary",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         assert relationship.is_valid_configuration() is True
@@ -307,13 +317,15 @@ class TestDHCPServerHAConfiguration:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         ha_config = server1.get_ha_config()
@@ -338,19 +350,22 @@ class TestDHCPServerHAConfiguration:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         server2 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         server3 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="backup",
-            ha_url="http://192.168.1.3:8000/",
+            ha_address="192.168.1.3",
+            ha_port=8000,
             ha_auto_failover=False,
         )
 
@@ -379,7 +394,8 @@ class TestDHCPServerHAConfiguration:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         ha_config = server.get_ha_config()
@@ -403,7 +419,8 @@ class TestDHCPServerHAConfiguration:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         ha_config = server.get_ha_config()
@@ -422,7 +439,8 @@ class TestDHCPServerHAConfiguration:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
             ha_basic_auth_user="admin",
             ha_basic_auth_password="secret",
         )
@@ -445,7 +463,8 @@ class TestDHCPServerHAConfiguration:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         ha_config = server.get_ha_config()
@@ -471,13 +490,15 @@ class TestDHCPServerToKeaDictWithHA:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         kea_config = server1.to_kea_dict()
@@ -506,7 +527,8 @@ class TestDHCPServerToKeaDictWithHA:
         server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         kea_config = server.to_kea_dict()
@@ -547,13 +569,15 @@ class TestHARelationshipToKeaDict:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         server2 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         kea_dict = relationship.to_kea_dict(this_server=server1)
@@ -580,13 +604,15 @@ class TestHARelationshipToKeaDict:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="secondary",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         kea_dict = relationship.to_kea_dict(this_server=server1)
@@ -614,13 +640,15 @@ class TestHASyncFunctionality:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         standby_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Standby should return primary
@@ -647,13 +675,15 @@ class TestHASyncFunctionality:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         standby_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         assert primary_server.is_ha_primary() is True
@@ -677,13 +707,15 @@ class TestHASyncFunctionality:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         standby_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Create DHCP Subnet on primary
@@ -729,13 +761,15 @@ class TestHASyncFunctionality:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         standby_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Create DHCP Subnet on primary
@@ -773,13 +807,15 @@ class TestHARelationshipHelpers:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         assert relationship.get_primary_server() == primary_server
@@ -796,13 +832,15 @@ class TestHARelationshipHelpers:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Create DHCP Subnets on primary
@@ -829,13 +867,15 @@ class TestHARelationshipHelpers:
         old_primary = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         new_primary = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Create DHCP Subnet on old primary
@@ -873,7 +913,8 @@ class TestHARoleChangeProtection:
         primary_server = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         # Create DHCP Subnet
@@ -903,13 +944,15 @@ class TestHARoleChangeProtection:
         old_primary = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
 
         new_primary = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         # Create DHCP Subnet
@@ -1118,12 +1161,14 @@ class TestToKeaDictHAHooksLibraryPaths:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         group = HookGroup.objects.create(
@@ -1152,12 +1197,14 @@ class TestToKeaDictHAHooksLibraryPaths:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         kea_config = server1.to_kea_dict()
@@ -1180,12 +1227,14 @@ class TestToKeaDictHAHooksLibraryPaths:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         ha_hook = Hook.objects.create(
@@ -1220,12 +1269,14 @@ class TestToKeaDictHAHooksLibraryPaths:
         server1 = dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="primary",
-            ha_url="http://192.168.1.1:8000/",
+            ha_address="192.168.1.1",
+            ha_port=8000,
         )
         dhcp_server_factory(
             ha_relationship=relationship,
             ha_role="standby",
-            ha_url="http://192.168.1.2:8000/",
+            ha_address="192.168.1.2",
+            ha_port=8000,
         )
 
         lease_hook = Hook.objects.create(

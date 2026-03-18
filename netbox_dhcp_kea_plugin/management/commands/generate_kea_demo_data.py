@@ -158,7 +158,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  - Deleted {count} Subnet objects")
 
         # Clear HA relationships from demo servers before deleting
-        demo_servers.update(ha_relationship=None, ha_role="", ha_url="")
+        demo_servers.update(ha_relationship=None, ha_role="", ha_address="", ha_port=8080, ha_tls=False)
 
         count = DHCPServer.objects.filter(tags=demo_tag).count()
         DHCPServer.objects.filter(tags=demo_tag).delete()
@@ -1252,7 +1252,9 @@ class Command(BaseCommand):
                 server.refresh_from_db()
                 server.ha_relationship = ha_relationship
                 server.ha_role = role
-                server.ha_url = f"http://{server.ip_address.address.ip}:8000/"
+                server.ha_address = str(server.ip_address.address.ip)
+                server.ha_port = 8080
+                server.ha_tls = False
                 server.save()
                 self.stdout.write(f"  Assigned {server.name} to {ha_relationship.name} as {role}")
             except Exception as e:

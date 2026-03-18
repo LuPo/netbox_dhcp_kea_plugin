@@ -269,7 +269,9 @@ class DHCPServerTable(NetBoxTable):
     service = tables.Column(linkify=True, verbose_name="Application Service")
     ha_relationship = tables.Column(linkify=True, verbose_name="HA Relationship")
     ha_role = RawValueColumn(field_name="ha_role", verbose_name="HA Role")
-    ha_url = tables.Column(verbose_name="HA URL")
+    ha_address = tables.Column(verbose_name="HA Address")
+    ha_port = tables.Column(verbose_name="HA Port")
+    ha_tls = BooleanColumn(verbose_name="HA TLS")
     ha_auto_failover = BooleanColumn(verbose_name="HA Auto Failover")
     ctrl_socket_http_enabled = BooleanColumn(verbose_name="HTTP Socket")
     ctrl_socket_unix_enabled = BooleanColumn(verbose_name="Unix Socket")
@@ -286,7 +288,9 @@ class DHCPServerTable(NetBoxTable):
             "service",
             "ha_relationship",
             "ha_role",
-            "ha_url",
+            "ha_address",
+            "ha_port",
+            "ha_tls",
             "ha_auto_failover",
             "ctrl_socket_http_enabled",
             "ctrl_socket_unix_enabled",

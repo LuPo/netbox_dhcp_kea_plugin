@@ -162,7 +162,7 @@ class SubnetViewSet(NetBoxModelViewSet):
                 "server": {
                     "name": server.name,
                     "url": server.ha_url
-                    or (f"http://{server.ip_address.address.ip}:8000/" if server.ip_address else None),
+                    or (f"http://{server.ip_address.address.ip}:8080/" if server.ip_address else None),
                 },
                 "relay_targets": relay_targets,
             }
@@ -252,7 +252,7 @@ class PrefixRelayConfigView(APIView):
                     "server": {
                         "name": server.name,
                         "url": server.ha_url
-                        or (f"http://{server.ip_address.address.ip}:8000/" if server.ip_address else None),
+                        or (f"http://{server.ip_address.address.ip}:8080/" if server.ip_address else None),
                     },
                     "relay_targets": relay_targets,
                 },

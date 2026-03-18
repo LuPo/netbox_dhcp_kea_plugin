@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.5.3 (2026-03-18)
+
+### Added
+- **HA Address/Port/TLS Fields**
+  - Split `ha_url` (URLField) into three separate fields on `DHCPServer`:
+    - `ha_address` — IP address for HA communication (CharField)
+    - `ha_port` — Port for HA communication (PositiveIntegerField, default: 8080)
+    - `ha_tls` — Use TLS/HTTPS for HA communication (BooleanField, default: False)
+  - New `ha_url` read-only property reconstructs the full URL (e.g. `http://192.168.1.1:8080/`) from the three fields
+  - KEA configuration JSON output (`high-availability` peer `url`) remains a full URL — no downstream config changes required
+
+- **IP Address Validation**
+  - `ha_address` is validated as a valid IP address (IPv4 or IPv6) using Python's `ipaddress` module
+  - `ctrl_socket_http_address` is validated as a valid IP address when provided
+
+- **Port Collision Validation**
+  - `ha_port` and `ctrl_socket_http_port` are validated to be different when the HTTP control socket is enabled, preventing accidental port conflicts on the same server
+
+- **Form Layout Improvements**
+  - HA fields use `InlineFields` for compact layout: `ha_address` and `ha_port` inline as "HA Peer", `ha_tls` and `ha_auto_failover` inline as "HA Options"
+
+### Changed
+- **BREAKING**: `ha_url` field removed from database — replaced by `ha_address`, `ha_port`, `ha_tls`
+  - Migration `0018` parses existing `ha_url` values with `urllib.parse.urlparse` to populate the new fields automatically
+  - API serializer exposes `ha_address`, `ha_port`, `ha_tls` as writable fields and `ha_url` as a read-only computed field
+  - Import form accepts `ha_address`, `ha_port`, `ha_tls` instead of `ha_url`
+  - Table columns updated: `ha_address`, `ha_port`, `ha_tls` replace `ha_url`
+- Default HA port changed from 8000 to 8080 (including fallback URLs in relay-config endpoints)
+- DHCP Server detail template now shows HA Address, HA Port, HA TLS (badge), computed HA URL, and HA Auto Failover
+
+## 0.5.2 (2026-03-18)
+
+### Added
+- **Control Socket Support for DHCP Servers**
+  - New `ctrl_socket_http_enabled` (BooleanField), `ctrl_socket_http_address` (CharField, default `127.0.0.1`), and `ctrl_socket_http_port` (PositiveIntegerField, default `8000`) fields for HTTP control socket configuration
+  - New `ctrl_socket_unix_enabled` (BooleanField) and `ctrl_socket_unix_path` (CharField, default `/var/run/kea/kea-dhcp4-socket`) fields for Unix domain socket configuration
+  - `DHCPServer.get_control_sockets()` method generates KEA-compatible `control-sockets` configuration list
+  - `to_kea_dict()` now includes `control-sockets` in the generated `Dhcp4` configuration when sockets are enabled
+  - Model validation: required fields enforced when a socket type is enabled (address + port for HTTP; path for Unix)
+  - Full integration across serializers, forms (edit, import, filter), filtersets, tables, and detail template
+  - Database migration (`0017`) adds the control socket fields to `DHCPServer`
+  - Comprehensive test suite (`test_control_sockets.py`) covering model defaults, validation, `to_kea_dict` output, API, forms, filters, and tables
+
+- **Stork Integration Tests**
+  - Added comprehensive test coverage for Stork server and agent group models, forms, API, and configuration generation
+  - Removed unused import from migration and fixed stray return in `test_clientclass_redirect.py`
+
+### Changed
+- **Form Layout with InlineFields**
+  - Refactored form `fieldsets` across the plugin to use `InlineFields` for grouping related inputs:
+    - `DHCPServerForm`: HTTP socket address/port, HA credentials
+    - `StorkServerForm`: DB host/port, version/log level
+    - `StorkAgentGroupForm`: Prometheus address/port, version/log level
+    - `HookForm`: library name / standard flag
+  - Added/adjusted `tags` fieldsets on all applicable forms
+  - `fieldsets` placed at class level (not inside `Meta`) to match NetBox rendering expectations
+  - Updated tests to collect field names from both top-level strings and `InlineFields` groups
+
 ## 0.5.1 (2026-03-18)
 
 ### Added

@@ -861,7 +861,8 @@ class TestHAServerRestrictionChecks:
             status="active",
             ha_relationship=ha,
             ha_role="primary",
-            ha_url="http://10.99.0.1:8000/",
+            ha_address="10.99.0.1",
+            ha_port=8000,
         )
         standby = DHCPServer.objects.create(
             name="HA-Standby",
@@ -870,7 +871,8 @@ class TestHAServerRestrictionChecks:
             status="active",
             ha_relationship=ha,
             ha_role="standby",
-            ha_url="http://10.99.0.2:8000/",
+            ha_address="10.99.0.2",
+            ha_port=8000,
         )
 
         assert standby.get_unreachable_subnet_restrictions() == []
@@ -898,7 +900,8 @@ class TestHAServerRestrictionChecks:
             status="active",
             ha_relationship=ha,
             ha_role="primary",
-            ha_url="http://10.98.0.1:8000/",
+            ha_address="10.98.0.1",
+            ha_port=8000,
         )
         DHCPServer.objects.create(
             name="HA-Standby-2",
@@ -907,7 +910,8 @@ class TestHAServerRestrictionChecks:
             status="active",
             ha_relationship=ha,
             ha_role="standby",
-            ha_url="http://10.98.0.2:8000/",
+            ha_address="10.98.0.2",
+            ha_port=8000,
         )
 
         cc = ClientClass.objects.create(

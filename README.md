@@ -22,7 +22,7 @@ This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configur
 
 ### Core Models
 
-- **DHCP Servers**: Manage ISC KEA DHCP server instances linked to NetBox IP addresses
+- **DHCP Servers**: Manage ISC KEA DHCP server instances linked to NetBox IP addresses, with control socket and HA peer configuration
 - **Vendor Option Spaces**: Define vendor-specific option spaces with enterprise IDs
 - **Option Definitions**: Create custom DHCP option definitions (KEA `option-def`)
 - **Option Data**: Configure DHCP option values (KEA `option-data`)
@@ -46,11 +46,21 @@ This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configur
 
 - Configure HA relationships with multiple modes: hot-standby, load-balancing, passive-backup
 - Define server roles within HA clusters (primary, secondary, standby, backup)
+- HA peer connection split into discrete fields: address (IP), port (default: 8080), and TLS toggle — the full URL is reconstructed automatically for KEA config output
 - Automatic configuration sync from primary to all HA peers
 - HA-aware KEA config generation ensures consistent configurations across all peers
 - Protection against orphaned configs (cannot delete/demote primary with existing configs)
 - Easy config migration when switching primary servers
 - UI intelligently hides config management options for non-primary servers
+
+### Control Socket Support
+
+DHCP servers can be configured with KEA control sockets for management access:
+
+- **HTTP control socket**: Address (validated as IP) and port for the HTTP control agent
+- **Unix control socket**: File path for the Unix domain socket
+- **Validation**: HA port and HTTP control socket port are validated to be different when both are active, preventing accidental port conflicts
+- **IP validation**: Both `ha_address` and `ctrl_socket_http_address` are validated as proper IP addresses (IPv4 or IPv6)
 
 ### DHCP Relay Support
 
@@ -73,7 +83,7 @@ The plugin provides DHCP relay target information for configuring `ip helper-add
 
 | NetBox Version | Plugin Version |
 |----------------|----------------|
-|     4.5        |      0.2.0     |
+|     4.5        |      0.5.3     |
 
 ## Installation
 
@@ -140,12 +150,13 @@ python manage.py migrate
 ### Quick Start
 
 1. **Create DHCP Servers**: Navigate to DHCP KEA > DHCP Servers and add your KEA server instances
-2. **Configure HA** (optional): Set up HA relationships and assign server roles
-3. **Configure Stork** (optional): Set up Stork servers and agent groups for monitoring
-4. **Define Options**: Create option definitions for vendor-specific options, or use standard DHCP options
-5. **Create Option Data**: Define option values to apply to client classes or prefixes
-6. **Set Up Client Classes**: Configure client classification rules with KEA test expressions
-7. **Configure Prefixes**: Link NetBox Prefixes to DHCP servers with pools and options
+2. **Configure HA** (optional): Set up HA relationships, assign server roles, and configure HA peer address/port/TLS
+3. **Configure Control Sockets** (optional): Enable HTTP and/or Unix control sockets on DHCP servers
+4. **Configure Stork** (optional): Set up Stork servers and agent groups for monitoring
+5. **Define Options**: Create option definitions for vendor-specific options, or use standard DHCP options
+6. **Create Option Data**: Define option values to apply to client classes or prefixes
+7. **Set Up Client Classes**: Configure client classification rules with KEA test expressions
+8. **Configure Prefixes**: Link NetBox Prefixes to DHCP servers with pools and options
 
 ### DHCP Relay Configuration
 
@@ -169,7 +180,7 @@ Response includes:
     "dhcp_config": {
         "server": {
             "name": "kea-dhcp-primary",
-            "url": "http://192.168.1.10:8000/"
+            "url": "http://192.168.1.10:8080/"
         },
         "relay_targets": ["192.168.1.10", "192.168.1.11"]
     }
@@ -195,7 +206,7 @@ Response:
     "dhcp_config": {
         "server": {
             "name": "kea-dhcp-primary",
-            "url": "http://192.168.1.10:8000/"
+            "url": "http://192.168.1.10:8080/"
         },
         "relay_targets": ["192.168.1.10", "192.168.1.11"]
     }
@@ -246,7 +257,25 @@ This returns a complete `Dhcp4` configuration dictionary including:
 - Global options
 - Client class definitions
 - Subnet configurations with pools
+- Control sockets (if configured)
 - HA configuration (if applicable)
+
+#### DHCP Server HA Fields
+
+When creating or updating DHCP servers via the API, HA peer connection details are specified as discrete fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ha_address` | string | `""` | IP address for HA communication (validated as IPv4/IPv6) |
+| `ha_port` | integer | `8080` | Port for HA communication |
+| `ha_tls` | boolean | `false` | Use TLS (HTTPS) for HA communication |
+| `ha_url` | string | *(read-only)* | Computed URL from address/port/TLS (e.g. `http://192.168.1.1:8080/`) |
+
+The `ha_url` field is read-only in API responses — it is reconstructed from `ha_address`, `ha_port`, and `ha_tls`. The KEA configuration JSON (`high-availability` peer `url`) uses this computed URL, so downstream KEA configs require no changes.
+
+**Validation rules:**
+- `ha_address` and `ctrl_socket_http_address` must be valid IP addresses when provided
+- `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled
 
 ### Stork Configuration Generation
 

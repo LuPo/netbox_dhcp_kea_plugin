@@ -1,3 +1,5 @@
+import ipaddress as ipaddress_module
+
 from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
 from django.contrib.contenttypes.models import ContentType
@@ -234,9 +236,24 @@ class DHCPServer(NetBoxModel):
         blank=True,
         help_text="Role in the HA relationship",
     )
-    ha_url = models.URLField(
+    ha_address = models.CharField(
+        max_length=255,
         blank=True,
-        help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
+        default="",
+        verbose_name="HA Address",
+        help_text="IP address for HA communication (e.g., 192.168.1.1)",
+    )
+    ha_port = models.PositiveIntegerField(
+        default=8080,
+        null=True,
+        blank=True,
+        verbose_name="HA Port",
+        help_text="Port for HA communication (default: 8080)",
+    )
+    ha_tls = models.BooleanField(
+        default=False,
+        verbose_name="HA TLS",
+        help_text="Use TLS (HTTPS) for HA communication",
     )
     ha_auto_failover = models.BooleanField(default=True, help_text="Enable automatic failover for this server in HA")
     ha_basic_auth_user = models.CharField(
@@ -374,16 +391,40 @@ class DHCPServer(NetBoxModel):
             service_to_delete.delete()
         return result
 
+    @property
+    def ha_url(self):
+        """Reconstruct the full HA URL from address, port, and TLS fields.
+
+        Returns:
+            str: Full URL like 'http://192.168.1.1:8080/' or empty string if no address set.
+        """
+        if not self.ha_address:
+            return ""
+        scheme = "https" if self.ha_tls else "http"
+        port = self.ha_port or 8080
+        return f"{scheme}://{self.ha_address}:{port}/"
+
     def clean(self):
-        """Validate HA configuration."""
+        """Validate HA and control socket configuration."""
         super().clean()
 
-        # If ha_relationship is set, ha_role and ha_url are required
+        # If ha_relationship is set, ha_role and ha_address are required
         if self.ha_relationship:
             if not self.ha_role:
                 raise ValidationError({"ha_role": "HA role is required when server is part of an HA relationship."})
-            if not self.ha_url:
-                raise ValidationError({"ha_url": "HA URL is required when server is part of an HA relationship."})
+            if not self.ha_address:
+                raise ValidationError(
+                    {"ha_address": "HA address is required when server is part of an HA relationship."}
+                )
+            if not self.ha_port:
+                raise ValidationError({"ha_port": "HA port is required when server is part of an HA relationship."})
+
+        # Validate ha_address is a valid IP address (when provided)
+        if self.ha_address:
+            try:
+                ipaddress_module.ip_address(self.ha_address)
+            except ValueError:
+                raise ValidationError({"ha_address": "HA address must be a valid IP address (e.g., 192.168.1.1)."})
 
         # Validate control socket configuration
         if self.ctrl_socket_http_enabled:
@@ -395,6 +436,30 @@ class DHCPServer(NetBoxModel):
                 raise ValidationError(
                     {"ctrl_socket_http_port": "HTTP socket port is required when HTTP control socket is enabled."}
                 )
+
+        # Validate ctrl_socket_http_address is a valid IP address (when provided)
+        if self.ctrl_socket_http_address:
+            try:
+                ipaddress_module.ip_address(self.ctrl_socket_http_address)
+            except ValueError:
+                raise ValidationError(
+                    {"ctrl_socket_http_address": "HTTP socket address must be a valid IP address (e.g., 127.0.0.1)."}
+                )
+
+        # Validate HA port and HTTP socket port are different (when both are actively in use)
+        if (
+            self.ctrl_socket_http_enabled
+            and self.ha_port
+            and self.ctrl_socket_http_port
+            and self.ha_port == self.ctrl_socket_http_port
+        ):
+            raise ValidationError(
+                {
+                    "ha_port": "HA port must be different from the HTTP control socket port.",
+                    "ctrl_socket_http_port": "HTTP control socket port must be different from the HA port.",
+                }
+            )
+
         if self.ctrl_socket_unix_enabled:
             if not self.ctrl_socket_unix_path:
                 raise ValidationError(

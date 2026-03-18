@@ -277,10 +277,18 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Role in the HA relationship: primary, secondary, standby, or backup",
     )
-    ha_url = forms.URLField(
+    ha_address = forms.CharField(
+        max_length=255,
         required=False,
-        assume_scheme="https",
-        help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
+        help_text="IP address for HA communication (e.g., 192.168.1.1)",
+    )
+    ha_port = forms.IntegerField(
+        required=False,
+        help_text="Port for HA communication (default: 8080)",
+    )
+    ha_tls = forms.BooleanField(
+        required=False,
+        help_text="Use TLS (HTTPS) for HA communication",
     )
     ctrl_socket_http_enabled = forms.BooleanField(
         required=False,
@@ -321,7 +329,9 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "service_template",
             "ha_relationship",
             "ha_role",
-            "ha_url",
+            "ha_address",
+            "ha_port",
+            "ha_tls",
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
@@ -576,11 +586,7 @@ class DHCPServerForm(NetBoxModelForm):
         queryset=IPAddress.objects.all(),
         help_text="IP address of the DHCP server (from NetBox IPAM)",
     )
-    ha_url = forms.URLField(
-        required=False,
-        assume_scheme="https",
-        help_text="URL for HA communication (e.g., http://192.168.1.1:8000/)",
-    )
+
     service_template = DynamicModelChoiceField(
         queryset=ServiceTemplate.objects.all(),
         query_params={
@@ -638,8 +644,8 @@ class DHCPServerForm(NetBoxModelForm):
         FieldSet(
             "ha_relationship",
             "ha_role",
-            "ha_url",
-            "ha_auto_failover",
+            InlineFields("ha_address", "ha_port", label="HA Peer"),
+            InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
             name="High Availability",
         ),
         FieldSet(
@@ -665,7 +671,9 @@ class DHCPServerForm(NetBoxModelForm):
             "ctrl_socket_unix_path",
             "ha_relationship",
             "ha_role",
-            "ha_url",
+            "ha_address",
+            "ha_port",
+            "ha_tls",
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",

@@ -84,7 +84,12 @@
                     </tr>
                     <tr>
                         <th>HA Auto Failover</th>
-                        <td>{% if object.ha_auto_failover %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if object.ha_auto_failover %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endif %}
                     <tr>
@@ -130,7 +135,7 @@
                             <span class="badge bg-success">Enabled</span>
                             <br><small class="text-muted">{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</small>
                             {% else %}
-                            <span class="text-muted">Disabled</span>
+                            <span class="text-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -138,10 +143,9 @@
                         <th>Unix Control Socket</th>
                         <td>
                             {% if object.ctrl_socket_unix_enabled %}
-                            <span class="badge bg-success">Enabled</span>
-                            <br><small class="text-muted">{{ object.ctrl_socket_unix_path }}</small>
+                            {{ object.ctrl_socket_unix_path }}
                             {% else %}
-                            <span class="text-muted">Disabled</span>
+                            <span class="text-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>
