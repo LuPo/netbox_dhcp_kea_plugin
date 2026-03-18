@@ -695,23 +695,36 @@ class TestControlSocketForms:
         """Test that DHCPServerForm has a 'Control Sockets' fieldset."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.Meta.fieldsets
+        fieldsets = DHCPServerForm.fieldsets
         fieldset_names = [fs.name for fs in fieldsets]
         assert "Control Sockets" in fieldset_names
 
     def test_control_sockets_fieldset_contains_correct_fields(self):
-        """Test that the Control Sockets fieldset contains all 5 fields."""
+        """Test that the Control Sockets fieldset contains all 5 fields.
+
+        Some fields are grouped via InlineFields, so we collect field names
+        from both top-level strings and InlineFields.fields tuples.
+        """
+        from utilities.forms.rendering import InlineFields
+
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.Meta.fieldsets
+        fieldsets = DHCPServerForm.fieldsets
         ctrl_fieldset = None
         for fs in fieldsets:
             if fs.name == "Control Sockets":
                 ctrl_fieldset = fs
                 break
         assert ctrl_fieldset is not None
-        # FieldSet stores fields in .items attribute (tuple of field names)
-        field_names = list(ctrl_fieldset.items)
+
+        # Collect all field names, including those nested inside InlineFields
+        field_names = []
+        for item in ctrl_fieldset.items:
+            if isinstance(item, str):
+                field_names.append(item)
+            elif isinstance(item, InlineFields):
+                field_names.extend(item.fields)
+
         assert "ctrl_socket_http_enabled" in field_names
         assert "ctrl_socket_http_address" in field_names
         assert "ctrl_socket_http_port" in field_names
@@ -719,10 +732,10 @@ class TestControlSocketForms:
         assert "ctrl_socket_unix_path" in field_names
 
     def test_control_sockets_fieldset_order(self):
-        """Test that Control Sockets fieldset comes after Hook Libraries and before HA."""
+        """Test that Control Sockets fieldset comes after Hook Libraries and before Stork/HA."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.Meta.fieldsets
+        fieldsets = DHCPServerForm.fieldsets
         fieldset_names = [fs.name for fs in fieldsets]
         hook_idx = fieldset_names.index("Hook Libraries")
         ctrl_idx = fieldset_names.index("Control Sockets")

@@ -16,7 +16,7 @@ from utilities.forms.fields import (
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
 )
-from utilities.forms.rendering import FieldSet
+from utilities.forms.rendering import FieldSet, InlineFields
 
 from .models import (
     ClientClass,
@@ -446,6 +446,8 @@ class VendorOptionSpaceForm(NetBoxModelForm):
         help_text="Manufacturer/vendor associated with this option space",
     )
 
+    fieldsets = (FieldSet("name", "enterprise_id", "manufacturer", "description", "tags", name="Vendor Option Space"),)
+
     class Meta:
         model = VendorOptionSpace
         fields = ("name", "enterprise_id", "manufacturer", "description", "tags")
@@ -456,6 +458,18 @@ class OptionDefinitionForm(NetBoxModelForm):
         queryset=VendorOptionSpace.objects.all(),
         required=False,
         help_text="Vendor option space this definition belongs to",
+    )
+
+    fieldsets = (
+        FieldSet(
+            "name",
+            InlineFields("code", "option_type", label="Code & Type"),
+            InlineFields("option_space", "vendor_option_space", label="Option Space"),
+            "description",
+            "tags",
+            name="Option Definition",
+        ),
+        FieldSet("is_array", "encapsulate", "record_types", name="Advanced"),
     )
 
     class Meta:
@@ -512,6 +526,19 @@ class OptionDataForm(NetBoxModelForm):
             "vendor_option_space_id": "$vendor_option_space",
         },
         help_text="Option definition - filtered by vendor option space (or standard/custom if none selected)",
+    )
+
+    fieldsets = (
+        FieldSet(
+            "distinctive_name",
+            "delivery_type",
+            "vendor_option_space",
+            "definition",
+            "option_space",
+            name="Option Selection",
+        ),
+        FieldSet("data", InlineFields("always_send", "csv_format", label="Flags"), name="Value"),
+        FieldSet("description", "tags", name="Metadata"),
     )
 
     class Meta:
@@ -588,6 +615,39 @@ class DHCPServerForm(NetBoxModelForm):
         help_text="Stork agent group configuration for this DHCP server",
     )
 
+    fieldsets = (
+        FieldSet(
+            "name",
+            "description",
+            "ip_address",
+            "status",
+            "service_template",
+            "tags",
+            name="General",
+        ),
+        FieldSet("option_data", "client_classes", name="DHCP Configuration"),
+        FieldSet("hook_groups", name="Hook Libraries"),
+        FieldSet(
+            "ctrl_socket_http_enabled",
+            InlineFields("ctrl_socket_http_address", "ctrl_socket_http_port", label="HTTP Socket"),
+            "ctrl_socket_unix_enabled",
+            "ctrl_socket_unix_path",
+            name="Control Sockets",
+        ),
+        FieldSet("stork_agent_group", name="Stork Monitoring"),
+        FieldSet(
+            "ha_relationship",
+            "ha_role",
+            "ha_url",
+            "ha_auto_failover",
+            name="High Availability",
+        ),
+        FieldSet(
+            InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
+            name="HA Authentication",
+        ),
+    )
+
     class Meta:
         model = DHCPServer
         fields = (
@@ -610,30 +670,6 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "tags",
-        )
-        fieldsets = (
-            FieldSet(
-                "name",
-                "description",
-                "ip_address",
-                "status",
-                "service_template",
-                "option_data",
-                "stork_agent_group",
-                "tags",
-                name="General",
-            ),
-            FieldSet("hook_groups", name="Hook Libraries"),
-            FieldSet(
-                "ctrl_socket_http_enabled",
-                "ctrl_socket_http_address",
-                "ctrl_socket_http_port",
-                "ctrl_socket_unix_enabled",
-                "ctrl_socket_unix_path",
-                name="Control Sockets",
-            ),
-            FieldSet("ha_relationship", "ha_role", "ha_url", "ha_auto_failover", name="High Availability"),
-            FieldSet("ha_basic_auth_user", "ha_basic_auth_password", name="HA Authentication"),
         )
         widgets = {
             "ha_basic_auth_password": forms.PasswordInput(render_value=True),
@@ -737,6 +773,13 @@ class ClientClassForm(NetBoxModelForm):
             "tags",
         )
 
+    fieldsets = (
+        FieldSet("name", "test_expression", "description", "tags", name="Client Class"),
+        FieldSet("servers", "option_data", name="Assignments"),
+        FieldSet("only_in_additional_list", name="Evaluation"),
+        FieldSet("next_server", "server_hostname", "boot_file_name", name="Boot Options"),
+    )
+
     def __init__(self, *args, **kwargs):
         # Extract request if passed (NetBox pattern)
         request = kwargs.pop("request", None)
@@ -833,7 +876,10 @@ class SubnetForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet("prefix", "server", name="Prefix Assignment"),
-        FieldSet("valid_lifetime", "max_lifetime", name="Lease Timing"),
+        FieldSet(
+            InlineFields("valid_lifetime", "max_lifetime", label="Lifetime"),
+            name="Lease Timing",
+        ),
         FieldSet("routers_option_offset", "option_data", name="DHCP Options"),
         FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
     )
@@ -1103,7 +1149,7 @@ class SubnetPoolForm(NetBoxModelForm):
         FieldSet("subnet", "ip_range", name="Pool Assignment"),
         FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
         FieldSet("option_data", name="DHCP Options"),
-        FieldSet("description", name="Description"),
+        FieldSet("description", "tags", name="Metadata"),
     )
 
     class Meta:
@@ -1198,6 +1244,22 @@ class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
 
 # DHCPHARelationship Forms
 class DHCPHARelationshipForm(NetBoxModelForm):
+    fieldsets = (
+        FieldSet("name", "mode", "description", "tags", name="General"),
+        FieldSet(
+            InlineFields("heartbeat_delay", "max_response_delay", label="Heartbeat / Response Delay"),
+            InlineFields("max_ack_delay", "max_unacked_clients", label="Ack Delay / Unacked Clients"),
+            "max_rejected_lease_updates",
+            name="Timing Parameters",
+        ),
+        FieldSet(
+            "enable_multi_threading",
+            "http_dedicated_listener",
+            InlineFields("http_listener_threads", "http_client_threads", label="Thread Counts"),
+            name="Multi-Threading",
+        ),
+    )
+
     class Meta:
         model = DHCPHARelationship
         fields = (
@@ -1214,24 +1276,6 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "http_client_threads",
             "description",
             "tags",
-        )
-        fieldsets = (
-            FieldSet("name", "mode", "description", "tags", name="General"),
-            FieldSet(
-                "heartbeat_delay",
-                "max_response_delay",
-                "max_ack_delay",
-                "max_unacked_clients",
-                "max_rejected_lease_updates",
-                name="Timing Parameters",
-            ),
-            FieldSet(
-                "enable_multi_threading",
-                "http_dedicated_listener",
-                "http_listener_threads",
-                "http_client_threads",
-                name="Multi-Threading",
-            ),
         )
 
 
@@ -1428,11 +1472,10 @@ class HookGroupForm(NetBoxModelForm):
         )
 
     fieldsets = (
-        FieldSet("name", "description", name="Hook Group"),
+        FieldSet("name", "description", "tags", name="Hook Group"),
         FieldSet("library_path", name="Library Path"),
         FieldSet("hooks", name="Hooks"),
         FieldSet("servers", name="DHCP Servers"),
-        FieldSet("tags", name="Tags"),
     )
 
 
@@ -1469,6 +1512,37 @@ class StorkServerForm(NetBoxModelForm):
         help_text="IP address of the Stork server (from NetBox IPAM)",
     )
 
+    fieldsets = (
+        FieldSet(
+            "name",
+            "description",
+            "ip_address",
+            "status",
+            InlineFields("stork_version", "log_level", label="Version / Log Level"),
+            "tags",
+            name="General",
+        ),
+        FieldSet(
+            InlineFields("rest_port", "rest_base_url", label="Port / Base URL"),
+            "use_tls",
+            name="REST API",
+        ),
+        FieldSet(
+            InlineFields("db_host", "db_port", label="Host / Port"),
+            InlineFields("db_name", "db_ssl_mode", label="Database / SSL Mode"),
+            name="Database",
+        ),
+        FieldSet(
+            "enable_metrics",
+            "grafana_url",
+            name="Monitoring & Integration",
+        ),
+        FieldSet(
+            "default_agent_registration",
+            name="Agent Registration",
+        ),
+    )
+
     class Meta:
         model = StorkServer
         fields = (
@@ -1489,40 +1563,6 @@ class StorkServerForm(NetBoxModelForm):
             "stork_version",
             "log_level",
             "tags",
-        )
-        fieldsets = (
-            FieldSet(
-                "name",
-                "description",
-                "ip_address",
-                "status",
-                "stork_version",
-                "log_level",
-                "tags",
-                name="General",
-            ),
-            FieldSet(
-                "rest_port",
-                "rest_base_url",
-                "use_tls",
-                name="REST API",
-            ),
-            FieldSet(
-                "db_host",
-                "db_port",
-                "db_name",
-                "db_ssl_mode",
-                name="Database",
-            ),
-            FieldSet(
-                "enable_metrics",
-                "grafana_url",
-                name="Monitoring & Integration",
-            ),
-            FieldSet(
-                "default_agent_registration",
-                name="Agent Registration",
-            ),
         )
 
 
@@ -1569,6 +1609,31 @@ class StorkAgentGroupForm(NetBoxModelForm):
         help_text="Stork server these agents report to (required unless Prometheus-only mode)",
     )
 
+    fieldsets = (
+        FieldSet(
+            "name",
+            "description",
+            "stork_server",
+            "operating_mode",
+            "tags",
+            name="General",
+        ),
+        FieldSet(
+            "agent_port",
+            "skip_tls_cert_verification",
+            name="Agent gRPC Settings",
+        ),
+        FieldSet(
+            InlineFields("prometheus_exporter_address", "prometheus_exporter_port", label="Address / Port"),
+            "prometheus_per_subnet_stats",
+            name="Prometheus Exporter",
+        ),
+        FieldSet(
+            "log_level",
+            name="Logging",
+        ),
+    )
+
     class Meta:
         model = StorkAgentGroup
         fields = (
@@ -1583,31 +1648,6 @@ class StorkAgentGroupForm(NetBoxModelForm):
             "skip_tls_cert_verification",
             "log_level",
             "tags",
-        )
-        fieldsets = (
-            FieldSet(
-                "name",
-                "description",
-                "stork_server",
-                "operating_mode",
-                "tags",
-                name="General",
-            ),
-            FieldSet(
-                "agent_port",
-                "skip_tls_cert_verification",
-                name="Agent gRPC Settings",
-            ),
-            FieldSet(
-                "prometheus_exporter_address",
-                "prometheus_exporter_port",
-                "prometheus_per_subnet_stats",
-                name="Prometheus Exporter",
-            ),
-            FieldSet(
-                "log_level",
-                name="Logging",
-            ),
         )
 
 
