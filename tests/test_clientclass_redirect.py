@@ -123,7 +123,6 @@ def test_scenario_1():
     assert flags, "Flags should be set"
 
     print("✓ PASS: Secondary correctly redirected to primary")
-    return True
 
 
 def test_scenario_2():
@@ -159,7 +158,6 @@ def test_scenario_2():
     assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Primary server used as-is, no redirect")
-    return True
 
 
 def test_scenario_3():
@@ -191,7 +189,6 @@ def test_scenario_3():
     assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Standalone server used as-is, no redirect")
-    return True
 
 
 def test_scenario_4():
@@ -231,7 +228,6 @@ def test_scenario_4():
     assert flags, "Flags should be set (redirect occurred)"
 
     print("✓ PASS: Secondary redirected, primary and standalone kept")
-    return True
 
 
 def test_scenario_5():
@@ -267,7 +263,6 @@ def test_scenario_5():
     assert flags, "Flags should be set"
 
     print("✓ PASS: Duplicate primary prevented, secondary redirected")
-    return True
 
 
 def test_scenario_6():
@@ -295,4 +290,3 @@ def test_scenario_6():
     assert not flags, "Flags should NOT be set"
 
     print("✓ PASS: Empty list handled correctly")
-    return True
