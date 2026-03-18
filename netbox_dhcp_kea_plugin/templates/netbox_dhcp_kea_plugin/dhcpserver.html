@@ -129,26 +129,27 @@
                     </tr>
                     {% endif %}
                     <tr>
-                        <th>HTTP Control Socket</th>
+                        <th>Control Socket</th>
                         <td>
-                            {% if object.ctrl_socket_http_enabled %}
-                            <span class="badge bg-success">Enabled</span>
-                            <br><small class="text-muted">{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</small>
+                            {% if object.ctrl_socket_type %}
+                            {{ object.get_ctrl_socket_type_display }}
                             {% else %}
-                            <span class="text-muted">—</span>
+                            <span class="text-muted">Disabled</span>
                             {% endif %}
                         </td>
                     </tr>
+                    {% if object.ctrl_socket_http_enabled %}
                     <tr>
-                        <th>Unix Control Socket</th>
-                        <td>
-                            {% if object.ctrl_socket_unix_enabled %}
-                            {{ object.ctrl_socket_unix_path }}
-                            {% else %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
+                        <th>HTTP Socket</th>
+                        <td>{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</td>
                     </tr>
+                    {% endif %}
+                    {% if object.ctrl_socket_unix_enabled %}
+                    <tr>
+                        <th>Unix Socket</th>
+                        <td>{{ object.ctrl_socket_unix_path }}</td>
+                    </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.4 (2026-03-18)
+
+### Changed
+- **Dynamic Control Socket Form Fields**
+  - Control socket fields (HTTP address/port, Unix path) now update dynamically when changing the "Control socket type" dropdown — no save/reload required
+  - Uses NetBox's `HTMXSelect` widget on `ctrl_socket_type`, matching the same UX pattern NetBox uses for 802.1Q VLAN mode on interfaces
+  - Converted `fieldsets` on `DHCPServerForm` from a static class attribute to a `@property` so that `InlineFields` labels (e.g. "HTTP Socket") are omitted when their child fields are not relevant, preventing orphaned labels in the form
+
+### Fixed
+- Orphaned "HTTP Socket" label remained visible in the DHCP Server edit form when "Unix" was selected as the control socket type
+
 ## 0.5.3 (2026-03-18)
 
 ### Added

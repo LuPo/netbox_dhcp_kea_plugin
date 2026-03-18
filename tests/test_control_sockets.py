@@ -72,7 +72,7 @@ def server_http_socket(db, ctrl_service_template):
         ip_address=ip,
         service_template=ctrl_service_template,
         status="active",
-        ctrl_socket_http_enabled=True,
+        ctrl_socket_type="http",
         ctrl_socket_http_address="127.0.0.1",
         ctrl_socket_http_port=8000,
     )
@@ -91,7 +91,7 @@ def server_unix_socket(db, ctrl_service_template):
         ip_address=ip,
         service_template=ctrl_service_template,
         status="active",
-        ctrl_socket_unix_enabled=True,
+        ctrl_socket_type="unix",
         ctrl_socket_unix_path="/var/run/kea/kea-dhcp4-socket",
     )
 
@@ -109,10 +109,9 @@ def server_both_sockets(db, ctrl_service_template):
         ip_address=ip,
         service_template=ctrl_service_template,
         status="active",
-        ctrl_socket_http_enabled=True,
+        ctrl_socket_type="both",
         ctrl_socket_http_address="0.0.0.0",
         ctrl_socket_http_port=8080,
-        ctrl_socket_unix_enabled=True,
         ctrl_socket_unix_path="/tmp/kea-ctrl.sock",
     )
 
@@ -154,7 +153,7 @@ class TestControlSocketDefaults:
 
     def test_http_socket_disabled_by_default(self, server_no_sockets):
         """Test that HTTP control socket is disabled by default."""
-        assert server_no_sockets.ctrl_socket_http_enabled is False
+        assert server_no_sockets.ctrl_socket_type == ""
 
     def test_http_socket_default_address(self, server_no_sockets):
         """Test that HTTP socket address defaults to 127.0.0.1."""
@@ -166,7 +165,7 @@ class TestControlSocketDefaults:
 
     def test_unix_socket_disabled_by_default(self, server_no_sockets):
         """Test that Unix control socket is disabled by default."""
-        assert server_no_sockets.ctrl_socket_unix_enabled is False
+        assert server_no_sockets.ctrl_socket_type == ""
 
     def test_unix_socket_default_path(self, server_no_sockets):
         """Test that Unix socket path has a sensible default."""
@@ -177,10 +176,9 @@ class TestControlSocketDefaults:
         from netbox_dhcp_kea_plugin.models import DHCPServer
 
         server = DHCPServer.objects.get(pk=server_no_sockets.pk)
-        assert server.ctrl_socket_http_enabled is False
+        assert server.ctrl_socket_type == ""
         assert server.ctrl_socket_http_address == "127.0.0.1"
         assert server.ctrl_socket_http_port == 8000
-        assert server.ctrl_socket_unix_enabled is False
         assert server.ctrl_socket_unix_path == "/var/run/kea/kea-dhcp4-socket"
 
 
@@ -196,6 +194,7 @@ class TestControlSocketCreation:
     def test_create_with_http_socket(self, server_http_socket):
         """Test creating a server with HTTP control socket."""
         assert server_http_socket.pk is not None
+        assert server_http_socket.ctrl_socket_type == "http"
         assert server_http_socket.ctrl_socket_http_enabled is True
         assert server_http_socket.ctrl_socket_http_address == "127.0.0.1"
         assert server_http_socket.ctrl_socket_http_port == 8000
@@ -203,12 +202,14 @@ class TestControlSocketCreation:
     def test_create_with_unix_socket(self, server_unix_socket):
         """Test creating a server with Unix control socket."""
         assert server_unix_socket.pk is not None
+        assert server_unix_socket.ctrl_socket_type == "unix"
         assert server_unix_socket.ctrl_socket_unix_enabled is True
         assert server_unix_socket.ctrl_socket_unix_path == "/var/run/kea/kea-dhcp4-socket"
 
     def test_create_with_both_sockets(self, server_both_sockets):
         """Test creating a server with both control sockets."""
         assert server_both_sockets.pk is not None
+        assert server_both_sockets.ctrl_socket_type == "both"
         assert server_both_sockets.ctrl_socket_http_enabled is True
         assert server_both_sockets.ctrl_socket_http_address == "0.0.0.0"
         assert server_both_sockets.ctrl_socket_http_port == 8080
@@ -218,6 +219,7 @@ class TestControlSocketCreation:
     def test_create_with_no_sockets(self, server_no_sockets):
         """Test creating a server with no control sockets."""
         assert server_no_sockets.pk is not None
+        assert server_no_sockets.ctrl_socket_type == ""
         assert server_no_sockets.ctrl_socket_http_enabled is False
         assert server_no_sockets.ctrl_socket_unix_enabled is False
 
@@ -232,7 +234,7 @@ class TestControlSocketCreation:
             name="ctrl-custom-addr",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="192.168.1.100",
             ctrl_socket_http_port=9000,
         )
@@ -250,14 +252,14 @@ class TestControlSocketCreation:
             name="ctrl-custom-path",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_unix_enabled=True,
+            ctrl_socket_type="unix",
             ctrl_socket_unix_path="/opt/kea/run/dhcp4.sock",
         )
         assert server.ctrl_socket_unix_path == "/opt/kea/run/dhcp4.sock"
 
     def test_update_enable_http_socket(self, server_no_sockets):
         """Test enabling HTTP socket on existing server."""
-        server_no_sockets.ctrl_socket_http_enabled = True
+        server_no_sockets.ctrl_socket_type = "http"
         server_no_sockets.ctrl_socket_http_address = "10.0.0.1"
         server_no_sockets.ctrl_socket_http_port = 8888
         server_no_sockets.save()
@@ -268,14 +270,14 @@ class TestControlSocketCreation:
 
     def test_update_disable_http_socket(self, server_http_socket):
         """Test disabling HTTP socket on existing server."""
-        server_http_socket.ctrl_socket_http_enabled = False
+        server_http_socket.ctrl_socket_type = ""
         server_http_socket.save()
         server_http_socket.refresh_from_db()
         assert server_http_socket.ctrl_socket_http_enabled is False
 
     def test_update_enable_unix_socket(self, server_no_sockets):
         """Test enabling Unix socket on existing server."""
-        server_no_sockets.ctrl_socket_unix_enabled = True
+        server_no_sockets.ctrl_socket_type = "unix"
         server_no_sockets.ctrl_socket_unix_path = "/run/kea/ctrl.sock"
         server_no_sockets.save()
         server_no_sockets.refresh_from_db()
@@ -300,7 +302,7 @@ class TestControlSocketValidation:
             name="ctrl-val-http-no-addr",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="",
             ctrl_socket_http_port=8000,
         )
@@ -316,7 +318,7 @@ class TestControlSocketValidation:
             name="ctrl-val-http-no-port",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="127.0.0.1",
             ctrl_socket_http_port=None,
         )
@@ -332,7 +334,7 @@ class TestControlSocketValidation:
             name="ctrl-val-unix-no-path",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_unix_enabled=True,
+            ctrl_socket_type="unix",
             ctrl_socket_unix_path="",
         )
         with pytest.raises(ValidationError) as exc_info:
@@ -347,7 +349,7 @@ class TestControlSocketValidation:
             name="ctrl-val-http-disabled-ok",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=False,
+            ctrl_socket_type="",
             ctrl_socket_http_address="",
             ctrl_socket_http_port=None,
         )
@@ -362,7 +364,7 @@ class TestControlSocketValidation:
             name="ctrl-val-unix-disabled-ok",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_unix_enabled=False,
+            ctrl_socket_type="",
             ctrl_socket_unix_path="",
         )
         # Should not raise
@@ -376,10 +378,9 @@ class TestControlSocketValidation:
             name="ctrl-val-both-ok",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="both",
             ctrl_socket_http_address="0.0.0.0",
             ctrl_socket_http_port=8000,
-            ctrl_socket_unix_enabled=True,
             ctrl_socket_unix_path="/var/run/kea/kea-dhcp4-socket",
         )
         # Should not raise
@@ -393,8 +394,7 @@ class TestControlSocketValidation:
             name="ctrl-val-none-ok",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=False,
-            ctrl_socket_unix_enabled=False,
+            ctrl_socket_type="",
         )
         # Should not raise
         server.clean()
@@ -407,7 +407,7 @@ class TestControlSocketValidation:
             name="ctrl-val-http-port-zero",
             ip_address=ctrl_ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="127.0.0.1",
             ctrl_socket_http_port=0,
         )
@@ -590,45 +590,40 @@ class TestControlSocketAPI:
         assert response.status_code == 200
         if response.data["count"] > 0:
             server_data = response.data["results"][0]
-            assert "ctrl_socket_http_enabled" in server_data
+            assert "ctrl_socket_type" in server_data
             assert "ctrl_socket_http_address" in server_data
             assert "ctrl_socket_http_port" in server_data
-            assert "ctrl_socket_unix_enabled" in server_data
             assert "ctrl_socket_unix_path" in server_data
 
     def test_detail_http_socket_values(self, ctrl_api_client, server_http_socket):
         """Test that detail endpoint returns correct HTTP socket values."""
         response = ctrl_api_client.get(f"/api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{server_http_socket.pk}/")
         assert response.status_code == 200
-        assert response.data["ctrl_socket_http_enabled"] is True
+        assert response.data["ctrl_socket_type"] == "http"
         assert response.data["ctrl_socket_http_address"] == "127.0.0.1"
         assert response.data["ctrl_socket_http_port"] == 8000
-        assert response.data["ctrl_socket_unix_enabled"] is False
 
     def test_detail_unix_socket_values(self, ctrl_api_client, server_unix_socket):
         """Test that detail endpoint returns correct Unix socket values."""
         response = ctrl_api_client.get(f"/api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{server_unix_socket.pk}/")
         assert response.status_code == 200
-        assert response.data["ctrl_socket_unix_enabled"] is True
+        assert response.data["ctrl_socket_type"] == "unix"
         assert response.data["ctrl_socket_unix_path"] == "/var/run/kea/kea-dhcp4-socket"
-        assert response.data["ctrl_socket_http_enabled"] is False
 
     def test_detail_both_sockets_values(self, ctrl_api_client, server_both_sockets):
         """Test that detail endpoint returns correct values for both sockets."""
         response = ctrl_api_client.get(f"/api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{server_both_sockets.pk}/")
         assert response.status_code == 200
-        assert response.data["ctrl_socket_http_enabled"] is True
+        assert response.data["ctrl_socket_type"] == "both"
         assert response.data["ctrl_socket_http_address"] == "0.0.0.0"
         assert response.data["ctrl_socket_http_port"] == 8080
-        assert response.data["ctrl_socket_unix_enabled"] is True
         assert response.data["ctrl_socket_unix_path"] == "/tmp/kea-ctrl.sock"
 
     def test_detail_no_sockets_values(self, ctrl_api_client, server_no_sockets):
         """Test that detail endpoint returns defaults when no sockets configured."""
         response = ctrl_api_client.get(f"/api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{server_no_sockets.pk}/")
         assert response.status_code == 200
-        assert response.data["ctrl_socket_http_enabled"] is False
-        assert response.data["ctrl_socket_unix_enabled"] is False
+        assert response.data["ctrl_socket_type"] == ""
 
     def test_kea_config_endpoint_includes_control_sockets(self, ctrl_api_client, server_http_socket):
         """Test that KEA config API endpoint includes control-sockets."""
@@ -653,10 +648,9 @@ class TestControlSocketAPI:
         from netbox_dhcp_kea_plugin.api.serializers import DHCPServerSerializer
 
         fields = DHCPServerSerializer.Meta.fields
-        assert "ctrl_socket_http_enabled" in fields
+        assert "ctrl_socket_type" in fields
         assert "ctrl_socket_http_address" in fields
         assert "ctrl_socket_http_port" in fields
-        assert "ctrl_socket_unix_enabled" in fields
         assert "ctrl_socket_unix_path" in fields
 
 
@@ -669,38 +663,92 @@ class TestControlSocketAPI:
 class TestControlSocketForms:
     """Tests for control socket fields in forms."""
 
-    def test_dhcp_server_form_has_control_socket_fields(self):
-        """Test that DHCPServerForm includes control socket fields."""
+    def test_dhcp_server_form_hides_detail_fields_when_sockets_disabled(self):
+        """Test that detail fields are hidden when socket type is empty (default)."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
         form = DHCPServerForm()
-        assert "ctrl_socket_http_enabled" in form.fields
+        # Type selector is always visible
+        assert "ctrl_socket_type" in form.fields
+        # Detail fields hidden when not enabled (matching NetBox VLAN 802.1Q mode pattern)
+        assert "ctrl_socket_http_address" not in form.fields
+        assert "ctrl_socket_http_port" not in form.fields
+        assert "ctrl_socket_unix_path" not in form.fields
+
+    def test_dhcp_server_form_shows_http_fields_when_http_enabled(self):
+        """Test that HTTP detail fields appear when HTTP socket is enabled."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerForm
+
+        form = DHCPServerForm(data={"ctrl_socket_type": "http"})
+        assert "ctrl_socket_type" in form.fields
         assert "ctrl_socket_http_address" in form.fields
         assert "ctrl_socket_http_port" in form.fields
-        assert "ctrl_socket_unix_enabled" in form.fields
+        # Unix fields still hidden
+        assert "ctrl_socket_unix_path" not in form.fields
+
+    def test_dhcp_server_form_shows_unix_fields_when_unix_enabled(self):
+        """Test that Unix detail fields appear when Unix socket is enabled."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerForm
+
+        form = DHCPServerForm(data={"ctrl_socket_type": "unix"})
+        assert "ctrl_socket_type" in form.fields
         assert "ctrl_socket_unix_path" in form.fields
+        # HTTP fields still hidden
+        assert "ctrl_socket_http_address" not in form.fields
+        assert "ctrl_socket_http_port" not in form.fields
+
+    def test_dhcp_server_form_shows_all_fields_when_both_enabled(self):
+        """Test that all detail fields appear when both sockets are enabled."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerForm
+
+        form = DHCPServerForm(
+            data={
+                "ctrl_socket_type": "both",
+            }
+        )
+        assert "ctrl_socket_type" in form.fields
+        assert "ctrl_socket_http_address" in form.fields
+        assert "ctrl_socket_http_port" in form.fields
+        assert "ctrl_socket_unix_path" in form.fields
+
+    def test_dhcp_server_form_shows_http_fields_for_existing_instance(self, server_http_socket):
+        """Test that editing a server with HTTP socket enabled shows HTTP fields."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerForm
+
+        form = DHCPServerForm(instance=server_http_socket)
+        assert "ctrl_socket_http_address" in form.fields
+        assert "ctrl_socket_http_port" in form.fields
+        assert "ctrl_socket_unix_path" not in form.fields
+
+    def test_dhcp_server_form_shows_unix_fields_for_existing_instance(self, server_unix_socket):
+        """Test that editing a server with Unix socket enabled shows Unix fields."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerForm
+
+        form = DHCPServerForm(instance=server_unix_socket)
+        assert "ctrl_socket_unix_path" in form.fields
+        assert "ctrl_socket_http_address" not in form.fields
+        assert "ctrl_socket_http_port" not in form.fields
 
     def test_dhcp_server_form_meta_fields(self):
         """Test that control socket fields are in Meta.fields."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
         fields = DHCPServerForm.Meta.fields
-        assert "ctrl_socket_http_enabled" in fields
+        assert "ctrl_socket_type" in fields
         assert "ctrl_socket_http_address" in fields
         assert "ctrl_socket_http_port" in fields
-        assert "ctrl_socket_unix_enabled" in fields
         assert "ctrl_socket_unix_path" in fields
 
     def test_dhcp_server_form_has_control_sockets_fieldset(self):
         """Test that DHCPServerForm has a 'Control Sockets' fieldset."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.fieldsets
-        fieldset_names = [fs.name for fs in fieldsets]
+        form = DHCPServerForm(data={"ctrl_socket_type": "both"})
+        fieldset_names = [fs.name for fs in form.fieldsets]
         assert "Control Sockets" in fieldset_names
 
     def test_control_sockets_fieldset_contains_correct_fields(self):
-        """Test that the Control Sockets fieldset contains all 5 fields.
+        """Test that the Control Sockets fieldset contains the expected fields.
 
         Some fields are grouped via InlineFields, so we collect field names
         from both top-level strings and InlineFields.fields tuples.
@@ -709,9 +757,9 @@ class TestControlSocketForms:
 
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.fieldsets
+        form = DHCPServerForm(data={"ctrl_socket_type": "both"})
         ctrl_fieldset = None
-        for fs in fieldsets:
+        for fs in form.fieldsets:
             if fs.name == "Control Sockets":
                 ctrl_fieldset = fs
                 break
@@ -725,18 +773,17 @@ class TestControlSocketForms:
             elif isinstance(item, InlineFields):
                 field_names.extend(item.fields)
 
-        assert "ctrl_socket_http_enabled" in field_names
+        assert "ctrl_socket_type" in field_names
         assert "ctrl_socket_http_address" in field_names
         assert "ctrl_socket_http_port" in field_names
-        assert "ctrl_socket_unix_enabled" in field_names
         assert "ctrl_socket_unix_path" in field_names
 
     def test_control_sockets_fieldset_order(self):
         """Test that Control Sockets fieldset comes after Hook Libraries and before Stork/HA."""
         from netbox_dhcp_kea_plugin.forms import DHCPServerForm
 
-        fieldsets = DHCPServerForm.fieldsets
-        fieldset_names = [fs.name for fs in fieldsets]
+        form = DHCPServerForm(data={"ctrl_socket_type": "both"})
+        fieldset_names = [fs.name for fs in form.fieldsets]
         hook_idx = fieldset_names.index("Hook Libraries")
         ctrl_idx = fieldset_names.index("Control Sockets")
         ha_idx = fieldset_names.index("High Availability")
@@ -747,10 +794,9 @@ class TestControlSocketForms:
         from netbox_dhcp_kea_plugin.forms import DHCPServerImportForm
 
         fields = DHCPServerImportForm.Meta.fields
-        assert "ctrl_socket_http_enabled" in fields
+        assert "ctrl_socket_type" in fields
         assert "ctrl_socket_http_address" in fields
         assert "ctrl_socket_http_port" in fields
-        assert "ctrl_socket_unix_enabled" in fields
         assert "ctrl_socket_unix_path" in fields
 
     def test_filter_form_has_control_socket_filters(self):
@@ -758,8 +804,7 @@ class TestControlSocketForms:
         from netbox_dhcp_kea_plugin.forms import DHCPServerFilterForm
 
         form = DHCPServerFilterForm()
-        assert "ctrl_socket_http_enabled" in form.fields
-        assert "ctrl_socket_unix_enabled" in form.fields
+        assert "ctrl_socket_type" in form.fields
 
 
 # ===========================================================================
@@ -772,42 +817,30 @@ class TestControlSocketFilterSet:
     """Tests for control socket fields in the filterset."""
 
     def test_filterset_meta_includes_control_socket_fields(self):
-        """Test that DHCPServerFilterSet.Meta.fields includes control socket booleans."""
+        """Test that DHCPServerFilterSet.Meta.fields includes ctrl_socket_type."""
         from netbox_dhcp_kea_plugin.filtersets import DHCPServerFilterSet
 
         fields = DHCPServerFilterSet.Meta.fields
-        assert "ctrl_socket_http_enabled" in fields
-        assert "ctrl_socket_unix_enabled" in fields
+        assert "ctrl_socket_type" in fields
 
     def test_filter_by_http_enabled(self, server_http_socket, server_no_sockets):
-        """Test filtering servers by HTTP control socket enabled."""
+        """Test filtering servers by HTTP control socket type."""
         from netbox_dhcp_kea_plugin.filtersets import DHCPServerFilterSet
         from netbox_dhcp_kea_plugin.models import DHCPServer
 
         qs = DHCPServer.objects.all()
-        fs = DHCPServerFilterSet({"ctrl_socket_http_enabled": True}, queryset=qs)
+        fs = DHCPServerFilterSet({"ctrl_socket_type": "http"}, queryset=qs)
         results = fs.qs
         assert server_http_socket in results
         assert server_no_sockets not in results
 
-    def test_filter_by_http_disabled(self, server_http_socket, server_no_sockets):
-        """Test filtering servers by HTTP control socket disabled."""
-        from netbox_dhcp_kea_plugin.filtersets import DHCPServerFilterSet
-        from netbox_dhcp_kea_plugin.models import DHCPServer
-
-        qs = DHCPServer.objects.all()
-        fs = DHCPServerFilterSet({"ctrl_socket_http_enabled": False}, queryset=qs)
-        results = fs.qs
-        assert server_no_sockets in results
-        assert server_http_socket not in results
-
     def test_filter_by_unix_enabled(self, server_unix_socket, server_no_sockets):
-        """Test filtering servers by Unix control socket enabled."""
+        """Test filtering servers by Unix control socket type."""
         from netbox_dhcp_kea_plugin.filtersets import DHCPServerFilterSet
         from netbox_dhcp_kea_plugin.models import DHCPServer
 
         qs = DHCPServer.objects.all()
-        fs = DHCPServerFilterSet({"ctrl_socket_unix_enabled": True}, queryset=qs)
+        fs = DHCPServerFilterSet({"ctrl_socket_type": "unix"}, queryset=qs)
         results = fs.qs
         assert server_unix_socket in results
         assert server_no_sockets not in results
@@ -819,7 +852,7 @@ class TestControlSocketFilterSet:
 
         qs = DHCPServer.objects.all()
         fs = DHCPServerFilterSet(
-            {"ctrl_socket_http_enabled": True, "ctrl_socket_unix_enabled": True},
+            {"ctrl_socket_type": "both"},
             queryset=qs,
         )
         results = fs.qs
@@ -837,17 +870,11 @@ class TestControlSocketFilterSet:
 class TestControlSocketTable:
     """Tests for control socket columns in the DHCPServerTable."""
 
-    def test_table_has_http_column(self):
-        """Test that DHCPServerTable has HTTP socket column."""
+    def test_table_has_socket_type_column(self):
+        """Test that DHCPServerTable has ctrl_socket_type column."""
         from netbox_dhcp_kea_plugin.tables import DHCPServerTable
 
-        assert "ctrl_socket_http_enabled" in DHCPServerTable.Meta.fields
-
-    def test_table_has_unix_column(self):
-        """Test that DHCPServerTable has Unix socket column."""
-        from netbox_dhcp_kea_plugin.tables import DHCPServerTable
-
-        assert "ctrl_socket_unix_enabled" in DHCPServerTable.Meta.fields
+        assert "ctrl_socket_type" in DHCPServerTable.Meta.fields
 
     def test_table_renders_with_data(self, server_both_sockets):
         """Test that table renders without errors with control socket data."""
@@ -863,8 +890,7 @@ class TestControlSocketTable:
         from netbox_dhcp_kea_plugin.tables import DHCPServerTable
 
         defaults = DHCPServerTable.Meta.default_columns
-        assert "ctrl_socket_http_enabled" not in defaults
-        assert "ctrl_socket_unix_enabled" not in defaults
+        assert "ctrl_socket_type" not in defaults
 
 
 # ===========================================================================
@@ -887,7 +913,7 @@ class TestControlSocketEdgeCases:
             name="ctrl-ipv6-addr",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="::1",
             ctrl_socket_http_port=8000,
         )
@@ -905,7 +931,7 @@ class TestControlSocketEdgeCases:
             name="ctrl-high-port",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=True,
+            ctrl_socket_type="http",
             ctrl_socket_http_address="127.0.0.1",
             ctrl_socket_http_port=65535,
         )
@@ -924,7 +950,7 @@ class TestControlSocketEdgeCases:
             name="ctrl-long-path",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_unix_enabled=True,
+            ctrl_socket_type="unix",
             ctrl_socket_unix_path=long_path,
         )
         sockets = server.get_control_sockets()
@@ -942,13 +968,13 @@ class TestControlSocketEdgeCases:
     def test_toggle_socket_on_and_off(self, server_no_sockets):
         """Test toggling a socket on and off."""
         # Enable
-        server_no_sockets.ctrl_socket_http_enabled = True
+        server_no_sockets.ctrl_socket_type = "http"
         server_no_sockets.save()
         server_no_sockets.refresh_from_db()
         assert len(server_no_sockets.get_control_sockets()) == 1
 
         # Disable
-        server_no_sockets.ctrl_socket_http_enabled = False
+        server_no_sockets.ctrl_socket_type = ""
         server_no_sockets.save()
         server_no_sockets.refresh_from_db()
         assert len(server_no_sockets.get_control_sockets()) == 0
@@ -961,9 +987,11 @@ class TestControlSocketEdgeCases:
 
     def test_get_control_sockets_does_not_modify_model(self, server_both_sockets):
         """Test that calling get_control_sockets() has no side effects on the model."""
+        original_type = server_both_sockets.ctrl_socket_type
         original_http = server_both_sockets.ctrl_socket_http_enabled
         original_unix = server_both_sockets.ctrl_socket_unix_enabled
         server_both_sockets.get_control_sockets()
+        assert server_both_sockets.ctrl_socket_type == original_type
         assert server_both_sockets.ctrl_socket_http_enabled == original_http
         assert server_both_sockets.ctrl_socket_unix_enabled == original_unix
 
@@ -986,10 +1014,9 @@ class TestControlSocketEdgeCases:
             name="ctrl-preserved",
             ip_address=ip,
             service_template=ctrl_service_template,
-            ctrl_socket_http_enabled=False,
+            ctrl_socket_type="",
             ctrl_socket_http_address="192.168.0.1",
             ctrl_socket_http_port=9999,
-            ctrl_socket_unix_enabled=False,
             ctrl_socket_unix_path="/custom/path.sock",
         )
         server.refresh_from_db()

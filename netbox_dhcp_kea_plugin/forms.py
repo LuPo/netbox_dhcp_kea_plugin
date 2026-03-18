@@ -17,6 +17,8 @@ from utilities.forms.fields import (
     DynamicModelMultipleChoiceField,
 )
 from utilities.forms.rendering import FieldSet, InlineFields
+from utilities.forms.utils import get_field_value
+from utilities.forms.widgets import HTMXSelect
 
 from .models import (
     ClientClass,
@@ -290,9 +292,10 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Use TLS (HTTPS) for HA communication",
     )
-    ctrl_socket_http_enabled = forms.BooleanField(
+    ctrl_socket_type = CSVChoiceField(
+        choices=[("", "")] + list(DHCPServer.CTRL_SOCKET_TYPE_CHOICES),
         required=False,
-        help_text="Enable HTTP control socket",
+        help_text="Control socket type: http, unix, or both",
     )
     ctrl_socket_http_address = forms.CharField(
         max_length=255,
@@ -303,10 +306,7 @@ class DHCPServerImportForm(NetBoxModelImportForm):
         required=False,
         help_text="HTTP socket port (e.g., 8000)",
     )
-    ctrl_socket_unix_enabled = forms.BooleanField(
-        required=False,
-        help_text="Enable Unix control socket",
-    )
+
     ctrl_socket_unix_path = forms.CharField(
         max_length=255,
         required=False,
@@ -336,10 +336,9 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "stork_agent_group",
-            "ctrl_socket_http_enabled",
+            "ctrl_socket_type",
             "ctrl_socket_http_address",
             "ctrl_socket_http_port",
-            "ctrl_socket_unix_enabled",
             "ctrl_socket_unix_path",
             "tags",
         )
@@ -621,38 +620,46 @@ class DHCPServerForm(NetBoxModelForm):
         help_text="Stork agent group configuration for this DHCP server",
     )
 
-    fieldsets = (
-        FieldSet(
-            "name",
-            "description",
-            "ip_address",
-            "status",
-            "service_template",
-            "tags",
-            name="General",
-        ),
-        FieldSet("option_data", "client_classes", name="DHCP Configuration"),
-        FieldSet("hook_groups", name="Hook Libraries"),
-        FieldSet(
-            "ctrl_socket_http_enabled",
-            InlineFields("ctrl_socket_http_address", "ctrl_socket_http_port", label="HTTP Socket"),
-            "ctrl_socket_unix_enabled",
-            "ctrl_socket_unix_path",
-            name="Control Sockets",
-        ),
-        FieldSet("stork_agent_group", name="Stork Monitoring"),
-        FieldSet(
-            "ha_relationship",
-            "ha_role",
-            InlineFields("ha_address", "ha_port", label="HA Peer"),
-            InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
-            name="High Availability",
-        ),
-        FieldSet(
-            InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
-            name="HA Authentication",
-        ),
-    )
+    @property
+    def fieldsets(self):
+        # Build Control Sockets fieldset dynamically based on which fields exist
+        ctrl_socket_items = ["ctrl_socket_type"]
+        if "ctrl_socket_http_address" in self.fields:
+            ctrl_socket_items.append(
+                InlineFields("ctrl_socket_http_address", "ctrl_socket_http_port", label="HTTP Socket")
+            )
+        if "ctrl_socket_unix_path" in self.fields:
+            ctrl_socket_items.append("ctrl_socket_unix_path")
+
+        return (
+            FieldSet(
+                "name",
+                "description",
+                "ip_address",
+                "status",
+                "service_template",
+                "tags",
+                name="General",
+            ),
+            FieldSet("option_data", "client_classes", name="DHCP Configuration"),
+            FieldSet("hook_groups", name="Hook Libraries"),
+            FieldSet(
+                *ctrl_socket_items,
+                name="Control Sockets",
+            ),
+            FieldSet("stork_agent_group", name="Stork Monitoring"),
+            FieldSet(
+                "ha_relationship",
+                "ha_role",
+                InlineFields("ha_address", "ha_port", label="HA Peer"),
+                InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
+                name="High Availability",
+            ),
+            FieldSet(
+                InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
+                name="HA Authentication",
+            ),
+        )
 
     class Meta:
         model = DHCPServer
@@ -664,10 +671,9 @@ class DHCPServerForm(NetBoxModelForm):
             "service_template",
             "option_data",
             "stork_agent_group",
-            "ctrl_socket_http_enabled",
+            "ctrl_socket_type",
             "ctrl_socket_http_address",
             "ctrl_socket_http_port",
-            "ctrl_socket_unix_enabled",
             "ctrl_socket_unix_path",
             "ha_relationship",
             "ha_role",
@@ -681,6 +687,7 @@ class DHCPServerForm(NetBoxModelForm):
         )
         widgets = {
             "ha_basic_auth_password": forms.PasswordInput(render_value=True),
+            "ctrl_socket_type": HTMXSelect(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -690,6 +697,16 @@ class DHCPServerForm(NetBoxModelForm):
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             if "stork_agent_group" in self.fields:
                 del self.fields["stork_agent_group"]
+
+        # Determine the selected control socket type
+        ctrl_socket_type = get_field_value(self, "ctrl_socket_type")
+
+        # Delete control socket fields which are not relevant for the selected type
+        if ctrl_socket_type not in ("http", "both"):
+            del self.fields["ctrl_socket_http_address"]
+            del self.fields["ctrl_socket_http_port"]
+        if ctrl_socket_type not in ("unix", "both"):
+            del self.fields["ctrl_socket_unix_path"]
 
         # Populate client_classes from reverse relation
         if self.instance.pk:
@@ -1015,27 +1032,10 @@ class DHCPServerFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="Stork Agent Group",
     )
-    ctrl_socket_http_enabled = forms.NullBooleanField(
+    ctrl_socket_type = forms.ChoiceField(
+        choices=[("", "---------")] + list(DHCPServer.CTRL_SOCKET_TYPE_CHOICES),
         required=False,
-        label="HTTP Control Socket",
-        widget=forms.Select(
-            choices=[
-                ("", "---------"),
-                ("true", "Yes"),
-                ("false", "No"),
-            ]
-        ),
-    )
-    ctrl_socket_unix_enabled = forms.NullBooleanField(
-        required=False,
-        label="Unix Control Socket",
-        widget=forms.Select(
-            choices=[
-                ("", "---------"),
-                ("true", "Yes"),
-                ("false", "No"),
-            ]
-        ),
+        label="Control Socket Type",
     )
 
 

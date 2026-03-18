@@ -59,6 +59,7 @@ DHCP servers can be configured with KEA control sockets for management access:
 
 - **HTTP control socket**: Address (validated as IP) and port for the HTTP control agent
 - **Unix control socket**: File path for the Unix domain socket
+- **Dynamic form fields**: Selecting a control socket type instantly shows/hides the relevant fields (uses the same HTMX pattern as NetBox's 802.1Q VLAN mode selector — no save or page reload required)
 - **Validation**: HA port and HTTP control socket port are validated to be different when both are active, preventing accidental port conflicts
 - **IP validation**: Both `ha_address` and `ctrl_socket_http_address` are validated as proper IP addresses (IPv4 or IPv6)
 
@@ -83,7 +84,7 @@ The plugin provides DHCP relay target information for configuring `ip helper-add
 
 | NetBox Version | Plugin Version |
 |----------------|----------------|
-|     4.5        |      0.5.3     |
+|     4.5        |      0.5.4     |
 
 ## Installation
 

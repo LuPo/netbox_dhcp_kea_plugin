@@ -44,8 +44,7 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
             "ha_role",
             "ha_auto_failover",
             "stork_agent_group",
-            "ctrl_socket_http_enabled",
-            "ctrl_socket_unix_enabled",
+            "ctrl_socket_type",
         ]
 
     def search(self, queryset, name, value):

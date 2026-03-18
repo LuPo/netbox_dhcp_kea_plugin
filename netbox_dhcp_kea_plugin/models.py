@@ -275,11 +275,21 @@ class DHCPServer(NetBoxModel):
         help_text="Stork agent group configuration for this DHCP server",
     )
 
-    # Control Socket - HTTP
-    ctrl_socket_http_enabled = models.BooleanField(
-        default=False,
-        verbose_name="Enable HTTP control socket",
-        help_text="Enable the HTTP control socket for this KEA server",
+    # Control Socket
+    CTRL_SOCKET_TYPE_CHOICES = (
+        ("", "Disabled"),
+        ("http", "HTTP"),
+        ("unix", "Unix"),
+        ("both", "HTTP + Unix"),
+    )
+
+    ctrl_socket_type = models.CharField(
+        max_length=10,
+        choices=CTRL_SOCKET_TYPE_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Control socket type",
+        help_text="Type of control socket to enable for this KEA server",
     )
     ctrl_socket_http_address = models.CharField(
         max_length=255,
@@ -295,13 +305,6 @@ class DHCPServer(NetBoxModel):
         verbose_name="HTTP socket port",
         help_text="Port number for the HTTP control socket (e.g., 8000)",
     )
-
-    # Control Socket - Unix
-    ctrl_socket_unix_enabled = models.BooleanField(
-        default=False,
-        verbose_name="Enable Unix control socket",
-        help_text="Enable the Unix domain socket for this KEA server",
-    )
     ctrl_socket_unix_path = models.CharField(
         max_length=255,
         default="/var/run/kea/kea-dhcp4-socket",
@@ -309,6 +312,16 @@ class DHCPServer(NetBoxModel):
         verbose_name="Unix socket path",
         help_text="File path for the Unix domain socket (e.g., /var/run/kea/kea-dhcp4-socket)",
     )
+
+    @property
+    def ctrl_socket_http_enabled(self):
+        """Return True if HTTP control socket is enabled."""
+        return self.ctrl_socket_type in ("http", "both")
+
+    @property
+    def ctrl_socket_unix_enabled(self):
+        """Return True if Unix control socket is enabled."""
+        return self.ctrl_socket_type in ("unix", "both")
 
     class Meta:
         ordering = ("name",)
