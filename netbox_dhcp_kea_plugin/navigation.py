@@ -178,17 +178,29 @@ storkagentgroup_menu_item = PluginMenuItem(
 # Build menu groups, conditionally including Stork
 _menu_groups = [
     (
-        "Server Configuration",
+        "Servers",
         (
             dhcpserver_menu_item,
+            dhcpharelationship_menu_item,
+            hook_menu_item,
+            hookgroup_menu_item,
+        ),
+    ),
+    (
+        "DHCP Configuration",
+        (
             subnet_menu_item,
             subnet_pools_menu_item,
             clientclass_menu_item,
         ),
     ),
     (
-        "High Availability",
-        (dhcpharelationship_menu_item,),
+        "Options",
+        (
+            optiondefinition_menu_item,
+            optiondata_menu_item,
+            vendoroptionspace_menu_item,
+        ),
     ),
 ]
 
@@ -203,26 +215,6 @@ if enable_stork:
         ),
     )
 
-_menu_groups.extend(
-    [
-        (
-            "Hook Libraries",
-            (
-                hook_menu_item,
-                hookgroup_menu_item,
-            ),
-        ),
-        (
-            "Option Definition",
-            (
-                optiondefinition_menu_item,
-                optiondata_menu_item,
-                vendoroptionspace_menu_item,
-            ),
-        ),
-    ]
-)
-
 if top_level_menu:
     menu = PluginMenu(
         label=menu_name,
@@ -232,20 +224,16 @@ if top_level_menu:
 else:
     _flat_items = [
         dhcpserver_menu_item,
+        dhcpharelationship_menu_item,
+        hook_menu_item,
+        hookgroup_menu_item,
         subnet_menu_item,
         subnet_pools_menu_item,
         clientclass_menu_item,
-        dhcpharelationship_menu_item,
+        optiondefinition_menu_item,
+        optiondata_menu_item,
+        vendoroptionspace_menu_item,
     ]
     if enable_stork:
         _flat_items.extend([storkserver_menu_item, storkagentgroup_menu_item])
-    _flat_items.extend(
-        [
-            hook_menu_item,
-            hookgroup_menu_item,
-            optiondefinition_menu_item,
-            optiondata_menu_item,
-            vendoroptionspace_menu_item,
-        ]
-    )
     menu_items = tuple(_flat_items)
