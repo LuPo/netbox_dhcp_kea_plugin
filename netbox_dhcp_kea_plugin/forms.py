@@ -929,6 +929,17 @@ class SubnetForm(NetBoxModelForm):
         self._redirected_to_primary = False
         self._original_server_name = None
 
+        # Set initial lifetime values from plugin config for new objects
+        if not self.instance.pk:
+            from netbox_dhcp_kea_plugin.models import get_model_default
+
+            valid_lifetime = get_model_default("Subnet", "valid_lifetime")
+            if valid_lifetime is not None:
+                self.initial["valid_lifetime"] = valid_lifetime
+            max_lifetime = get_model_default("Subnet", "max_lifetime")
+            if max_lifetime is not None:
+                self.initial["max_lifetime"] = max_lifetime
+
     def clean_option_data(self):
         """Validate that no two option data entries have the same space and code."""
         option_data = self.cleaned_data.get("option_data")

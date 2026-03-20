@@ -1593,6 +1593,22 @@ class ClientClass(NetBoxModel):
         return json.dumps(self.to_kea_dict(ascii_format=ascii_format), indent=indent)
 
 
+def get_model_default(model_name, field_name, fallback=None):
+    """Return a default value from plugin config ``model_defaults.<Model>.<field>``."""
+    from netbox.plugins.utils import get_plugin_config
+
+    model_defaults = get_plugin_config("netbox_dhcp_kea_plugin", "model_defaults") or {}
+    return model_defaults.get(model_name, {}).get(field_name, fallback)
+
+
+def get_default_valid_lifetime():
+    return get_model_default("Subnet", "valid_lifetime", 3600)
+
+
+def get_default_max_lifetime():
+    return get_model_default("Subnet", "max_lifetime", 7200)
+
+
 class Subnet(NetBoxModel):
     """KEA subnet configuration linked to NetBox Prefixes"""
 
@@ -1618,8 +1634,12 @@ class Subnet(NetBoxModel):
         related_name="subnet_evaluations",
         help_text="Additional client classes to evaluate for clients in this subnet (KEA evaluate-additional-classes)",
     )
-    valid_lifetime = models.PositiveIntegerField(default=3600, help_text="Lease valid lifetime in seconds")
-    max_lifetime = models.PositiveIntegerField(default=7200, help_text="Maximum lease lifetime in seconds")
+    valid_lifetime = models.PositiveIntegerField(
+        default=get_default_valid_lifetime, help_text="Lease valid lifetime in seconds"
+    )
+    max_lifetime = models.PositiveIntegerField(
+        default=get_default_max_lifetime, help_text="Maximum lease lifetime in seconds"
+    )
     routers_option_offset = models.PositiveIntegerField(
         default=1,
         help_text="Offset from network address for router IP (e.g., 1 for .1, 254 for .254 in a /24). Set to 0 to disable routers option.",

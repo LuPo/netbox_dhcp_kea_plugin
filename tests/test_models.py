@@ -897,3 +897,164 @@ class TestSubnetLifetimeValidation:
         subnet.refresh_from_db()
         assert subnet.valid_lifetime == 1800
         assert subnet.max_lifetime == 7200
+
+
+class TestModelDefaults:
+    """Test plugin model_defaults configuration for Subnet default values."""
+
+    def test_get_model_default_returns_configured_value(self, settings):
+        """get_model_default returns the value from model_defaults config."""
+        from netbox_dhcp_kea_plugin.models import get_model_default
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {
+                        "valid_lifetime": 900,
+                        "max_lifetime": 1800,
+                    },
+                },
+            }
+        }
+
+        assert get_model_default("Subnet", "valid_lifetime") == 900
+        assert get_model_default("Subnet", "max_lifetime") == 1800
+
+    def test_get_model_default_returns_fallback_when_missing(self, settings):
+        """get_model_default returns fallback when key is absent."""
+        from netbox_dhcp_kea_plugin.models import get_model_default
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {},
+            }
+        }
+
+        assert get_model_default("Subnet", "valid_lifetime", 3600) == 3600
+        assert get_model_default("Subnet", "max_lifetime", 7200) == 7200
+
+    def test_get_model_default_returns_fallback_when_no_model_defaults(self, settings):
+        """get_model_default returns fallback when model_defaults is not set at all."""
+        from netbox_dhcp_kea_plugin.models import get_model_default
+
+        settings.PLUGINS_CONFIG = {"netbox_dhcp_kea_plugin": {}}
+
+        assert get_model_default("Subnet", "valid_lifetime", 3600) == 3600
+
+    def test_get_model_default_returns_none_without_fallback(self, settings):
+        """get_model_default returns None when key is absent and no fallback given."""
+        from netbox_dhcp_kea_plugin.models import get_model_default
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {},
+            }
+        }
+
+        assert get_model_default("Subnet", "nonexistent") is None
+
+    def test_get_model_default_unknown_model_returns_fallback(self, settings):
+        """get_model_default returns fallback for an unconfigured model name."""
+        from netbox_dhcp_kea_plugin.models import get_model_default
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {"valid_lifetime": 900},
+                },
+            }
+        }
+
+        assert get_model_default("UnknownModel", "some_field", 42) == 42
+
+    def test_subnet_model_uses_configured_defaults(self, settings, prefix_factory, dhcp_server_factory):
+        """Subnet.objects.create() without explicit lifetimes uses model_defaults."""
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {
+                        "valid_lifetime": 1200,
+                        "max_lifetime": 2400,
+                    },
+                },
+            }
+        }
+
+        subnet = Subnet.objects.create(
+            prefix=prefix_factory(),
+            server=dhcp_server_factory(),
+            routers_option_offset=1,
+        )
+
+        assert subnet.valid_lifetime == 1200
+        assert subnet.max_lifetime == 2400
+
+    def test_subnet_model_explicit_values_override_defaults(self, settings, prefix_factory, dhcp_server_factory):
+        """Explicit values passed to create() take precedence over model_defaults."""
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {
+                        "valid_lifetime": 1200,
+                        "max_lifetime": 2400,
+                    },
+                },
+            }
+        }
+
+        subnet = Subnet.objects.create(
+            prefix=prefix_factory(),
+            server=dhcp_server_factory(),
+            valid_lifetime=5000,
+            max_lifetime=10000,
+            routers_option_offset=1,
+        )
+
+        assert subnet.valid_lifetime == 5000
+        assert subnet.max_lifetime == 10000
+
+    def test_subnet_form_initial_values_from_config(self, settings):
+        """SubnetForm pre-populates lifetime fields from model_defaults for new objects."""
+        from netbox_dhcp_kea_plugin.forms import SubnetForm
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {
+                        "valid_lifetime": 600,
+                        "max_lifetime": 1200,
+                    },
+                },
+            }
+        }
+
+        form = SubnetForm()
+
+        assert form.initial["valid_lifetime"] == 600
+        assert form.initial["max_lifetime"] == 1200
+
+    def test_subnet_form_no_override_on_existing_instance(self, settings, subnet_factory):
+        """SubnetForm does not override lifetime fields for existing instances."""
+        from netbox_dhcp_kea_plugin.forms import SubnetForm
+
+        settings.PLUGINS_CONFIG = {
+            "netbox_dhcp_kea_plugin": {
+                "model_defaults": {
+                    "Subnet": {
+                        "valid_lifetime": 600,
+                        "max_lifetime": 1200,
+                    },
+                },
+            }
+        }
+
+        subnet = subnet_factory()
+        form = SubnetForm(instance=subnet)
+
+        # Existing instance values should be used, not the config defaults
+        assert form.initial["valid_lifetime"] == subnet.valid_lifetime
+        assert form.initial["max_lifetime"] == subnet.max_lifetime

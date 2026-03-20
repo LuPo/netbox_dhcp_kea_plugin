@@ -21,6 +21,12 @@ class DHCPKEAConfig(PluginConfig):
         "top_level_menu": True,
         "menu_name": "DHCP KEA",
         "enable_stork": True,
+        "model_defaults": {
+            "Subnet": {
+                "valid_lifetime": 3600,
+                "max_lifetime": 7200,
+            },
+        },
         "demo_data": {
             "enabled": False,
             "vendor_option_spaces": 3,

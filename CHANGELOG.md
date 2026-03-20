@@ -19,6 +19,12 @@
 - **Stork Server Form Default**
   - `stork_version` field on `StorkServerForm` now pre-populates with `"stable"` when creating a new Stork server instance
 
+- **Plugin `model_defaults` Configuration**
+  - New `model_defaults` setting in `PLUGINS_CONFIG` allows operators to configure default field values per model
+  - `model_defaults.Subnet.valid_lifetime` — default valid lifetime for new subnets (default: `3600`)
+  - `model_defaults.Subnet.max_lifetime` — default max lifetime for new subnets (default: `7200`)
+  - Defaults apply to both the model layer (`Subnet.objects.create()`) and the form (pre-populated fields when adding a new subnet)
+
 ### Changed
 - **Dynamic Control Socket Form Fields**
   - Control socket fields (HTTP address/port, Unix path) now update dynamically when changing the "Control socket type" dropdown — no save/reload required
