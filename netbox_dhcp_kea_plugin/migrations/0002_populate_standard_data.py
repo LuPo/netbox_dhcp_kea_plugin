@@ -156,8 +156,157 @@ STANDARD_DHCP4_OPTIONS = [
     ("v4-access-domain", 213, "fqdn", True, "Access Network Domain Name (RFC5986)"),
 ]
 
-# Define generator that pads every tuple to exactly 6 elements. Six because "record" options types can have up to 6 fields.
+# Pad every tuple to exactly 6 elements (record-type options have a 6th field).
 padded_options = ([val for val, _ in zip_longest(row, range(6), fillvalue="")] for row in STANDARD_DHCP4_OPTIONS)
+
+# Standard KEA hook libraries with their allowed processes
+# Based on ISC KEA documentation: https://kea.readthedocs.io/en/latest/arm/hooks.html
+STANDARD_HOOKS = [
+    {
+        "name": "BOOTP",
+        "library_name": "libdhcp_bootp.so",
+        "description": "Provides BOOTP protocol support for legacy clients that do not support DHCP.",
+        "allowed_processes": ["kea-dhcp4"],
+    },
+    {
+        "name": "Class Commands",
+        "library_name": "libdhcp_class_cmds.so",
+        "description": "Provides commands for managing client classes at runtime without restarting the server.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Config Backend Commands",
+        "library_name": "libdhcp_cb_cmds.so",
+        "description": "Provides commands for managing configuration backend (database) entries.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "DDNS Tuning",
+        "library_name": "libdhcp_ddns_tuning.so",
+        "description": "Allows fine-tuning of Dynamic DNS updates, including hostname generation and conflict resolution.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Flexible Identifier",
+        "library_name": "libdhcp_flex_id.so",
+        "description": "Allows using arbitrary expressions to identify clients, beyond the standard hardware address or client ID.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Flexible Option",
+        "library_name": "libdhcp_flex_option.so",
+        "description": "Enables setting option values based on expressions evaluated at runtime.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Forensic Logging",
+        "library_name": "libdhcp_legal_log.so",
+        "description": "Provides detailed forensic logging of all lease assignments for legal/compliance purposes.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "GSS-TSIG",
+        "library_name": "libddns_gss_tsig.so",
+        "description": "Enables secure DNS updates using GSS-TSIG (Kerberos) authentication with Active Directory.",
+        "allowed_processes": ["kea-dhcp-ddns"],
+    },
+    {
+        "name": "High Availability",
+        "library_name": "libdhcp_ha.so",
+        "description": "Provides high availability functionality with automatic failover between DHCP servers.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Host Cache",
+        "library_name": "libdhcp_host_cache.so",
+        "description": "Caches host reservations in memory to improve performance when using external databases.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Host Commands",
+        "library_name": "libdhcp_host_cmds.so",
+        "description": "Provides commands for managing host reservations at runtime without restarting the server.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Lease Commands",
+        "library_name": "libdhcp_lease_cmds.so",
+        "description": "Provides commands for managing leases at runtime, including adding, updating, and deleting leases.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Lease Query",
+        "library_name": "libdhcp_lease_query.so",
+        "description": "Implements the DHCPv4/DHCPv6 Leasequery protocol (RFC 4388/RFC 5007).",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Limits",
+        "library_name": "libdhcp_limits.so",
+        "description": "Provides rate limiting and lease limiting capabilities to protect against abuse.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "MySQL Host Backend",
+        "library_name": "libdhcp_mysql.so",
+        "description": "Enables storing host reservations in a MySQL database.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Performance Monitor",
+        "library_name": "libdhcp_perfmon.so",
+        "description": "Monitors and reports DHCP server performance metrics.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Ping Check",
+        "library_name": "libdhcp_ping_check.so",
+        "description": "Checks if an IP address is in use before assigning it by sending ICMP echo requests.",
+        "allowed_processes": ["kea-dhcp4"],
+    },
+    {
+        "name": "PostgreSQL Host Backend",
+        "library_name": "libdhcp_pgsql.so",
+        "description": "Enables storing host reservations in a PostgreSQL database.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "RADIUS",
+        "library_name": "libdhcp_radius.so",
+        "description": "Integrates with RADIUS servers for authentication and accounting.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Role-Based Access Control",
+        "library_name": "libdhcp_rbac.so",
+        "description": "Provides role-based access control for the KEA control agent API.",
+        "allowed_processes": ["kea-ctrl-agent"],
+    },
+    {
+        "name": "Run Script",
+        "library_name": "libdhcp_run_script.so",
+        "description": "Executes external scripts at various hook points in the DHCP processing lifecycle.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Statistics Commands",
+        "library_name": "libdhcp_stat_cmds.so",
+        "description": "Provides extended commands for querying and managing DHCP statistics.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "Subnet Commands",
+        "library_name": "libdhcp_subnet_cmds.so",
+        "description": "Provides commands for managing subnets at runtime without restarting the server.",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+    {
+        "name": "User Check",
+        "library_name": "libdhcp_user_chk.so",
+        "description": "Example hook that demonstrates user registry checking (typically used as a template).",
+        "allowed_processes": ["kea-dhcp4", "kea-dhcp6"],
+    },
+]
 
 
 def populate_standard_options(apps, schema_editor):
@@ -165,7 +314,6 @@ def populate_standard_options(apps, schema_editor):
     OptionDefinition = apps.get_model("netbox_dhcp_kea_plugin", "OptionDefinition")
 
     for name, code, option_type, is_array, description, record_types in padded_options:
-        # Only create if it doesn't exist (by code in dhcp4 space with no vendor)
         if not OptionDefinition.objects.filter(
             code=code, option_space="dhcp4", vendor_option_space__isnull=True
         ).exists():
@@ -189,6 +337,30 @@ def remove_standard_options(apps, schema_editor):
     OptionDefinition.objects.filter(is_standard=True).delete()
 
 
+def create_standard_hooks(apps, schema_editor):
+    """Create standard KEA hook library entries."""
+    Hook = apps.get_model("netbox_dhcp_kea_plugin", "Hook")
+
+    for hook_data in STANDARD_HOOKS:
+        Hook.objects.get_or_create(
+            library_name=hook_data["library_name"],
+            defaults={
+                "name": hook_data["name"],
+                "description": hook_data["description"],
+                "is_standard": True,
+                "allowed_processes": hook_data["allowed_processes"],
+                "parameters": None,
+            },
+        )
+
+
+def remove_standard_hooks(apps, schema_editor):
+    """Remove standard KEA hook library entries."""
+    Hook = apps.get_model("netbox_dhcp_kea_plugin", "Hook")
+    library_names = [h["library_name"] for h in STANDARD_HOOKS]
+    Hook.objects.filter(library_name__in=library_names, is_standard=True).delete()
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("netbox_dhcp_kea_plugin", "0001_initial"),
@@ -196,4 +368,5 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(populate_standard_options, remove_standard_options),
+        migrations.RunPython(create_standard_hooks, remove_standard_hooks),
     ]
