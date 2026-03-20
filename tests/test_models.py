@@ -818,3 +818,82 @@ class TestSubnetReservations:
         assert len(kea_reservations) == 1
         assert kea_reservations[0]["ip-address"] == "192.168.1.10"
         assert kea_reservations[0]["hw-address"] == "aa:bb:cc:dd:ee:ff"
+
+
+class TestSubnetLifetimeValidation:
+    """Test that valid_lifetime cannot be greater than max_lifetime on Subnet."""
+
+    def test_clean_rejects_valid_lifetime_greater_than_max_lifetime(self):
+        """clean() must raise ValidationError when valid_lifetime > max_lifetime."""
+        from django.core.exceptions import ValidationError
+
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        config = Subnet(valid_lifetime=9000, max_lifetime=3600)
+        # Provide a prefix_id=None so routers_option_offset check is skipped,
+        # and client_class_id=None so client-class check is skipped.
+        config.prefix_id = None
+        config.client_class_id = None
+
+        import pytest
+
+        with pytest.raises(ValidationError) as exc_info:
+            config.clean()
+
+        assert "valid_lifetime" in exc_info.value.message_dict
+
+    def test_clean_allows_valid_lifetime_equal_to_max_lifetime(self):
+        """clean() must accept valid_lifetime == max_lifetime."""
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        config = Subnet(valid_lifetime=3600, max_lifetime=3600)
+        config.prefix_id = None
+        config.client_class_id = None
+        # Should not raise
+        config.clean()
+
+    def test_clean_allows_valid_lifetime_less_than_max_lifetime(self):
+        """clean() must accept valid_lifetime < max_lifetime."""
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        config = Subnet(valid_lifetime=1800, max_lifetime=3600)
+        config.prefix_id = None
+        config.client_class_id = None
+        # Should not raise
+        config.clean()
+
+    def test_save_rejects_valid_lifetime_greater_than_max_lifetime(self, subnet_factory):
+        """save() must enforce that valid_lifetime <= max_lifetime."""
+        import pytest
+        from django.core.exceptions import ValidationError
+
+        subnet = subnet_factory()
+        subnet.valid_lifetime = 99999
+        subnet.max_lifetime = 100
+
+        with pytest.raises(ValidationError) as exc_info:
+            subnet.save()
+
+        assert "valid_lifetime" in exc_info.value.message_dict
+
+    def test_save_accepts_valid_lifetime_equal_to_max_lifetime(self, subnet_factory):
+        """save() must accept valid_lifetime == max_lifetime."""
+        subnet = subnet_factory()
+        subnet.valid_lifetime = 5000
+        subnet.max_lifetime = 5000
+        subnet.save()
+
+        subnet.refresh_from_db()
+        assert subnet.valid_lifetime == 5000
+        assert subnet.max_lifetime == 5000
+
+    def test_save_accepts_valid_lifetime_less_than_max_lifetime(self, subnet_factory):
+        """save() must accept valid_lifetime < max_lifetime."""
+        subnet = subnet_factory()
+        subnet.valid_lifetime = 1800
+        subnet.max_lifetime = 7200
+        subnet.save()
+
+        subnet.refresh_from_db()
+        assert subnet.valid_lifetime == 1800
+        assert subnet.max_lifetime == 7200

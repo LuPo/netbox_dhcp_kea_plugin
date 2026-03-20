@@ -1639,11 +1639,15 @@ class Subnet(NetBoxModel):
     def clean(self):
         super().clean()
         if self.max_lifetime < self.valid_lifetime:
-            raise ValidationError("Maximum lifetime must be greater than or equal to valid lifetime")
+            raise ValidationError({"valid_lifetime": "Valid lifetime cannot be greater than max lifetime."})
 
         # Validate routers_option_offset is within prefix range
         if self.routers_option_offset and self.prefix_id:
+            import netaddr
+
             prefix = self.prefix.prefix
+            if isinstance(prefix, str):
+                prefix = netaddr.IPNetwork(prefix)
             max_offset = prefix.size - 2  # Exclude network and broadcast
             if self.routers_option_offset > max_offset:
                 raise ValidationError(
@@ -1680,6 +1684,10 @@ class Subnet(NetBoxModel):
                         "evaluate-additional-classes."
                     }
                 )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def get_router_ip(self):
         """Calculate the router IP address based on routers_option_offset.

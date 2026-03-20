@@ -28,6 +28,7 @@
 ### Fixed
 - Orphaned "HTTP Socket" label remained visible in the DHCP Server edit form when "Unix" was selected as the control socket type
 - Reservations without a MAC address on their interface no longer cause `kea-dhcp4.service` config validation to fail
+- **Subnet `valid_lifetime` validation enforced on `save()`** — `valid_lifetime` can no longer exceed `max_lifetime` when saving programmatically (e.g. via API or scripts); previously the check only ran during form validation (`clean()`)
 
 ## 0.5.3 (2026-03-18)
 
