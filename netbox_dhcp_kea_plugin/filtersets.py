@@ -1,4 +1,6 @@
 import django_filters
+from dcim.choices import DeviceStatusChoices
+from dcim.models import Manufacturer
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from netbox.plugins.utils import get_plugin_config
@@ -20,10 +22,15 @@ from .models import (
 
 
 class DHCPServerFilterSet(NetBoxModelFilterSet):
+    status = django_filters.MultipleChoiceFilter(choices=DeviceStatusChoices, label="Status")
     ha_relationship = django_filters.ModelChoiceFilter(
         queryset=DHCPHARelationship.objects.all(), label="HA Relationship"
     )
     ha_role = django_filters.ChoiceFilter(choices=DHCPServer.HA_ROLE_CHOICES, label="HA Role")
+    ha_auto_failover = django_filters.BooleanFilter(label="HA Auto Failover")
+    ctrl_socket_type = django_filters.ChoiceFilter(
+        choices=DHCPServer.CTRL_SOCKET_TYPE_CHOICES, label="Control Socket Type"
+    )
     stork_agent_group = django_filters.ModelChoiceFilter(
         queryset=StorkAgentGroup.objects.all(), label="Stork Agent Group"
     )
@@ -54,6 +61,8 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
 
 
 class VendorOptionSpaceFilterSet(NetBoxModelFilterSet):
+    manufacturer = django_filters.ModelChoiceFilter(queryset=Manufacturer.objects.all(), label="Manufacturer")
+
     class Meta:
         model = VendorOptionSpace
         fields = ["id", "name", "enterprise_id", "manufacturer"]
@@ -111,6 +120,7 @@ class OptionDataFilterSet(NetBoxModelFilterSet):
         queryset=VendorOptionSpace.objects.all(), label="Vendor Option Space"
     )
     delivery_type = django_filters.ChoiceFilter(choices=OptionData.DELIVERY_TYPE_CHOICES, label="Delivery Type")
+    always_send = django_filters.BooleanFilter(label="Always Send")
 
     class Meta:
         model = OptionData
@@ -184,6 +194,7 @@ class SubnetPoolFilterSet(NetBoxModelFilterSet):
 
 class DHCPHARelationshipFilterSet(NetBoxModelFilterSet):
     mode = django_filters.ChoiceFilter(choices=DHCPHARelationship.HA_MODE_CHOICES, label="HA Mode")
+    enable_multi_threading = django_filters.BooleanFilter(label="Enable Multi-Threading")
 
     class Meta:
         model = DHCPHARelationship
@@ -221,11 +232,11 @@ class HookFilterSet(NetBoxModelFilterSet):
 
 
 class HookGroupFilterSet(NetBoxModelFilterSet):
-    hooks = django_filters.ModelChoiceFilter(
+    hooks = django_filters.ModelMultipleChoiceFilter(
         queryset=Hook.objects.all(),
         label="Hook",
     )
-    servers = django_filters.ModelChoiceFilter(
+    servers = django_filters.ModelMultipleChoiceFilter(
         queryset=DHCPServer.objects.all(),
         label="DHCP Server",
     )
@@ -241,6 +252,9 @@ class HookGroupFilterSet(NetBoxModelFilterSet):
 
 
 class StorkServerFilterSet(NetBoxModelFilterSet):
+    use_tls = django_filters.BooleanFilter(label="TLS Enabled")
+    enable_metrics = django_filters.BooleanFilter(label="Metrics Enabled")
+
     class Meta:
         model = StorkServer
         fields = ["id", "name", "status", "use_tls", "enable_metrics", "db_ssl_mode"]
