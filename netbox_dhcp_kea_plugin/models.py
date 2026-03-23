@@ -479,6 +479,10 @@ class DHCPServer(NetBoxModel):
                     {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
                 )
 
+        # Validate no port conflicts between KEA daemon ports and Stork agent group ports
+        if self.stork_agent_group:
+            self._validate_stork_port_conflicts()
+
         # If changing from primary to another role, check for orphaned configs
         if self.pk:
             try:
@@ -497,6 +501,38 @@ class DHCPServer(NetBoxModel):
                         )
             except DHCPServer.DoesNotExist:
                 pass
+
+    def _validate_stork_port_conflicts(self):
+        """Check for port conflicts between KEA daemon ports and Stork agent group ports."""
+        group = self.stork_agent_group
+        errors = {}
+
+        # Collect active stork agent ports
+        stork_ports = {}
+        stork_ports[group.agent_port] = "Stork agent port"
+        if group.operating_mode in ("both", "prometheus-only") and group.prometheus_exporter_port:
+            stork_ports[group.prometheus_exporter_port] = "Stork Prometheus exporter port"
+
+        # Check HTTP control socket port conflicts
+        if self.ctrl_socket_http_enabled and self.ctrl_socket_http_port:
+            if self.ctrl_socket_http_port in stork_ports:
+                conflicting = stork_ports[self.ctrl_socket_http_port]
+                errors["ctrl_socket_http_port"] = (
+                    f"HTTP control socket port ({self.ctrl_socket_http_port}) conflicts with "
+                    f"{conflicting} in Stork agent group '{group.name}'."
+                )
+
+        # Check HA port conflicts
+        if self.ha_relationship and self.ha_port:
+            if self.ha_port in stork_ports:
+                conflicting = stork_ports[self.ha_port]
+                errors["ha_port"] = (
+                    f"HA port ({self.ha_port}) conflicts with "
+                    f"{conflicting} in Stork agent group '{group.name}'."
+                )
+
+        if errors:
+            raise ValidationError(errors)
 
     def get_ha_config(self):
         """Generate HA configuration if this server is part of an HA relationship.
@@ -2718,6 +2754,10 @@ class StorkAgentGroup(NetBoxModel):
             if not self.prometheus_exporter_port:
                 errors["prometheus_exporter_port"] = (
                     "Prometheus exporter port is required when operating mode includes Prometheus."
+                )
+            elif self.prometheus_exporter_port == self.agent_port:
+                errors["prometheus_exporter_port"] = (
+                    "Prometheus exporter port must be different from the agent port."
                 )
 
         if errors:

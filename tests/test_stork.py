@@ -622,6 +622,199 @@ class TestStorkAgentGroupValidation:
         assert "prometheus_exporter_address" in errors
         assert "prometheus_exporter_port" in errors
 
+    def test_prometheus_port_same_as_agent_port_raises(self, stork_server):
+        """Test that prometheus exporter port cannot equal agent port."""
+        from netbox_dhcp_kea_plugin.models import StorkAgentGroup
+
+        group = StorkAgentGroup(
+            name="val-port-conflict",
+            operating_mode="both",
+            stork_server=stork_server,
+            agent_port=8080,
+            prometheus_exporter_address="0.0.0.0",
+            prometheus_exporter_port=8080,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            group.clean()
+        assert "prometheus_exporter_port" in exc_info.value.message_dict
+
+    def test_prometheus_port_different_from_agent_port_passes(self, stork_server):
+        """Test that different prometheus and agent ports pass validation."""
+        from netbox_dhcp_kea_plugin.models import StorkAgentGroup
+
+        group = StorkAgentGroup(
+            name="val-port-ok",
+            operating_mode="both",
+            stork_server=stork_server,
+            agent_port=8080,
+            prometheus_exporter_address="0.0.0.0",
+            prometheus_exporter_port=9547,
+        )
+        group.clean()  # Should not raise
+
+    def test_stork_only_skips_prometheus_port_conflict_check(self, stork_server):
+        """Test that stork-only mode doesn't check prometheus port conflict."""
+        from netbox_dhcp_kea_plugin.models import StorkAgentGroup
+
+        group = StorkAgentGroup(
+            name="val-stork-only-no-conflict",
+            operating_mode="stork-only",
+            stork_server=stork_server,
+            agent_port=8080,
+            prometheus_exporter_address="",
+            prometheus_exporter_port=None,
+        )
+        group.clean()  # Should not raise
+
+
+# ===========================================================================
+# DHCPServer ↔ StorkAgentGroup Port Conflict Validation
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestDHCPServerStorkPortConflicts:
+    """Tests for port conflict validation between KEA daemon ports and Stork agent group ports."""
+
+    @pytest.fixture
+    def port_ip(self, db):
+        from ipam.models import IPAddress
+
+        return IPAddress.objects.create(address="10.50.0.1/24")
+
+    @pytest.fixture
+    def port_service_template(self, db):
+        from ipam.models import ServiceTemplate
+
+        template, _ = ServiceTemplate.objects.get_or_create(
+            name="dhcp-port-test",
+            defaults={"protocol": "udp", "ports": [67, 68]},
+        )
+        return template
+
+    def test_http_port_conflicts_with_agent_port(self, port_ip, port_service_template, agent_group_both):
+        """HTTP control socket port must not equal the Stork agent port."""
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        server = DHCPServer(
+            name="port-conflict-http-agent",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ctrl_socket_type="http",
+            ctrl_socket_http_address="127.0.0.1",
+            ctrl_socket_http_port=agent_group_both.agent_port,  # 8080
+            stork_agent_group=agent_group_both,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            server.clean()
+        assert "ctrl_socket_http_port" in exc_info.value.message_dict
+
+    def test_http_port_conflicts_with_prometheus_port(self, port_ip, port_service_template, agent_group_both):
+        """HTTP control socket port must not equal the Stork Prometheus exporter port."""
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        server = DHCPServer(
+            name="port-conflict-http-prom",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ctrl_socket_type="http",
+            ctrl_socket_http_address="127.0.0.1",
+            ctrl_socket_http_port=agent_group_both.prometheus_exporter_port,  # 9547
+            stork_agent_group=agent_group_both,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            server.clean()
+        assert "ctrl_socket_http_port" in exc_info.value.message_dict
+
+    def test_ha_port_conflicts_with_agent_port(self, port_ip, port_service_template, agent_group_both):
+        """HA port must not equal the Stork agent port."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, DHCPServer
+
+        ha_rel = DHCPHARelationship.objects.create(name="ha-port-conflict-test", mode="hot-standby")
+        server = DHCPServer(
+            name="port-conflict-ha-agent",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ha_relationship=ha_rel,
+            ha_role="primary",
+            ha_address="10.50.0.1",
+            ha_port=agent_group_both.agent_port,  # 8080
+            stork_agent_group=agent_group_both,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            server.clean()
+        assert "ha_port" in exc_info.value.message_dict
+
+    def test_ha_port_conflicts_with_prometheus_port(self, port_ip, port_service_template, agent_group_both):
+        """HA port must not equal the Stork Prometheus exporter port."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship, DHCPServer
+
+        ha_rel = DHCPHARelationship.objects.create(name="ha-port-conflict-prom-test", mode="hot-standby")
+        server = DHCPServer(
+            name="port-conflict-ha-prom",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ha_relationship=ha_rel,
+            ha_role="primary",
+            ha_address="10.50.0.1",
+            ha_port=agent_group_both.prometheus_exporter_port,  # 9547
+            stork_agent_group=agent_group_both,
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            server.clean()
+        assert "ha_port" in exc_info.value.message_dict
+
+    def test_no_conflict_with_different_ports(self, port_ip, port_service_template, agent_group_both):
+        """No error when all ports are distinct."""
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        server = DHCPServer(
+            name="port-no-conflict",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ctrl_socket_type="http",
+            ctrl_socket_http_address="127.0.0.1",
+            ctrl_socket_http_port=8001,  # differs from agent(8080) and prom(9547)
+            stork_agent_group=agent_group_both,
+        )
+        server.clean()  # Should not raise
+
+    def test_no_conflict_when_http_socket_disabled(self, port_ip, port_service_template, agent_group_both):
+        """No error when HTTP socket is disabled even if port matches."""
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        server = DHCPServer(
+            name="port-disabled-http",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ctrl_socket_type="",  # disabled
+            ctrl_socket_http_port=agent_group_both.agent_port,  # same but inactive
+            stork_agent_group=agent_group_both,
+        )
+        server.clean()  # Should not raise
+
+    def test_no_conflict_without_stork_agent_group(self, port_ip, port_service_template):
+        """No error when no Stork agent group is assigned."""
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        server = DHCPServer(
+            name="port-no-group",
+            ip_address=port_ip,
+            service_template=port_service_template,
+            status="active",
+            ctrl_socket_type="http",
+            ctrl_socket_http_address="127.0.0.1",
+            ctrl_socket_http_port=8001,
+            stork_agent_group=None,
+        )
+        server.clean()  # Should not raise
+
 
 # ===========================================================================
 # StorkAgentGroup Environment File Generation
