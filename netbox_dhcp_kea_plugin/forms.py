@@ -915,26 +915,18 @@ class SubnetForm(NetBoxModelForm):
         help_text="Offset from network address for router IP (e.g., 1 for .1, 254 for .254). Set to 0 to disable routers option.",
     )
 
-    RESERVATION_INHERIT_CHOICES = (
-        ("", "Inherit from Server"),
-        ("true", "Yes"),
-        ("false", "No"),
-    )
     reservations_global = forms.NullBooleanField(
         required=False,
-        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
         label="Reservations Global",
         help_text="Look for host reservations in the global scope. Leave blank to inherit from server.",
     )
     reservations_in_subnet = forms.NullBooleanField(
         required=False,
-        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
         label="Reservations In-Subnet",
         help_text="Look for host reservations within this subnet. Leave blank to inherit from server.",
     )
     reservations_out_of_pool = forms.NullBooleanField(
         required=False,
-        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
         label="Reservations Out-of-Pool",
         help_text="Exclude reserved addresses from dynamic pool allocation. Leave blank to inherit from server.",
     )
@@ -979,6 +971,11 @@ class SubnetForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Relabel NullBooleanSelect "Unknown" → "Inherit from Server"
+        inherit_label = [("unknown", "Inherit from Server"), ("true", "Yes"), ("false", "No")]
+        for field_name in ("reservations_global", "reservations_in_subnet", "reservations_out_of_pool"):
+            self.fields[field_name].widget.choices = inherit_label
+
         # Track if server was redirected to primary (for messaging)
         self._redirected_to_primary = False
         self._original_server_name = None

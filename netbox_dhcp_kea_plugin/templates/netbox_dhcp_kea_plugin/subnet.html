@@ -50,11 +50,11 @@
                         <td>
                             {% if object.reservations_global is None %}
                             <span class="text-muted">Inherit</span>
-                            <small class="text-muted">(server: {% if object.effective_reservations_global %}<i class="mdi mdi-check-bold text-success"></i>{% else %}—{% endif %})</small>
+                            <small class="text-muted">(server: {% if object.effective_reservations_global %}<i class="mdi mdi-check-bold text-success"></i>{% else %}<i class="mdi mdi-close-thick text-danger"></i>{% endif %})</small>
                             {% elif object.reservations_global %}
                             <i class="mdi mdi-check-bold text-success"></i>
                             {% else %}
-                            <span class="text-muted">—</span>
+                            <i class="mdi mdi-close-thick text-danger"></i>
                             {% endif %}
                         </td>
                     </tr>
@@ -63,11 +63,11 @@
                         <td>
                             {% if object.reservations_in_subnet is None %}
                             <span class="text-muted">Inherit</span>
-                            <small class="text-muted">(server: {% if object.effective_reservations_in_subnet %}<i class="mdi mdi-check-bold text-success"></i>{% else %}—{% endif %})</small>
+                            <small class="text-muted">(server: {% if object.effective_reservations_in_subnet %}<i class="mdi mdi-check-bold text-success"></i>{% else %}<i class="mdi mdi-close-thick text-danger"></i>{% endif %})</small>
                             {% elif object.reservations_in_subnet %}
                             <i class="mdi mdi-check-bold text-success"></i>
                             {% else %}
-                            <span class="text-muted">—</span>
+                            <i class="mdi mdi-close-thick text-danger"></i>
                             {% endif %}
                         </td>
                     </tr>
@@ -76,11 +76,11 @@
                         <td>
                             {% if object.reservations_out_of_pool is None %}
                             <span class="text-muted">Inherit</span>
-                            <small class="text-muted">(server: {% if object.effective_reservations_out_of_pool %}<i class="mdi mdi-check-bold text-success"></i>{% else %}—{% endif %})</small>
+                            <small class="text-muted">(server: {% if object.effective_reservations_out_of_pool %}<i class="mdi mdi-check-bold text-success"></i>{% else %}<i class="mdi mdi-close-thick text-danger"></i>{% endif %})</small>
                             {% elif object.reservations_out_of_pool %}
                             <i class="mdi mdi-check-bold text-success"></i>
                             {% else %}
-                            <span class="text-muted">—</span>
+                            <i class="mdi mdi-close-thick text-danger"></i>
                             {% endif %}
                         </td>
                     </tr>
@@ -91,7 +91,7 @@
                             <i class="mdi mdi-check-bold text-success"></i>
                             <br><small class="text-muted">No dynamic pools — only reserved hosts get IPs</small>
                             {% else %}
-                            <span class="text-muted">—</span>
+                            <i class="mdi mdi-close-thick text-danger"></i>
                             {% endif %}
                         </td>
                     </tr>
