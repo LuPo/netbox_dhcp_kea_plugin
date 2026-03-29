@@ -150,6 +150,39 @@
                         <td>{{ object.ctrl_socket_unix_path }}</td>
                     </tr>
                     {% endif %}
+                    <tr>
+                        <th colspan="2" class="table-light">Reservation Mode Defaults</th>
+                    </tr>
+                    <tr>
+                        <th>Reservations Global</th>
+                        <td>
+                            {% if object.reservations_global %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Reservations In-Subnet</th>
+                        <td>
+                            {% if object.reservations_in_subnet %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Reservations Out-of-Pool</th>
+                        <td>
+                            {% if object.reservations_out_of_pool %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>

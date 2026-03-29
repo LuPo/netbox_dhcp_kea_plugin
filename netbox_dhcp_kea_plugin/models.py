@@ -175,6 +175,30 @@ class HookGroup(NetBoxModel):
         return [hook.to_kea_dict(self.library_path) for hook in hooks]
 
 
+def get_model_default(model_name, field_name, fallback=None):
+    """Return a default value from plugin config ``model_defaults.<Model>.<field>``."""
+    from netbox.plugins.utils import get_plugin_config
+
+    model_defaults = get_plugin_config("netbox_dhcp_kea_plugin", "model_defaults") or {}
+    return model_defaults.get(model_name, {}).get(field_name, fallback)
+
+
+def get_default_reservations_global():
+    return get_model_default("Subnet", "reservations_global", False)
+
+
+def get_default_reservations_in_subnet():
+    return get_model_default("Subnet", "reservations_in_subnet", True)
+
+
+def get_default_reservations_out_of_pool():
+    return get_model_default("Subnet", "reservations_out_of_pool", True)
+
+
+def get_default_reservations_only():
+    return get_model_default("Subnet", "reservations_only", False)
+
+
 class DHCPServer(NetBoxModel):
     """ISC KEA DHCP Server instance"""
 
@@ -219,6 +243,23 @@ class DHCPServer(NetBoxModel):
         blank=True,
         related_name="dhcp_servers",
         help_text="Auto-created Application Service (managed automatically)",
+    )
+
+    # Global KEA reservation mode defaults (subnets can override per-subnet)
+    reservations_global = models.BooleanField(
+        default=get_default_reservations_global,
+        verbose_name="Reservations Global",
+        help_text="Default: look for host reservations in the global scope (subnets can override)",
+    )
+    reservations_in_subnet = models.BooleanField(
+        default=get_default_reservations_in_subnet,
+        verbose_name="Reservations In-Subnet",
+        help_text="Default: look for host reservations within subnets (subnets can override)",
+    )
+    reservations_out_of_pool = models.BooleanField(
+        default=get_default_reservations_out_of_pool,
+        verbose_name="Reservations Out-of-Pool",
+        help_text="Default: exclude reserved addresses from dynamic pool allocation (subnets can override)",
     )
 
     # HA-related fields (optional - only set if server is part of an HA relationship)
@@ -837,6 +878,10 @@ class DHCPServer(NetBoxModel):
                 },
                 "valid-lifetime": 3600,
                 "max-valid-lifetime": 7200,
+                # Global reservation mode defaults (subnets can override per-subnet)
+                "reservations-global": self.reservations_global,
+                "reservations-in-subnet": self.reservations_in_subnet,
+                "reservations-out-of-pool": self.reservations_out_of_pool,
             }
         }
 
@@ -952,14 +997,22 @@ class DHCPServer(NetBoxModel):
             dhcp4["client-classes"] = [cc.to_kea_dict() for cc in all_client_classes]
 
         # Add subnets (subnet4) - using effective subnets for HA
+        # Also collect global reservations from subnets where effective
+        # reservations_global is True (explicit or inherited from server)
         subnets = []
+        global_reservations = []
         for subnet_item in effective_subnet_items:
             # Only include IPv4 prefixes
             if subnet_item.prefix.prefix.version == 4:
                 subnets.append(subnet_item.to_kea_dict())
+                if subnet_item.effective_reservations_global:
+                    global_reservations.extend(subnet_item.get_kea_global_reservations())
 
         if subnets:
             dhcp4["subnet4"] = subnets
+
+        if global_reservations:
+            dhcp4["reservations"] = global_reservations
 
         # Build hooks-libraries from hook groups assigned to this server
         hooks_libraries = self.get_hooks_libraries("kea-dhcp4")
@@ -1629,14 +1682,6 @@ class ClientClass(NetBoxModel):
         return json.dumps(self.to_kea_dict(ascii_format=ascii_format), indent=indent)
 
 
-def get_model_default(model_name, field_name, fallback=None):
-    """Return a default value from plugin config ``model_defaults.<Model>.<field>``."""
-    from netbox.plugins.utils import get_plugin_config
-
-    model_defaults = get_plugin_config("netbox_dhcp_kea_plugin", "model_defaults") or {}
-    return model_defaults.get(model_name, {}).get(field_name, fallback)
-
-
 def get_default_valid_lifetime():
     return get_model_default("Subnet", "valid_lifetime", 3600)
 
@@ -1681,6 +1726,34 @@ class Subnet(NetBoxModel):
         help_text="Offset from network address for router IP (e.g., 1 for .1, 254 for .254 in a /24). Set to 0 to disable routers option.",
     )
 
+    # KEA reservation mode flags (per-subnet overrides, None = inherit from server)
+    reservations_global = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name="Reservations Global",
+        help_text="Look for host reservations in the global scope. Leave blank to inherit from server.",
+    )
+    reservations_in_subnet = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name="Reservations In-Subnet",
+        help_text="Look for host reservations within this subnet. Leave blank to inherit from server.",
+    )
+    reservations_out_of_pool = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name="Reservations Out-of-Pool",
+        help_text="Exclude reserved addresses from dynamic pool allocation. Leave blank to inherit from server.",
+    )
+    reservations_only = models.BooleanField(
+        default=get_default_reservations_only,
+        verbose_name="Reservations Only",
+        help_text="Disable dynamic pool allocation — only reserved hosts will receive an IP from this subnet",
+    )
+
     class Meta:
         ordering = ("prefix",)
         verbose_name = "Subnet"
@@ -1691,6 +1764,29 @@ class Subnet(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:subnet", args=[self.pk])
+
+    def get_effective_reservation_flag(self, field_name):
+        """Return the effective value of a reservation flag.
+
+        If the subnet has an explicit value (True/False), return it.
+        If None, inherit from the parent DHCPServer.
+        """
+        value = getattr(self, field_name)
+        if value is not None:
+            return value
+        return getattr(self.server, field_name)
+
+    @property
+    def effective_reservations_global(self):
+        return self.get_effective_reservation_flag("reservations_global")
+
+    @property
+    def effective_reservations_in_subnet(self):
+        return self.get_effective_reservation_flag("reservations_in_subnet")
+
+    @property
+    def effective_reservations_out_of_pool(self):
+        return self.get_effective_reservation_flag("reservations_out_of_pool")
 
     def clean(self):
         super().clean()
@@ -1760,9 +1856,18 @@ class Subnet(NetBoxModel):
     def get_pools(self):
         """Calculate DHCP pools based on NetBox IP ranges or available IPs.
 
+        Returns an empty list when ``reservations_only`` is enabled, so KEA
+        will only serve reserved hosts from this subnet.
+
         Priority:
         1. If the prefix has IPRanges that are NOT mark_utilized, use those ranges
-        2. Otherwise, use prefix.get_available_ips() to get available IP ranges
+        2. Otherwise, calculate pools from the prefix address space:
+           - When ``reservations_out_of_pool`` is True: use only unassigned IPs
+             (``prefix.get_available_ips()``) so reserved addresses are excluded.
+           - When ``reservations_out_of_pool`` is False: use the full usable range
+             (network+1 to broadcast-1, or the entire range when ``prefix.is_pool``
+             is True) excluding only the gateway (``routers_option_offset``).
+             KEA handles reservation/pool overlap at runtime.
 
         When IP ranges are used, any associated SubnetPool configuration
         (client class, evaluate-additional-classes, option-data) is merged
@@ -1772,6 +1877,9 @@ class Subnet(NetBoxModel):
             list: List of pool dictionaries with 'pool' key containing
                   "start - end" format and optional KEA pool-level config.
         """
+        if self.reservations_only:
+            return []
+
         import netaddr
 
         pools = []
@@ -1801,16 +1909,24 @@ class Subnet(NetBoxModel):
                     subnet_pool.apply_to_pool_dict(pool_dict)
 
                 pools.append(pool_dict)
-        else:
-            # Use prefix's built-in method to get available IPs
+        elif self.effective_reservations_out_of_pool:
+            # Exclude reserved (assigned) IPs from pools — use only available IPs
             available_ips = self.prefix.get_available_ips()
+
+            # Also exclude the gateway IP from the available set
+            gateway_offset = self.routers_option_offset
+            if gateway_offset:
+                prefix_net = self.prefix.prefix
+                if isinstance(prefix_net, str):
+                    prefix_net = netaddr.IPNetwork(prefix_net)
+                gateway_ip = netaddr.IPAddress(prefix_net.network.value + gateway_offset)
+                available_ips = available_ips - netaddr.IPSet([gateway_ip])
 
             # Get all CIDRs and merge contiguous ranges
             cidrs = list(available_ips.iter_cidrs())
             if not cidrs:
                 return pools
 
-            # Sort CIDRs by first IP (should already be sorted, but just in case)
             cidrs.sort(key=lambda c: c.first)
 
             # Merge contiguous ranges
@@ -1819,20 +1935,60 @@ class Subnet(NetBoxModel):
 
             for cidr in cidrs[1:]:
                 if cidr.first == current_end + 1:
-                    # Contiguous - extend the current range
                     current_end = cidr.last
                 else:
-                    # Gap found - save current range and start new one
                     first_ip = netaddr.IPAddress(current_start)
                     last_ip = netaddr.IPAddress(current_end)
                     pools.append({"pool": f"{first_ip} - {last_ip}"})
                     current_start = cidr.first
                     current_end = cidr.last
 
-            # Don't forget the last range
             first_ip = netaddr.IPAddress(current_start)
             last_ip = netaddr.IPAddress(current_end)
             pools.append({"pool": f"{first_ip} - {last_ip}"})
+        else:
+            # Full usable range — KEA handles reservation/pool overlap at runtime
+            prefix = self.prefix.prefix
+            if isinstance(prefix, str):
+                prefix = netaddr.IPNetwork(prefix)
+
+            if self.prefix.is_pool:
+                # is_pool: all addresses are usable (including network/broadcast)
+                pool_start = prefix.first
+                pool_end = prefix.last
+            else:
+                # Standard: exclude network and broadcast addresses
+                pool_start = prefix.first + 1
+                pool_end = prefix.last - 1
+
+            if pool_start > pool_end:
+                return pools
+
+            # Exclude the gateway IP by splitting the range around it
+            gateway_offset = self.routers_option_offset
+            if gateway_offset:
+                gateway_int = prefix.network.value + gateway_offset
+                if pool_start <= gateway_int <= pool_end:
+                    # Range before gateway
+                    if gateway_int > pool_start:
+                        pools.append({
+                            "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(gateway_int - 1)}"
+                        })
+                    # Range after gateway
+                    if gateway_int < pool_end:
+                        pools.append({
+                            "pool": f"{netaddr.IPAddress(gateway_int + 1)} - {netaddr.IPAddress(pool_end)}"
+                        })
+                else:
+                    # Gateway outside range, use full range
+                    pools.append({
+                        "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"
+                    })
+            else:
+                # No gateway configured
+                pools.append({
+                    "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"
+                })
 
         return pools
 
@@ -1950,6 +2106,22 @@ class Subnet(NetBoxModel):
         """
         return [r[0] for r in self.get_reservations() if "hw-address" in r[0]]
 
+    def get_kea_global_reservations(self):
+        """Get DHCP reservations in KEA global format (without ip-address).
+
+        Global reservations are placed at the Dhcp4 level and omit the
+        ip-address field — the host receives an IP dynamically from
+        whichever subnet it falls into, but is still identified by
+        hw-address/hostname for option assignment and logging.
+
+        Returns a list of KEA reservation dictionaries without ip-address.
+        """
+        global_reservations = []
+        for res in self.get_kea_reservations():
+            global_res = {k: v for k, v in res.items() if k != "ip-address"}
+            global_reservations.append(global_res)
+        return global_reservations
+
     def get_all_pool_option_data(self):
         """Get all OptionData instances used across this subnet's pool configurations.
 
@@ -2032,10 +2204,22 @@ class Subnet(NetBoxModel):
         if additional_class_names:
             result["evaluate-additional-classes"] = additional_class_names
 
-        # Add reservations from assigned IP addresses
-        reservations = self.get_kea_reservations()
-        if reservations:
-            result["reservations"] = reservations
+        # Add reservation mode flags only when explicitly set (not None).
+        # When None, KEA inherits from the Dhcp4 global block (set by DHCPServer).
+        if self.reservations_global is not None:
+            result["reservations-global"] = self.reservations_global
+        if self.reservations_in_subnet is not None:
+            result["reservations-in-subnet"] = self.reservations_in_subnet
+        if self.reservations_out_of_pool is not None:
+            result["reservations-out-of-pool"] = self.reservations_out_of_pool
+
+        # Add reservations at subnet level only when not using global reservations.
+        # When reservations_global is True (explicitly or inherited), reservations
+        # are collected by DHCPServer.to_kea_dict() and placed in Dhcp4.reservations.
+        if not self.effective_reservations_global:
+            reservations = self.get_kea_reservations()
+            if reservations:
+                result["reservations"] = reservations
 
         return result
 

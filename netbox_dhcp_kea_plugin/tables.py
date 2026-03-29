@@ -274,6 +274,9 @@ class DHCPServerTable(NetBoxTable):
     ha_tls = BooleanColumn(verbose_name="HA TLS")
     ha_auto_failover = BooleanColumn(verbose_name="HA Auto Failover")
     ctrl_socket_type = ChoiceFieldColumn(verbose_name="Control Socket")
+    reservations_global = BooleanColumn(verbose_name="Reservations Global")
+    reservations_in_subnet = BooleanColumn(verbose_name="Reservations In-Subnet")
+    reservations_out_of_pool = BooleanColumn(verbose_name="Reservations Out-of-Pool")
 
     class Meta(NetBoxTable.Meta):
         model = DHCPServer
@@ -292,6 +295,9 @@ class DHCPServerTable(NetBoxTable):
             "ha_tls",
             "ha_auto_failover",
             "ctrl_socket_type",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
             "actions",
         )
         default_columns = ("name", "description", "ip_address", "status", "ha_relationship", "ha_role")
@@ -355,6 +361,11 @@ class SubnetTable(NetBoxTable):
         orderable=False,
     )
 
+    reservations_global = tables.BooleanColumn(verbose_name="Res. Global")
+    reservations_in_subnet = tables.BooleanColumn(verbose_name="Res. In-Subnet")
+    reservations_out_of_pool = tables.BooleanColumn(verbose_name="Res. Out-of-Pool")
+    reservations_only = tables.BooleanColumn(verbose_name="Res. Only")
+
     class Meta(NetBoxTable.Meta):
         model = Subnet
         fields = (
@@ -365,6 +376,10 @@ class SubnetTable(NetBoxTable):
             "max_lifetime",
             "pool_count",
             "option_data_count",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
+            "reservations_only",
             "id",
             "actions",
         )

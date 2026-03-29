@@ -419,6 +419,10 @@ class SubnetImportForm(NetBoxModelImportForm):
             "valid_lifetime",
             "max_lifetime",
             "routers_option_offset",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
+            "reservations_only",
             "tags",
         )
 
@@ -642,6 +646,15 @@ class DHCPServerForm(NetBoxModelForm):
                 name="General",
             ),
             FieldSet("option_data", "client_classes", name="DHCP Configuration"),
+            FieldSet(
+                InlineFields(
+                    "reservations_global",
+                    "reservations_in_subnet",
+                    "reservations_out_of_pool",
+                    label="Reservation Mode Defaults",
+                ),
+                name="Reservations",
+            ),
             FieldSet("hook_groups", name="Hook Libraries"),
             FieldSet(
                 *ctrl_socket_items,
@@ -670,6 +683,9 @@ class DHCPServerForm(NetBoxModelForm):
             "status",
             "service_template",
             "option_data",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
             "stork_agent_group",
             "ctrl_socket_type",
             "ctrl_socket_http_address",
@@ -899,6 +915,30 @@ class SubnetForm(NetBoxModelForm):
         help_text="Offset from network address for router IP (e.g., 1 for .1, 254 for .254). Set to 0 to disable routers option.",
     )
 
+    RESERVATION_INHERIT_CHOICES = (
+        ("", "Inherit from Server"),
+        ("true", "Yes"),
+        ("false", "No"),
+    )
+    reservations_global = forms.NullBooleanField(
+        required=False,
+        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
+        label="Reservations Global",
+        help_text="Look for host reservations in the global scope. Leave blank to inherit from server.",
+    )
+    reservations_in_subnet = forms.NullBooleanField(
+        required=False,
+        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
+        label="Reservations In-Subnet",
+        help_text="Look for host reservations within this subnet. Leave blank to inherit from server.",
+    )
+    reservations_out_of_pool = forms.NullBooleanField(
+        required=False,
+        widget=forms.Select(choices=RESERVATION_INHERIT_CHOICES),
+        label="Reservations Out-of-Pool",
+        help_text="Exclude reserved addresses from dynamic pool allocation. Leave blank to inherit from server.",
+    )
+
     fieldsets = (
         FieldSet("prefix", "server", name="Prefix Assignment"),
         FieldSet(
@@ -907,6 +947,16 @@ class SubnetForm(NetBoxModelForm):
         ),
         FieldSet("routers_option_offset", "option_data", name="DHCP Options"),
         FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
+        FieldSet(
+            InlineFields(
+                "reservations_global",
+                "reservations_in_subnet",
+                "reservations_out_of_pool",
+                label="Reservation Modes",
+            ),
+            "reservations_only",
+            name="Reservations",
+        ),
     )
 
     class Meta:
@@ -920,6 +970,10 @@ class SubnetForm(NetBoxModelForm):
             "option_data",
             "client_class",
             "evaluate_additional_classes",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
+            "reservations_only",
             "tags",
         )
 
@@ -939,6 +993,9 @@ class SubnetForm(NetBoxModelForm):
             max_lifetime = get_model_default("Subnet", "max_lifetime")
             if max_lifetime is not None:
                 self.initial["max_lifetime"] = max_lifetime
+            reservations_only = get_model_default("Subnet", "reservations_only")
+            if reservations_only is not None:
+                self.initial["reservations_only"] = reservations_only
 
     def clean_option_data(self):
         """Validate that no two option data entries have the same space and code."""

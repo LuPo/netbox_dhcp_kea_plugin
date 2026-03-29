@@ -63,6 +63,39 @@ DHCP servers can be configured with KEA control sockets for management access:
 - **Validation**: HA port and HTTP control socket port are validated to be different when both are active, preventing accidental port conflicts
 - **IP validation**: Both `ha_address` and `ctrl_socket_http_address` are validated as proper IP addresses (IPv4 or IPv6)
 
+### DHCP Reservation Modes
+
+The plugin supports KEA's reservation mode flags at both the **server** (global) and **subnet** (per-subnet) level, following KEA's native inheritance model.
+
+#### Server-Level Defaults
+
+Each DHCP server has three reservation mode flags that appear in the `Dhcp4` global config block:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `reservations-global` | `False` | Look for host reservations in the global scope |
+| `reservations-in-subnet` | `True` | Look for host reservations within each subnet |
+| `reservations-out-of-pool` | `True` | Exclude reserved addresses from dynamic pool allocation |
+
+These defaults are configurable via `PLUGINS_CONFIG` (see [Configuration](#configuration)).
+
+#### Subnet-Level Overrides
+
+Each subnet can override the server defaults or inherit them:
+
+- **Inherit from Server** (default): The flag is omitted from the KEA subnet config — KEA inherits the value from the `Dhcp4` global block
+- **Yes / No**: Explicit per-subnet override emitted in the KEA subnet config
+
+Additionally, subnets have a `reservations_only` flag (not a KEA global parameter) that disables dynamic pool generation entirely — only reserved hosts receive an IP.
+
+#### Global vs Subnet Reservation Placement
+
+When `reservations-global` is effective for a subnet (explicitly set or inherited from server):
+- Reservations are placed in the `Dhcp4.reservations` array **without** `ip-address` (only `hw-address` + `hostname`)
+- The subnet's own `reservations` key is omitted
+
+When `reservations-global` is not active, reservations are placed at the subnet level with full `ip-address`, `hw-address`, and `hostname`.
+
 ### DHCP Reservations
 
 The plugin automatically discovers DHCP reservations from NetBox IP address assignments:
@@ -93,7 +126,7 @@ The plugin provides DHCP relay target information for configuring `ip helper-add
 
 | NetBox Version | Plugin Version |
 |----------------|----------------|
-|     4.5        |      0.5.5     |
+|     4.5        |      0.6.0     |
 
 ## Installation
 
@@ -138,6 +171,30 @@ PLUGINS_CONFIG = {
 | `top_level_menu` | `True` | Display plugin as a top-level menu in the NetBox navigation |
 | `menu_name` | `'DHCP KEA'` | Label for the plugin menu |
 | `enable_stork` | `True` | Enable ISC Stork monitoring integration. When `False`, all Stork-related menu items, form fields, filters, API endpoints, and UI elements are hidden |
+| `model_defaults` | *(see below)* | Default values for model fields, including reservation modes and lease lifetimes |
+
+#### Model Defaults
+
+Default values for DHCP server reservation modes and subnet lease lifetimes can be configured:
+
+```python
+PLUGINS_CONFIG = {
+    'netbox_dhcp_kea_plugin': {
+        'model_defaults': {
+            'Subnet': {
+                'valid_lifetime': 3600,
+                'max_lifetime': 7200,
+                'reservations_global': False,
+                'reservations_in_subnet': True,
+                'reservations_out_of_pool': True,
+                'reservations_only': False,
+            },
+        },
+    },
+}
+```
+
+The `reservations_*` settings under `model_defaults.Subnet` control the **server-level defaults** for new DHCP servers. Individual subnets inherit from their server by default and can override per-subnet.
 
 To disable Stork integration:
 

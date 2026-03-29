@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.6.0 (2026-03-29)
+
+### Added
+- **KEA Reservation Mode Flags**
+  - Three reservation mode flags on both DHCP Server and Subnet models: `reservations-global`, `reservations-in-subnet`, `reservations-out-of-pool`
+  - Server-level flags set the global `Dhcp4` block defaults; subnet-level flags can override per-subnet or inherit from the server
+  - Subnet fields are nullable (tri-state): `None` = inherit from server (omitted from KEA subnet config), `True`/`False` = explicit per-subnet override
+  - `reservations_only` flag on Subnet disables dynamic pool generation entirely (subnet-only, not a KEA global parameter)
+  - `Subnet.get_effective_reservation_flag()` helper and `effective_reservations_*` properties resolve inherited values
+
+- **Global Reservation Placement**
+  - When `reservations-global` is effective for a subnet, reservations are placed in the `Dhcp4.reservations` array without `ip-address` (only `hw-address` + `hostname`)
+  - `DHCPServer.to_kea_dict()` collects global reservations from all subnets where effective `reservations_global` is `True`
+
+- **Pool Generation Modes**
+  - `reservations_out_of_pool=True` (default): pools built from available IPs only, excluding assigned addresses
+  - `reservations_out_of_pool=False`: pools cover the full usable prefix range (KEA handles reservation/pool overlap at runtime)
+  - `reservations_only=True`: no pools generated — only reserved hosts get IPs
+  - IP Ranges defined in NetBox always take priority over computed pools
+
+- **Configurable Defaults**
+  - Reservation mode defaults configurable via `PLUGINS_CONFIG` under `model_defaults.Subnet`
+  - Applies to new DHCP server instances; new subnets default to "Inherit from Server"
+
+- **UI Updates**
+  - Subnet form shows tri-state select (Inherit from Server / Yes / No) for reservation mode fields
+  - Subnet detail page shows "Inherit (server: ...)" with resolved effective value when set to inherit
+  - DHCP Server form and detail page include "Reservation Mode Defaults" section
+  - Filterset and table columns for reservation flags on both Server and Subnet
+
+- **Comprehensive Tests**
+  - 38 tests covering all flag combinations, inheritance, pool generation, global reservation collection, and end-to-end KEA config output
+
+### Changed
+- Subnet reservation mode fields changed from non-nullable `BooleanField` to nullable `BooleanField(null=True, default=None)` to support server inheritance
+- `get_default_reservations_*` functions and `get_model_default` helper moved earlier in `models.py` (before `DHCPServer` class) for reuse
+
+### Migrations
+- `0003_subnet_reservation_modes` — adds 4 reservation fields to Subnet
+- `0004_alter_subnet_reservations_global_and_more` — switches to callable defaults
+- `0005_dhcpserver_reservation_modes` — adds 3 reservation fields to DHCPServer
+- `0006_subnet_nullable_reservation_flags` — makes Subnet fields nullable + data migration converting old defaults to `None` (inherit)
+
 ## 0.5.5 (2026-03-18)
 
 ### Added

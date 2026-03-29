@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.5.5"
+__version__ = "0.6.0"
 
 
 from netbox.plugins import PluginConfig
@@ -25,6 +25,10 @@ class DHCPKEAConfig(PluginConfig):
             "Subnet": {
                 "valid_lifetime": 3600,
                 "max_lifetime": 7200,
+                "reservations_global": False,
+                "reservations_in_subnet": True,
+                "reservations_out_of_pool": True,
+                "reservations_only": False,
             },
         },
         "demo_data": {

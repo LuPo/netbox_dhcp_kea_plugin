@@ -107,8 +107,7 @@
                 <div class="alert alert-info mb-0">
                     <i class="mdi mdi-information-outline"></i>
                     This subnet has no child IP Ranges. Pools are computed from available IPs within the prefix.
-                    To configure pool-level client classes and option data, create IP Ranges under the
-                    <a href="{{ object.prefix.get_absolute_url }}">prefix {{ object.prefix }}</a> first.
+                    To configure pool-level client classes and option data, create IP Ranges under <a href="{{ object.prefix.get_absolute_url }}">{{ object.prefix }}</a>prefix first.
                 </div>
                 {% if pools %}
                 <h6 class="mt-3">Computed Pools (from available IPs)</h6>

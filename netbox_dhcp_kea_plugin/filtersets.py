@@ -28,6 +28,9 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
     )
     ha_role = django_filters.ChoiceFilter(choices=DHCPServer.HA_ROLE_CHOICES, label="HA Role")
     ha_auto_failover = django_filters.BooleanFilter(label="HA Auto Failover")
+    reservations_global = django_filters.BooleanFilter(label="Reservations Global")
+    reservations_in_subnet = django_filters.BooleanFilter(label="Reservations In-Subnet")
+    reservations_out_of_pool = django_filters.BooleanFilter(label="Reservations Out-of-Pool")
     ctrl_socket_type = django_filters.ChoiceFilter(
         choices=DHCPServer.CTRL_SOCKET_TYPE_CHOICES, label="Control Socket Type"
     )
@@ -167,10 +170,23 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
 class SubnetFilterSet(NetBoxModelFilterSet):
     server = django_filters.ModelChoiceFilter(queryset=DHCPServer.objects.all(), label="DHCP Server")
     client_class = django_filters.ModelChoiceFilter(queryset=ClientClass.objects.all(), label="Client Class")
+    reservations_global = django_filters.BooleanFilter(label="Reservations Global")
+    reservations_in_subnet = django_filters.BooleanFilter(label="Reservations In-Subnet")
+    reservations_out_of_pool = django_filters.BooleanFilter(label="Reservations Out-of-Pool")
+    reservations_only = django_filters.BooleanFilter(label="Reservations Only")
 
     class Meta:
         model = Subnet
-        fields = ["id", "prefix", "server", "client_class"]
+        fields = [
+            "id",
+            "prefix",
+            "server",
+            "client_class",
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
+            "reservations_only",
+        ]
 
     def search(self, queryset, name, value):
         if not value.strip():
