@@ -4,13 +4,14 @@ reservations-out-of-pool, and reservations_only on Subnet and DHCPServer."""
 
 from unittest.mock import MagicMock, PropertyMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_mock_ip(ip_str, mac_address="aa:bb:cc:dd:ee:ff", hostname="test-device", dns_name="",
-                  is_primary=True, is_oob=False):
+
+def _make_mock_ip(
+    ip_str, mac_address="aa:bb:cc:dd:ee:ff", hostname="test-device", dns_name="", is_primary=True, is_oob=False
+):
     """Build a mock IPAddress with interface, parent, and MAC."""
     mock_interface = MagicMock()
     mock_interface.name = "eth0"
@@ -71,7 +72,9 @@ def _subnet_to_kea(config, reservations=None, pools=None, mock_server=None):
                 with patch.object(Subnet, "option_data", new_callable=PropertyMock, return_value=mock_option_data):
                     mock_eval = MagicMock()
                     mock_eval.all.return_value = []
-                    with patch.object(Subnet, "evaluate_additional_classes", new_callable=PropertyMock, return_value=mock_eval):
+                    with patch.object(
+                        Subnet, "evaluate_additional_classes", new_callable=PropertyMock, return_value=mock_eval
+                    ):
                         with patch.object(Subnet, "client_class", new_callable=PropertyMock, return_value=None):
                             config.client_class_id = None
                             with patch.object(config, "get_router_ip", return_value=None):
@@ -88,6 +91,7 @@ SAMPLE_RESERVATIONS = [
 # ===========================================================================
 # Subnet-level reservation mode flags in to_kea_dict()
 # ===========================================================================
+
 
 class TestSubnetReservationModeFlags:
     """Verify that per-subnet reservation mode flags appear in KEA output
@@ -108,7 +112,8 @@ class TestSubnetReservationModeFlags:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=True,
             reservations_in_subnet=False,
             reservations_out_of_pool=False,
@@ -123,7 +128,8 @@ class TestSubnetReservationModeFlags:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=False,
             reservations_in_subnet=False,
             reservations_out_of_pool=False,
@@ -138,7 +144,8 @@ class TestSubnetReservationModeFlags:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=True,
             reservations_in_subnet=True,
             reservations_out_of_pool=True,
@@ -154,7 +161,8 @@ class TestSubnetReservationModeFlags:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=True,
             reservations_in_subnet=None,
             reservations_out_of_pool=None,
@@ -170,6 +178,7 @@ class TestSubnetReservationModeFlags:
 # Subnet reservations placement: subnet-level vs global
 # ===========================================================================
 
+
 class TestSubnetReservationPlacement:
     """When reservations_global is False, reservations go into the subnet dict.
     When True, they are omitted (DHCPServer collects them globally)."""
@@ -178,7 +187,8 @@ class TestSubnetReservationPlacement:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=False,
             reservations_in_subnet=True,
         )
@@ -192,7 +202,8 @@ class TestSubnetReservationPlacement:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=True,
             reservations_in_subnet=False,
         )
@@ -206,7 +217,8 @@ class TestSubnetReservationPlacement:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=True,
             reservations_in_subnet=True,
         )
@@ -218,7 +230,8 @@ class TestSubnetReservationPlacement:
         from netbox_dhcp_kea_plugin.models import Subnet
 
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=False,
         )
         result = _subnet_to_kea(config, reservations=[])
@@ -232,7 +245,8 @@ class TestSubnetReservationPlacement:
 
         server = _make_mock_server(reservations_global=False)
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=None,
         )
         result = _subnet_to_kea(config, reservations=SAMPLE_RESERVATIONS, mock_server=server)
@@ -247,7 +261,8 @@ class TestSubnetReservationPlacement:
 
         server = _make_mock_server(reservations_global=True)
         config = Subnet(
-            valid_lifetime=3600, max_lifetime=7200,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             reservations_global=None,
         )
         result = _subnet_to_kea(config, reservations=SAMPLE_RESERVATIONS, mock_server=server)
@@ -258,6 +273,7 @@ class TestSubnetReservationPlacement:
 # ===========================================================================
 # Global reservations: get_kea_global_reservations()
 # ===========================================================================
+
 
 class TestSubnetGetKeaGlobalReservations:
     """get_kea_global_reservations() strips ip-address from each reservation."""
@@ -349,6 +365,7 @@ class TestSubnetGetKeaGlobalReservations:
 # DHCPServer.to_kea_dict() global reservation collection
 # ===========================================================================
 
+
 class TestDHCPServerGlobalReservations:
     """DHCPServer.to_kea_dict() must collect global reservations from subnets
     that have effective reservations_global=True (explicit or inherited) and
@@ -360,8 +377,11 @@ class TestDHCPServerGlobalReservations:
 
         prefix = prefix_factory(network=network)
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200, routers_option_offset=1,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
+            routers_option_offset=1,
             **kwargs,
         )
         subnet.refresh_from_db()
@@ -369,8 +389,11 @@ class TestDHCPServerGlobalReservations:
 
     def test_server_collects_global_reservations(self, dhcp_server, prefix_factory):
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=True, reservations_in_subnet=False,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
         )
 
         global_res = [{"hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"}]
@@ -391,8 +414,11 @@ class TestDHCPServerGlobalReservations:
 
     def test_server_no_global_reservations_when_all_subnets_in_subnet(self, dhcp_server, prefix_factory):
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.1.0.0/24",
-            reservations_global=False, reservations_in_subnet=True,
+            prefix_factory,
+            dhcp_server,
+            "10.1.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=True,
         )
 
         with patch.object(subnet, "get_kea_reservations", return_value=[]):
@@ -409,12 +435,18 @@ class TestDHCPServerGlobalReservations:
     def test_server_mixes_global_and_in_subnet_reservations(self, dhcp_server, prefix_factory):
         """Some subnets use global reservations, others use in-subnet."""
         subnet_global = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=True, reservations_in_subnet=False,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
         )
         subnet_local = self._make_subnet(
-            prefix_factory, dhcp_server, "10.1.0.0/24",
-            reservations_global=False, reservations_in_subnet=True,
+            prefix_factory,
+            dhcp_server,
+            "10.1.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=True,
         )
 
         global_res = [{"hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "global-host"}]
@@ -423,7 +455,9 @@ class TestDHCPServerGlobalReservations:
         with patch.object(subnet_global, "get_kea_global_reservations", return_value=global_res):
             with patch.object(subnet_global, "get_kea_reservations", return_value=[]):
                 with patch.object(subnet_local, "get_kea_reservations", return_value=local_res):
-                    with patch.object(dhcp_server, "get_effective_subnet_items", return_value=[subnet_global, subnet_local]):
+                    with patch.object(
+                        dhcp_server, "get_effective_subnet_items", return_value=[subnet_global, subnet_local]
+                    ):
                         with patch.object(dhcp_server, "get_effective_client_classes", return_value=[]):
                             with patch.object(dhcp_server, "get_effective_option_data", return_value=[]):
                                 with patch.object(dhcp_server, "get_hooks_libraries", return_value=[]):
@@ -449,12 +483,18 @@ class TestDHCPServerGlobalReservations:
 
     def test_server_aggregates_global_reservations_from_multiple_subnets(self, dhcp_server, prefix_factory):
         subnet1 = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=True, reservations_in_subnet=False,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
         )
         subnet2 = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.1.0/24",
-            reservations_global=True, reservations_in_subnet=False,
+            prefix_factory,
+            dhcp_server,
+            "10.0.1.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
         )
 
         res1 = [{"hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"}]
@@ -483,7 +523,9 @@ class TestDHCPServerGlobalReservations:
         dhcp_server.refresh_from_db()
 
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
             reservations_global=None,  # inherits True from server
         )
 
@@ -508,7 +550,9 @@ class TestDHCPServerGlobalReservations:
         dhcp_server.refresh_from_db()
 
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
             reservations_global=None,  # inherits False from server
         )
 
@@ -527,6 +571,7 @@ class TestDHCPServerGlobalReservations:
 # ===========================================================================
 # DHCPServer global-level reservation mode defaults in Dhcp4
 # ===========================================================================
+
 
 class TestDHCPServerGlobalDefaults:
     """Verify that Dhcp4 block contains the global reservation mode defaults
@@ -593,6 +638,7 @@ class TestDHCPServerGlobalDefaults:
 # Pool generation: reservations_out_of_pool interaction
 # ===========================================================================
 
+
 class TestPoolGenerationReservationModes:
     """get_pools() behaviour varies with reservations_out_of_pool and reservations_only."""
 
@@ -601,8 +647,11 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200, routers_option_offset=1,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
+            routers_option_offset=1,
             reservations_only=True,
         )
 
@@ -617,8 +666,11 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200, routers_option_offset=1,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
+            routers_option_offset=1,
             reservations_out_of_pool=True,
             reservations_only=False,
         )
@@ -631,11 +683,13 @@ class TestPoolGenerationReservationModes:
             mock_ranges.return_value = mock_qs
 
             # Mock available IPs — use real IPSet so gateway subtraction works
-            available = netaddr.IPSet([
-                netaddr.IPNetwork("10.0.0.1/32"),    # .1 (gateway — should be excluded)
-                netaddr.IPNetwork("10.0.0.2/31"),    # .2-.3
-                netaddr.IPNetwork("10.0.0.5/32"),    # .5 (gap at .4 = assigned)
-            ])
+            available = netaddr.IPSet(
+                [
+                    netaddr.IPNetwork("10.0.0.1/32"),  # .1 (gateway — should be excluded)
+                    netaddr.IPNetwork("10.0.0.2/31"),  # .2-.3
+                    netaddr.IPNetwork("10.0.0.5/32"),  # .5 (gap at .4 = assigned)
+                ]
+            )
             with patch.object(prefix, "get_available_ips", return_value=available):
                 pools = subnet.get_pools()
 
@@ -651,8 +705,10 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=1,  # gateway at 10.0.0.1
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -688,8 +744,10 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=128,  # gateway at 10.0.0.128
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -713,8 +771,10 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=254,  # gateway at 10.0.0.254
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -737,8 +797,10 @@ class TestPoolGenerationReservationModes:
 
         prefix = prefix_factory(network="10.0.0.0/24")
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=0,
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -764,8 +826,10 @@ class TestPoolGenerationReservationModes:
         prefix.save()
 
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=1,  # gateway at .1
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -788,7 +852,6 @@ class TestPoolGenerationReservationModes:
         """When IP ranges exist, they are always used as pools regardless of
         reservations_out_of_pool setting."""
         import netaddr
-
         from ipam.models import IPRange
 
         from netbox_dhcp_kea_plugin.models import Subnet
@@ -800,8 +863,10 @@ class TestPoolGenerationReservationModes:
         )
 
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
             routers_option_offset=1,
             reservations_out_of_pool=False,
             reservations_only=False,
@@ -816,6 +881,7 @@ class TestPoolGenerationReservationModes:
 # Combined scenarios: full KEA config output verification
 # ===========================================================================
 
+
 class TestReservationModeEndToEnd:
     """End-to-end tests verifying the full KEA config structure for various
     reservation mode combinations at both subnet and global level."""
@@ -825,8 +891,11 @@ class TestReservationModeEndToEnd:
 
         prefix = prefix_factory(network=network)
         subnet = Subnet.objects.create(
-            prefix=prefix, server=dhcp_server,
-            valid_lifetime=3600, max_lifetime=7200, routers_option_offset=1,
+            prefix=prefix,
+            server=dhcp_server,
+            valid_lifetime=3600,
+            max_lifetime=7200,
+            routers_option_offset=1,
             **kwargs,
         )
         subnet.refresh_from_db()
@@ -836,8 +905,12 @@ class TestReservationModeEndToEnd:
         """Default: reservations_in_subnet=True, reservations_out_of_pool=True.
         Reservations in subnet4, excluded from pools, no global reservations."""
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=False, reservations_in_subnet=True, reservations_out_of_pool=True,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=True,
+            reservations_out_of_pool=True,
         )
 
         local_res = [{"ip-address": "10.0.0.10", "hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"}]
@@ -870,8 +943,12 @@ class TestReservationModeEndToEnd:
         """reservations_global=True: reservations at Dhcp4 level without ip-address,
         none at subnet level."""
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=True, reservations_in_subnet=False, reservations_out_of_pool=True,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
+            reservations_out_of_pool=True,
         )
 
         global_res = [{"hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"}]
@@ -902,8 +979,12 @@ class TestReservationModeEndToEnd:
         """reservations_in_subnet=False, reservations_global=False:
         Reservations are ignored entirely — no reservations in output."""
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=False, reservations_in_subnet=False, reservations_out_of_pool=False,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=False,
+            reservations_out_of_pool=False,
         )
 
         # Even though we have reservations data, with global=False the subnet
@@ -935,12 +1016,20 @@ class TestReservationModeEndToEnd:
         """Server with one global-reservation subnet and one in-subnet reservation subnet.
         Verifies each subnet's flags and reservation placement are independent."""
         subnet_a = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=True, reservations_in_subnet=False, reservations_out_of_pool=True,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=True,
+            reservations_in_subnet=False,
+            reservations_out_of_pool=True,
         )
         subnet_b = self._make_subnet(
-            prefix_factory, dhcp_server, "10.1.0.0/24",
-            reservations_global=False, reservations_in_subnet=True, reservations_out_of_pool=False,
+            prefix_factory,
+            dhcp_server,
+            "10.1.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=True,
+            reservations_out_of_pool=False,
         )
 
         global_res = [{"hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "global-host"}]
@@ -988,8 +1077,12 @@ class TestReservationModeEndToEnd:
 
         # Subnet has different flags than server
         subnet = self._make_subnet(
-            prefix_factory, dhcp_server, "10.0.0.0/24",
-            reservations_global=False, reservations_in_subnet=True, reservations_out_of_pool=True,
+            prefix_factory,
+            dhcp_server,
+            "10.0.0.0/24",
+            reservations_global=False,
+            reservations_in_subnet=True,
+            reservations_out_of_pool=True,
         )
 
         local_res = [{"ip-address": "10.0.0.10", "hw-address": "aa:bb:cc:dd:ee:ff", "hostname": "host1"}]

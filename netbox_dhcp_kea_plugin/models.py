@@ -568,8 +568,7 @@ class DHCPServer(NetBoxModel):
             if self.ha_port in stork_ports:
                 conflicting = stork_ports[self.ha_port]
                 errors["ha_port"] = (
-                    f"HA port ({self.ha_port}) conflicts with "
-                    f"{conflicting} in Stork agent group '{group.name}'."
+                    f"HA port ({self.ha_port}) conflicts with {conflicting} in Stork agent group '{group.name}'."
                 )
 
         if errors:
@@ -1327,12 +1326,12 @@ class OptionData(NetBoxModel):
                         raise ValidationError(
                             {"data": "Hexadecimal data must have an even number of characters (complete bytes)."}
                         )
-            except ValueError:
+            except ValueError as err:
                 raise ValidationError(
                     {
                         "data": 'When CSV format is disabled, data must be a valid hexadecimal string (e.g., "48656C6C6F" or "48:65:6C:6C:6F").'
                     }
-                )
+                ) from err
         # If referencing a definition, sync the space info
         if self.definition:
             if self.definition.vendor_option_space and not self.vendor_option_space:
@@ -1794,7 +1793,7 @@ class Subnet(NetBoxModel):
             raise ValidationError({"valid_lifetime": "Valid lifetime cannot be greater than max lifetime."})
 
         # Validate routers_option_offset is within prefix range
-        if self.routers_option_offset and self.prefix_id:
+        if self.routers_option_offset and self.prefix_id:  # type: ignore[attr-defined]
             import netaddr
 
             prefix = self.prefix.prefix
@@ -1812,7 +1811,7 @@ class Subnet(NetBoxModel):
         # during global evaluation and there is no higher scope that could list them
         # in evaluate-additional-classes, so no client would ever match — making the
         # subnet permanently unreachable.
-        if self.client_class_id:
+        if self.client_class_id:  # type: ignore[attr-defined]
             # Need to fetch the related object if not already loaded
             cc = self.client_class
             if cc and cc.only_in_additional_list:
@@ -1828,8 +1827,8 @@ class Subnet(NetBoxModel):
 
         # Validate that client_class is not also in evaluate_additional_classes
         # (can only check after save for M2M, so this is a best-effort check)
-        if self.pk and self.client_class_id:
-            if self.evaluate_additional_classes.filter(pk=self.client_class_id).exists():
+        if self.pk and self.client_class_id:  # type: ignore[attr-defined]
+            if self.evaluate_additional_classes.filter(pk=self.client_class_id).exists():  # type: ignore[attr-defined]
                 raise ValidationError(
                     {
                         "client_class": "The restricting client class should not also appear in "
@@ -1890,7 +1889,7 @@ class Subnet(NetBoxModel):
         if ip_ranges.exists():
             # Pre-fetch SubnetPool configs for these ranges in one query
             pool_configs = {
-                sp.ip_range_id: sp
+                sp.ip_range_id: sp  # type: ignore[attr-defined]
                 for sp in SubnetPool.objects.filter(subnet=self, ip_range__in=ip_ranges)
                 .select_related("client_class")
                 .prefetch_related("evaluate_additional_classes", "option_data")
@@ -1971,24 +1970,18 @@ class Subnet(NetBoxModel):
                 if pool_start <= gateway_int <= pool_end:
                     # Range before gateway
                     if gateway_int > pool_start:
-                        pools.append({
-                            "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(gateway_int - 1)}"
-                        })
+                        pools.append(
+                            {"pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(gateway_int - 1)}"}
+                        )
                     # Range after gateway
                     if gateway_int < pool_end:
-                        pools.append({
-                            "pool": f"{netaddr.IPAddress(gateway_int + 1)} - {netaddr.IPAddress(pool_end)}"
-                        })
+                        pools.append({"pool": f"{netaddr.IPAddress(gateway_int + 1)} - {netaddr.IPAddress(pool_end)}"})
                 else:
                     # Gateway outside range, use full range
-                    pools.append({
-                        "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"
-                    })
+                    pools.append({"pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"})
             else:
                 # No gateway configured
-                pools.append({
-                    "pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"
-                })
+                pools.append({"pool": f"{netaddr.IPAddress(pool_start)} - {netaddr.IPAddress(pool_end)}"})
 
         return pools
 
@@ -2940,9 +2933,7 @@ class StorkAgentGroup(NetBoxModel):
                     "Prometheus exporter port is required when operating mode includes Prometheus."
                 )
             elif self.prometheus_exporter_port == self.agent_port:
-                errors["prometheus_exporter_port"] = (
-                    "Prometheus exporter port must be different from the agent port."
-                )
+                errors["prometheus_exporter_port"] = "Prometheus exporter port must be different from the agent port."
 
         if errors:
             raise ValidationError(errors)

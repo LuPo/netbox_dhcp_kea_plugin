@@ -389,7 +389,7 @@ class SubnetPoolImportForm(NetBoxModelImportForm):
 
 
 class SubnetImportForm(NetBoxModelImportForm):
-    prefix = CSVModelChoiceField(
+    prefix = CSVModelChoiceField(  # type: ignore[assignment]
         queryset=Prefix.objects.all(),
         to_field_name="prefix",
         help_text="Prefix in CIDR notation",
@@ -443,8 +443,8 @@ class SubnetImportForm(NetBoxModelImportForm):
                     self.cleaned_data["prefix"] = prefix_with_vrf
                 else:
                     raise forms.ValidationError({"prefix": f"Prefix {prefix.prefix} not found in VRF {vrf_name}."})
-            except VRF.DoesNotExist:
-                raise forms.ValidationError({"vrf": f"VRF {vrf_name} does not exist."})
+            except VRF.DoesNotExist as err:
+                raise forms.ValidationError({"vrf": f"VRF {vrf_name} does not exist."}) from err
 
         return self.cleaned_data
 
@@ -522,7 +522,6 @@ class OptionDefinitionForm(NetBoxModelForm):
                 raise forms.ValidationError(
                     f"Cannot create: option code {code} in {option_space} space is already a standard DHCP option ({existing.name})."
                 )
-        return self.cleaned_data
 
 
 class OptionDataForm(NetBoxModelForm):
@@ -627,7 +626,7 @@ class DHCPServerForm(NetBoxModelForm):
     @property
     def fieldsets(self):
         # Build Control Sockets fieldset dynamically based on which fields exist
-        ctrl_socket_items = ["ctrl_socket_type"]
+        ctrl_socket_items: list = ["ctrl_socket_type"]
         if "ctrl_socket_http_address" in self.fields:
             ctrl_socket_items.append(
                 InlineFields("ctrl_socket_http_address", "ctrl_socket_http_port", label="HTTP Socket")
@@ -887,8 +886,8 @@ class ClientClassForm(NetBoxModelForm):
 
 
 class SubnetForm(NetBoxModelForm):
-    prefix = DynamicModelChoiceField(queryset=Prefix.objects.all())
-    server = DynamicModelChoiceField(queryset=DHCPServer.objects.all())
+    prefix = DynamicModelChoiceField(queryset=Prefix.objects.all())  # type: ignore[assignment]
+    server = DynamicModelChoiceField(queryset=DHCPServer.objects.all())  # type: ignore[assignment]
     option_data = DynamicModelMultipleChoiceField(
         queryset=OptionData.objects.all(),
         required=False,
@@ -1031,8 +1030,6 @@ class SubnetForm(NetBoxModelForm):
                     "'only in additional list' on the class, or use a different restricting class."
                 }
             )
-
-        return self.cleaned_data
 
     def clean_server(self):
         """Redirect non-primary HA servers to their primary.
@@ -1252,7 +1249,7 @@ class SubnetPoolForm(NetBoxModelForm):
 
         # Filter ip_range to only show child ranges of the subnet's prefix
         if subnet_obj:
-            self.fields["ip_range"].queryset = IPRange.objects.filter(
+            self.fields["ip_range"].queryset = IPRange.objects.filter(  # type: ignore[attr-defined]
                 pk__in=subnet_obj.prefix.get_child_ranges().values_list("pk", flat=True)
             )
 
@@ -1305,8 +1302,6 @@ class SubnetPoolForm(NetBoxModelForm):
                         "or use a different restricting class for this pool."
                     }
                 )
-
-        return self.cleaned_data
 
 
 class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
@@ -1470,8 +1465,6 @@ class HookForm(NetBoxModelForm):
             cleaned_data["library_name"] = self.instance.library_name
             cleaned_data["description"] = self.instance.description
             cleaned_data["allowed_processes"] = self.instance.allowed_processes
-
-        return cleaned_data
 
     def clean_allowed_processes(self):
         """Validate allowed_processes for custom hooks."""

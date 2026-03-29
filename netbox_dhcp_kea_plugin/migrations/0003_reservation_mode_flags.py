@@ -4,12 +4,12 @@ Subnet flags are nullable (None = inherit from server, True/False = explicit ove
 DHCPServer flags are non-nullable and serve as global Dhcp4-level defaults.
 """
 
-import netbox_dhcp_kea_plugin.models
 from django.db import migrations, models
+
+import netbox_dhcp_kea_plugin.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("netbox_dhcp_kea_plugin", "0002_populate_standard_data"),
     ]

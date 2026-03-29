@@ -3,14 +3,14 @@
 import django.contrib.postgres.fields
 import django.db.models.deletion
 import netbox.models.deletion
-import netbox_dhcp_kea_plugin.models
 import taggit.managers
 import utilities.json
 from django.db import migrations, models
 
+import netbox_dhcp_kea_plugin.models
+
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -25,9 +25,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -53,9 +51,7 @@ class Migration(migrations.Migration):
                 ("description", models.CharField(blank=True, max_length=200)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -70,9 +66,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -161,9 +155,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -178,9 +170,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -207,9 +197,7 @@ class Migration(migrations.Migration):
                 ("parameters", models.JSONField(blank=True, null=True)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -224,9 +212,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -242,9 +228,7 @@ class Migration(migrations.Migration):
                 ("description", models.TextField(blank=True)),
                 (
                     "library_path",
-                    models.CharField(
-                        blank=True, default="/usr/lib64/kea/hooks", max_length=255
-                    ),
+                    models.CharField(blank=True, default="/usr/lib64/kea/hooks", max_length=255),
                 ),
                 (
                     "hooks",
@@ -264,9 +248,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -281,9 +263,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -304,9 +284,7 @@ class Migration(migrations.Migration):
                 ("description", models.CharField(blank=True, max_length=200)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -335,9 +313,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -355,17 +331,13 @@ class Migration(migrations.Migration):
                 ("only_in_additional_list", models.BooleanField(default=False)),
                 (
                     "next_server",
-                    models.GenericIPAddressField(
-                        blank=True, null=True, protocol="IPv4"
-                    ),
+                    models.GenericIPAddressField(blank=True, null=True, protocol="IPv4"),
                 ),
                 ("server_hostname", models.CharField(blank=True, max_length=255)),
                 ("boot_file_name", models.CharField(blank=True, max_length=255)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
                 (
                     "servers",
@@ -396,9 +368,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -421,9 +391,7 @@ class Migration(migrations.Migration):
                 ("is_standard", models.BooleanField(default=False)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -449,9 +417,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -480,9 +446,7 @@ class Migration(migrations.Migration):
                 ("log_level", models.CharField(default="INFO", max_length=10)),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -508,9 +472,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -557,9 +519,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -585,9 +545,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -601,15 +559,11 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "valid_lifetime",
-                    models.PositiveIntegerField(
-                        default=netbox_dhcp_kea_plugin.models.get_default_valid_lifetime
-                    ),
+                    models.PositiveIntegerField(default=netbox_dhcp_kea_plugin.models.get_default_valid_lifetime),
                 ),
                 (
                     "max_lifetime",
-                    models.PositiveIntegerField(
-                        default=netbox_dhcp_kea_plugin.models.get_default_max_lifetime
-                    ),
+                    models.PositiveIntegerField(default=netbox_dhcp_kea_plugin.models.get_default_max_lifetime),
                 ),
                 ("routers_option_offset", models.PositiveIntegerField(default=1)),
                 (
@@ -656,9 +610,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -673,9 +625,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -732,9 +682,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
@@ -749,9 +697,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -778,9 +724,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={

@@ -649,7 +649,8 @@ class TestSubnetReservations:
                                     },
                                 ]
                                 with patch.object(config, "get_kea_reservations", return_value=mock_reservations):
-                                    result = config.to_kea_dict()
+                                    with patch.object(Subnet, "effective_reservations_global", new_callable=PropertyMock, return_value=False):
+                                        result = config.to_kea_dict()
 
         assert "reservations" in result
         assert len(result["reservations"]) == 2
@@ -687,7 +688,8 @@ class TestSubnetReservations:
                             config.client_class_id = None
                             with patch.object(config, "get_router_ip", return_value=None):
                                 with patch.object(config, "get_kea_reservations", return_value=[]):
-                                    result = config.to_kea_dict()
+                                    with patch.object(Subnet, "effective_reservations_global", new_callable=PropertyMock, return_value=False):
+                                        result = config.to_kea_dict()
 
         assert "reservations" not in result
 

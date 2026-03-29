@@ -24,7 +24,7 @@ import pytest
 def pytest_configure(config):
     """Configure Django settings for pytest."""
     # Add NetBox to the path
-    netbox_path = os.environ.get("NETBOX_PATH", "/home/lupo/Github/netbox/netbox")
+    netbox_path = os.environ.get("NETBOX_PATH", "~/Github/netbox/netbox")
     if netbox_path not in sys.path:
         sys.path.insert(0, netbox_path)
 
