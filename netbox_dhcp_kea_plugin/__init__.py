@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 
 from netbox.plugins import PluginConfig
@@ -95,6 +95,41 @@ class DHCPKEAConfig(PluginConfig):
         if hasattr(PrefixSerializer.Meta, "fields") and isinstance(PrefixSerializer.Meta.fields, list):
             if "dhcp_config" not in PrefixSerializer.Meta.fields:
                 PrefixSerializer.Meta.fields.append("dhcp_config")
+
+        # Protect IP sources from deletion — GenericFK has no DB-level constraint
+        self._register_ip_source_protection()
+
+    @staticmethod
+    def _register_ip_source_protection():
+        """Register pre_delete signal to prevent deletion of objects linked as IP sources."""
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import ProtectedError
+        from django.db.models.signals import pre_delete
+
+        from .models import OptionDataIPSource
+
+        def protect_ip_source(sender, instance, **kwargs):
+            ct = ContentType.objects.get_for_model(instance)
+            refs = OptionDataIPSource.objects.filter(content_type=ct, object_id=instance.pk)
+            if refs.exists():
+                option_names = ", ".join(refs.values_list("option_data__distinctive_name", flat=True))
+                raise ProtectedError(
+                    f"Cannot delete {instance} — it is linked as an IP source on Option Data: {option_names}",
+                    set(refs),
+                )
+
+        # Protect IPAM IPAddress
+        from ipam.models import IPAddress
+
+        pre_delete.connect(protect_ip_source, sender=IPAddress)
+
+        # Protect netbox-dns Record if available
+        try:
+            from netbox_dns.models import Record as DNSRecord
+
+            pre_delete.connect(protect_ip_source, sender=DNSRecord)
+        except ImportError:
+            pass
 
 
 config = DHCPKEAConfig
