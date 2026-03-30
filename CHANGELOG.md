@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.7.0 (2026-03-31)
+
+### Added
+- **Option Data Type-Based Validation**
+  - `OptionData.clean()` validates the `data` field against the option definition's `option_type` when using CSV format
+  - Supported types: `ipv4-address`, `ipv6-address`, `ipv6-prefix`, `boolean`, `uint8/16/32`, `int8/16/32`, `fqdn`
+  - Array enforcement: definitions with `is_array=True` accept comma-separated values; single-value definitions reject multiple values
+  - `_validate_typed_value()` static method is extensible for future types
+
+- **IP Source Linking for Option Data**
+  - New `OptionDataIPSource` through model links `OptionData` to IPAM `IPAddress` or netbox-dns `Record` objects via `GenericForeignKey`
+  - `OptionData.to_kea_dict()` resolves current IPs from linked sources at config generation time — no Django signals needed
+  - Multiple sources ordered by `ordinal` for array-type options (e.g. `ntp-servers`)
+  - Falls back to manual `data` field if all linked sources are deleted
+  - `data` field is hidden in the form when an IP-type definition is selected — IP sources replace manual entry
+  - IP Sources panel on Option Data detail page shows linked objects with resolved IPs
+  - All option data tables (list view, DHCP server, subnet, subnet pool, prefix panel) display resolved IP values
+
+- **netbox-dns Integration (Optional)**
+  - New `enable_netbox_dns` plugin setting (default: `False`) to enable linking DNS A records as IP sources
+  - When enabled, Option Data form shows DNS A Record selector alongside IPAM IP Address selector
+  - Supports both managed records (from IPAM dns_name) and user-created records
+  - No hard migration dependency on netbox-dns — uses `GenericForeignKey` via `ContentType`
+
+- **Dynamic Option Data Form**
+  - `definition` field triggers HTMX form reload on change
+  - IP source fields (IPAM IP Address, DNS A Record) shown/hidden dynamically based on selected definition's `option_type`
+  - Single-select vs multi-select automatically chosen based on `is_array` flag
+  - Pre-populates IP source fields when editing existing Option Data with linked sources
+
+- **API: IP Sources on Option Data**
+  - `OptionDataSerializer` includes nested `ip_sources` field (read-only) with `content_type`, `object_id`, `ordinal`, and `resolved_ip`
+
+### Changed
+- `OptionData.data` field is now `blank=True` to support IP-source-only options without dummy data
+- `OptionData.ascii_data` property resolves IP sources when linked, so all tables and templates show effective values
+- Option Data detail page "KEA Configuration" preview now shows resolved IP data from `to_kea_dict()` instead of raw `data` field
+- Makefile test targets now export `PYTHONPATH` alongside `NETBOX_PATH` so `pytest-django` can find the NetBox module
+
+### Fixed
+- URL import crash caused by `HTMXSelect` widget on `DynamicModelChoiceField` — `HTMXSelect` doesn't implement `add_query_params()` required by the API select widget; replaced with HTMX attributes on the default widget
+- `urlpatterns` assignment in `urls.py` moved before conditional Stork URL block to prevent `ImportError` when URL module import fails
+- `OptionDataIPSource.get_absolute_url()` now delegates to parent `OptionData` — prevents `NoReverseMatch` on delete confirmation pages
+
+### Migrations
+- `0004_optiondata_ip_source` — creates `OptionDataIPSource` table and makes `OptionData.data` blank/nullable
+
 ## 0.6.0 (2026-03-29)
 
 ### Added

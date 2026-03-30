@@ -2,6 +2,7 @@ import ipaddress as ipaddress_module
 
 from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
@@ -1272,7 +1273,7 @@ class OptionData(NetBoxModel):
         default="standard",
         help_text="How to deliver this option: standard (direct), Option 43, or VIVSO (Option 125)",
     )
-    data = models.TextField(help_text="Option value/data")
+    data = models.TextField(blank=True, default="", help_text="Option value/data")
     always_send = models.BooleanField(
         default=False,
         help_text="Always send this option even if not requested by client",
@@ -1337,6 +1338,68 @@ class OptionData(NetBoxModel):
             if self.definition.vendor_option_space and not self.vendor_option_space:
                 self.vendor_option_space = self.definition.vendor_option_space
 
+        # Type-based validation of data against definition's option_type
+        if self.csv_format and self.data and self.definition:
+            values = [v.strip() for v in self.data.split(",")] if self.definition.is_array else [self.data.strip()]
+            # Single-value options must not contain commas
+            if not self.definition.is_array and "," in self.data:
+                raise ValidationError(
+                    {"data": "This option does not accept multiple values (definition is not an array)."}
+                )
+            for val in values:
+                if val:
+                    self._validate_typed_value(val, self.definition.option_type)
+
+    @staticmethod
+    def _validate_typed_value(value, option_type):
+        """Validate a single value against the expected KEA option type."""
+        import ipaddress as ipaddress_mod
+
+        validators = {
+            "ipv4-address": (ipaddress_mod.IPv4Address, "Must be a valid IPv4 address (e.g., 192.168.1.1)."),
+            "ipv6-address": (ipaddress_mod.IPv6Address, "Must be a valid IPv6 address (e.g., 2001:db8::1)."),
+            "ipv6-prefix": (ipaddress_mod.IPv6Network, "Must be a valid IPv6 prefix (e.g., 2001:db8::/32)."),
+        }
+        if option_type in validators:
+            cls, msg = validators[option_type]
+            try:
+                cls(value)
+            except (ValueError, ipaddress_mod.AddressValueError, ipaddress_mod.NetmaskValueError):
+                raise ValidationError({"data": f"'{value}': {msg}"})
+            return
+
+        if option_type == "boolean":
+            if value.lower() not in ("true", "false", "0", "1"):
+                raise ValidationError({"data": f"'{value}': Must be true, false, 0, or 1."})
+            return
+
+        int_ranges = {
+            "uint8": (0, 255),
+            "uint16": (0, 65535),
+            "uint32": (0, 4294967295),
+            "int8": (-128, 127),
+            "int16": (-32768, 32767),
+            "int32": (-2147483648, 2147483647),
+        }
+        if option_type in int_ranges:
+            lo, hi = int_ranges[option_type]
+            try:
+                n = int(value)
+            except ValueError:
+                raise ValidationError({"data": f"'{value}': Must be an integer."})
+            if not (lo <= n <= hi):
+                raise ValidationError({"data": f"'{value}': Must be between {lo} and {hi} for {option_type}."})
+            return
+
+        if option_type == "fqdn":
+            import re
+
+            if not re.match(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.?$", value):
+                raise ValidationError({"data": f"'{value}': Must be a valid FQDN."})
+            return
+
+        # string, binary, empty, record, tuple, psid — no extra validation
+
     def __str__(self):
         if self.vendor_option_space:
             return f"{self.distinctive_name} ({self.vendor_option_space.name})"
@@ -1361,7 +1424,13 @@ class OptionData(NetBoxModel):
 
     @property
     def ascii_data(self):
-        """Return hex data converted to ASCII (only meaningful when csv_format is False)"""
+        """Return hex data converted to ASCII, or resolved IP sources if linked."""
+        # Resolve from IP sources if any are linked
+        if self.pk and self.ip_sources.exists():
+            resolved = [self._resolve_ip(src.ip_source) for src in self.ip_sources.order_by("ordinal")]
+            resolved_ips = [ip for ip in resolved if ip]
+            if resolved_ips:
+                return ", ".join(resolved_ips)
         if self.csv_format or not self.data:
             return self.data
         try:
@@ -1399,8 +1468,17 @@ class OptionData(NetBoxModel):
         if self.code:
             result["code"] = self.code
 
-        # Add data
-        result["data"] = self.data
+        # Add data — resolve from IP sources if linked, otherwise use manual entry
+        ip_sources = self.ip_sources.order_by("ordinal")
+        if ip_sources.exists():
+            resolved = [self._resolve_ip(src.ip_source) for src in ip_sources]
+            resolved_ips = [ip for ip in resolved if ip]
+            if resolved_ips:
+                result["data"] = ", ".join(resolved_ips)
+            else:
+                result["data"] = self.data  # fallback if all sources deleted
+        else:
+            result["data"] = self.data
 
         # Add optional fields
         if self.always_send:
@@ -1409,6 +1487,62 @@ class OptionData(NetBoxModel):
             result["csv-format"] = False
 
         return result
+
+    @staticmethod
+    def _resolve_ip(obj):
+        """Extract IP string from an IPAddress or DNS Record object."""
+        if obj is None:
+            return None
+        from ipam.models import IPAddress
+
+        if isinstance(obj, IPAddress):
+            return str(obj.address.ip)
+        # Check for DNS Record without hard import
+        try:
+            from netbox_dns.models import Record as DNSRecord
+
+            if isinstance(obj, DNSRecord):
+                return obj.value
+        except ImportError:
+            pass
+        return None
+
+
+class OptionDataIPSource(NetBoxModel):
+    """Links an OptionData to an IP source (IPAddress or DNS Record) via GenericFK.
+
+    When IP sources are linked, OptionData.to_kea_dict() resolves current IPs
+    from the linked objects instead of using the manual ``data`` field.
+    Multiple sources are ordered by ``ordinal`` for array-type options.
+    """
+
+    option_data = models.ForeignKey(
+        to="OptionData",
+        on_delete=models.CASCADE,
+        related_name="ip_sources",
+    )
+    content_type = models.ForeignKey(
+        to=ContentType,
+        on_delete=models.CASCADE,
+        limit_choices_to=models.Q(app_label="ipam", model="ipaddress"),
+    )
+    object_id = models.PositiveBigIntegerField()
+    ip_source = GenericForeignKey("content_type", "object_id")
+    ordinal = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Order of this IP source within the option data value list.",
+    )
+
+    class Meta:
+        ordering = ("ordinal",)
+        verbose_name = "IP Source"
+        verbose_name_plural = "IP Sources"
+
+    def __str__(self):
+        return f"{self.option_data} → {self.ip_source}"
+
+    def get_absolute_url(self):
+        return self.option_data.get_absolute_url()
 
 
 class ClientClass(NetBoxModel):

@@ -540,17 +540,13 @@ class OptionDataForm(NetBoxModelForm):
         help_text="Option definition - filtered by vendor option space (or standard/custom if none selected)",
     )
 
-    fieldsets = (
-        FieldSet(
-            "distinctive_name",
-            "delivery_type",
-            "vendor_option_space",
-            "definition",
-            "option_space",
-            name="Option Selection",
-        ),
-        FieldSet("data", InlineFields("always_send", "csv_format", label="Flags"), name="Value"),
-        FieldSet("description", "tags", name="Metadata"),
+    # IP source fields — conditionally shown when definition is ipv4-address type.
+    # These are defined here and deleted in __init__ when not applicable.
+    ipam_ip_sources = DynamicModelMultipleChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        label="IPAM IP Addresses",
+        help_text="Select IP addresses from NetBox IPAM. Overrides the Data field in KEA config output.",
     )
 
     class Meta:
@@ -574,6 +570,116 @@ class OptionDataForm(NetBoxModelForm):
         if not self.instance.pk:
             self.fields["csv_format"].initial = True
 
+        # Add HTMX attributes to the definition widget so the form reloads on change
+        defn_widget = self.fields["definition"].widget
+        defn_widget.attrs.update({
+            "hx-get": ".",
+            "hx-include": "#form_fields",
+            "hx-target": "#form_fields",
+        })
+
+        # Determine if IP source fields should be shown based on selected definition
+        show_ip_sources = False
+        is_array = True
+        definition_id = get_field_value(self, "definition")
+        if definition_id:
+            try:
+                defn = OptionDefinition.objects.get(pk=definition_id)
+                show_ip_sources = defn.option_type == "ipv4-address"
+                is_array = defn.is_array
+            except OptionDefinition.DoesNotExist:
+                pass
+
+        if not show_ip_sources:
+            self.fields.pop("ipam_ip_sources", None)
+            self.fields.pop("dns_record_sources", None)
+        else:
+            # Hide data field — IP sources replace manual data entry for IP-type options
+            self.fields.pop("data", None)
+            # For single-value options, use single-select instead of multi-select
+            if not is_array:
+                self.fields["ipam_ip_sources"] = DynamicModelChoiceField(
+                    queryset=IPAddress.objects.all(),
+                    required=False,
+                    label="IPAM IP Address",
+                    help_text="Select an IP address from NetBox IPAM. Overrides the Data field in KEA config output.",
+                )
+
+            # Add DNS Record source field if netbox-dns integration is enabled
+            if get_plugin_config("netbox_dhcp_kea_plugin", "enable_netbox_dns"):
+                try:
+                    from netbox_dns.models import Record as DNSRecord
+
+                    if is_array:
+                        self.fields["dns_record_sources"] = DynamicModelMultipleChoiceField(
+                            queryset=DNSRecord.objects.filter(type="A"),
+                            required=False,
+                            label="DNS A Records",
+                            help_text="Select DNS A records. IPs resolved at KEA config generation time.",
+                        )
+                    else:
+                        self.fields["dns_record_sources"] = DynamicModelChoiceField(
+                            queryset=DNSRecord.objects.filter(type="A"),
+                            required=False,
+                            label="DNS A Record",
+                            help_text="Select a DNS A record. IP resolved at KEA config generation time.",
+                        )
+                except ImportError:
+                    pass
+
+            # Pre-populate IP source fields for existing objects
+            if self.instance.pk:
+                self._populate_ip_source_fields()
+
+    def _populate_ip_source_fields(self):
+        """Set initial values for IP source fields from existing OptionDataIPSource entries."""
+        from django.contrib.contenttypes.models import ContentType
+
+        from netbox_dhcp_kea_plugin.models import OptionDataIPSource
+
+        sources = OptionDataIPSource.objects.filter(option_data=self.instance).order_by("ordinal")
+        if not sources.exists():
+            return
+
+        ipam_ct = ContentType.objects.get(app_label="ipam", model="ipaddress")
+        ipam_ids = list(sources.filter(content_type=ipam_ct).values_list("object_id", flat=True))
+        if ipam_ids and "ipam_ip_sources" in self.fields:
+            self.initial["ipam_ip_sources"] = ipam_ids
+
+        if "dns_record_sources" in self.fields:
+            try:
+                dns_ct = ContentType.objects.get(app_label="netbox_dns", model="record")
+                dns_ids = list(sources.filter(content_type=dns_ct).values_list("object_id", flat=True))
+                if dns_ids:
+                    self.initial["dns_record_sources"] = dns_ids
+            except ContentType.DoesNotExist:
+                pass
+
+    @property
+    def fieldsets(self):
+        base = [
+            FieldSet(
+                "distinctive_name",
+                "delivery_type",
+                "vendor_option_space",
+                "definition",
+                "option_space",
+                name="Option Selection",
+            ),
+        ]
+        # Build IP Sources or manual Data fieldset based on available fields
+        ip_source_items = []
+        if "ipam_ip_sources" in self.fields:
+            ip_source_items.append("ipam_ip_sources")
+        if "dns_record_sources" in self.fields:
+            ip_source_items.append("dns_record_sources")
+        if ip_source_items:
+            base.append(FieldSet(*ip_source_items, InlineFields("always_send", "csv_format", label="Flags"), name="IP Sources"))
+        else:
+            base.append(FieldSet("data", InlineFields("always_send", "csv_format", label="Flags"), name="Value"))
+        base.append(FieldSet("description", "tags", name="Metadata"))
+        return tuple(base)
+
     def clean_csv_format(self):
         """Set csv_format to True if not provided (matching model default)"""
         csv_format = self.cleaned_data.get("csv_format")
@@ -581,6 +687,60 @@ class OptionDataForm(NetBoxModelForm):
         if csv_format is None or csv_format == "":
             return True
         return csv_format
+
+    def save(self, *args, **kwargs):
+        instance = super().save(*args, **kwargs)
+        self._save_ip_sources(instance)
+        return instance
+
+    def _save_ip_sources(self, instance):
+        """Sync OptionDataIPSource entries from form selections."""
+        from django.contrib.contenttypes.models import ContentType
+
+        from netbox_dhcp_kea_plugin.models import OptionDataIPSource
+
+        # Only process if IP source fields were present in the form
+        if "ipam_ip_sources" not in self.fields and "dns_record_sources" not in self.fields:
+            return
+
+        # Clear existing sources and rebuild
+        OptionDataIPSource.objects.filter(option_data=instance).delete()
+
+        ordinal = 0
+
+        # Add IPAM IP sources
+        ipam_selection = self.cleaned_data.get("ipam_ip_sources")
+        if ipam_selection:
+            ipam_ct = ContentType.objects.get(app_label="ipam", model="ipaddress")
+            # Handle both single and multi-select
+            if not hasattr(ipam_selection, "__iter__"):
+                ipam_selection = [ipam_selection]
+            for ip_obj in ipam_selection:
+                OptionDataIPSource.objects.create(
+                    option_data=instance,
+                    content_type=ipam_ct,
+                    object_id=ip_obj.pk,
+                    ordinal=ordinal,
+                )
+                ordinal += 1
+
+        # Add DNS Record sources
+        dns_selection = self.cleaned_data.get("dns_record_sources")
+        if dns_selection:
+            try:
+                dns_ct = ContentType.objects.get(app_label="netbox_dns", model="record")
+                if not hasattr(dns_selection, "__iter__"):
+                    dns_selection = [dns_selection]
+                for record_obj in dns_selection:
+                    OptionDataIPSource.objects.create(
+                        option_data=instance,
+                        content_type=dns_ct,
+                        object_id=record_obj.pk,
+                        ordinal=ordinal,
+                    )
+                    ordinal += 1
+            except ContentType.DoesNotExist:
+                pass
 
 
 class DHCPServerForm(NetBoxModelForm):

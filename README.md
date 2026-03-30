@@ -96,6 +96,42 @@ When `reservations-global` is effective for a subnet (explicitly set or inherite
 
 When `reservations-global` is not active, reservations are placed at the subnet level with full `ip-address`, `hw-address`, and `hostname`.
 
+### Option Data Validation & IP Source Linking
+
+#### Type-Based Validation
+
+Option Data values are validated against the option definition's type when using CSV format:
+
+- **IP addresses**: `ipv4-address`, `ipv6-address`, `ipv6-prefix` validated as proper addresses/prefixes
+- **Integers**: `uint8`, `uint16`, `uint32`, `int8`, `int16`, `int32` validated for correct range
+- **Booleans**: Must be `true`, `false`, `0`, or `1`
+- **FQDN**: Validated as proper domain name format
+- **Arrays**: Definitions with `is_array=True` accept comma-separated values; single-value definitions reject multiple values
+
+#### IP Source Linking
+
+For IP-type options (e.g. `routers`, `ntp-servers`), instead of entering IP addresses manually in the Data field, you can link to NetBox objects:
+
+- **IPAM IP Addresses**: Link to NetBox IPAM `IPAddress` objects
+- **DNS A Records**: Link to netbox-dns `Record` objects (requires `enable_netbox_dns: True`)
+
+When IP sources are linked:
+- The Data field is hidden in the form — IP sources replace manual entry
+- IPs are resolved from the linked objects at KEA config generation time
+- If the linked IP address changes in NetBox, the KEA config automatically picks up the new value (no signals needed)
+- Array-type options support multiple sources, ordered by ordinal
+- If all linked sources are deleted, falls back to the manual Data field
+
+Enable netbox-dns integration:
+
+```python
+PLUGINS_CONFIG = {
+    'netbox_dhcp_kea_plugin': {
+        'enable_netbox_dns': True,
+    },
+}
+```
+
 ### DHCP Reservations
 
 The plugin automatically discovers DHCP reservations from NetBox IP address assignments:
@@ -126,7 +162,7 @@ The plugin provides DHCP relay target information for configuring `ip helper-add
 
 | NetBox Version | Plugin Version |
 |----------------|----------------|
-|     4.5        |      0.6.0     |
+|     4.5        |      0.7.0     |
 
 ## Installation
 
@@ -160,6 +196,7 @@ PLUGINS_CONFIG = {
         'top_level_menu': True,      # Use top-level menu (default: True)
         'menu_name': 'DHCP KEA',     # Menu label (default: 'DHCP KEA')
         'enable_stork': True,        # Enable Stork monitoring integration (default: True)
+        'enable_netbox_dns': False,  # Enable netbox-dns IP source linking (default: False)
     },
 }
 ```
@@ -171,6 +208,7 @@ PLUGINS_CONFIG = {
 | `top_level_menu` | `True` | Display plugin as a top-level menu in the NetBox navigation |
 | `menu_name` | `'DHCP KEA'` | Label for the plugin menu |
 | `enable_stork` | `True` | Enable ISC Stork monitoring integration. When `False`, all Stork-related menu items, form fields, filters, API endpoints, and UI elements are hidden |
+| `enable_netbox_dns` | `False` | Enable netbox-dns integration for linking DNS A records as IP sources on Option Data |
 | `model_defaults` | *(see below)* | Default values for model fields, including reservation modes and lease lifetimes |
 
 #### Model Defaults

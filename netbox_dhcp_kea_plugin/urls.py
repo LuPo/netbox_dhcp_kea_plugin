@@ -229,8 +229,10 @@ _urlpatterns = [
     ),
 ]
 
+urlpatterns = _urlpatterns
+
 if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
-    _urlpatterns += [
+    urlpatterns += [
         # StorkServer URLs
         path("stork-servers/", views.StorkServerListView.as_view(), name="storkserver_list"),
         path("stork-servers/add/", views.StorkServerEditView.as_view(), name="storkserver_add"),
@@ -290,5 +292,3 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             name="storkagentgroup_config",
         ),
     ]
-
-urlpatterns = _urlpatterns

@@ -11,7 +11,7 @@
             {% for option in dhcp_config.option_data.all %}
             <tr>
                 <th><a href="{{ option.get_absolute_url }}">{{ option.distinctive_name }}</a></th>
-                <td><span class="text-muted">{{ option.name }}:</span> {{ option.data }}</td>
+                <td><span class="text-muted">{{ option.name }}:</span> {{ option.ascii_data }}</td>
             </tr>
             {% empty %}
             <tr>

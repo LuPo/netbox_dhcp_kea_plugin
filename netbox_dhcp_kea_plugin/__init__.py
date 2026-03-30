@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 
 from netbox.plugins import PluginConfig
@@ -21,6 +21,7 @@ class DHCPKEAConfig(PluginConfig):
         "top_level_menu": True,
         "menu_name": "DHCP KEA",
         "enable_stork": True,
+        "enable_netbox_dns": False,
         "model_defaults": {
             "Subnet": {
                 "valid_lifetime": 3600,

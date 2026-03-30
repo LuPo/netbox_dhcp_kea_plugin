@@ -24,7 +24,7 @@
                 {{ opt.get_option_space_display }}
                 {% endif %}
             </td>
-            <td><code>{{ opt.ascii_data|truncatechars:40 }}</code></td>
+            <td>{{ opt.ascii_data|truncatechars:40 }}</td>
             <td>{% if opt.always_send %}Yes{% else %}No{% endif %}</td>
             <td>{{ opt.description|placeholder }}</td>
         </tr>

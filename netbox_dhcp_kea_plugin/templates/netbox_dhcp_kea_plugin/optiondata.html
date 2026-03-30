@@ -36,12 +36,18 @@
                     </tr>
                     <tr>
                         <th scope="row">Data {% if not object.csv_format %}(Hex){% endif %}</th>
-                        <td>{{ object.data }}</td>
+                        <td>
+                            {% if ip_sources %}
+                            <span class="text-muted">Resolved from IP sources →</span> {{ kea_data }}
+                            {% else %}
+                            {{ object.data }}
+                            {% endif %}
+                        </td>
                     </tr>
                     {% if not object.csv_format %}
                     <tr>
                         <th scope="row">ASCII Data</th>
-                        <td><code>{{ object.ascii_data }}</code></td>
+                        <td>{{ object.ascii_data }}</td>
                     </tr>
                     {% endif %}
                     <tr>
@@ -59,6 +65,29 @@
                 </table>
             </div>
         </div>
+        {% if ip_sources %}
+        <div class="card">
+            <h5 class="card-header">IP Sources</h5>
+            <div class="card-body">
+                <p class="text-muted">IPs resolved from linked objects at config generation time. These override the Data field.</p>
+                <table class="table table-hover attr-table">
+                    {% for source in ip_sources %}
+                    <tr>
+                        <th scope="row">#{{ source.ordinal }}</th>
+                        <td>
+                            {% if source.ip_source %}
+                            <a href="{{ source.ip_source.get_absolute_url }}">{{ source.ip_source }}</a>
+                            <span class="text-muted">→ {{ source.resolved_ip }}</span>
+                            {% else %}
+                            <span class="text-danger">Source deleted</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+        {% endif %}
         {% include 'inc/panels/tags.html' %}
         {% plugin_left_page object %}
     </div>
@@ -72,7 +101,7 @@
     "space": "{{ object.option_space }}",
     "name": "{{ object.name }}",
     "code": {{ object.code }},
-    "data": "{{ object.data }}"{% if object.always_send %},
+    "data": "{{ kea_data }}"{% if object.always_send %},
     "always-send": true{% endif %}{% if not object.csv_format %},
     "csv-format": false{% endif %}
 
@@ -93,7 +122,7 @@
     "space": "{{ object.vendor_option_space.name }}",
     "name": "{{ object.name }}",
     "code": {{ object.code }},
-    "data": "{{ object.data }}"{% if object.always_send %},
+    "data": "{{ kea_data }}"{% if object.always_send %},
     "always-send": true{% endif %}{% if not object.csv_format %},
     "csv-format": false{% endif %}
 
@@ -111,7 +140,7 @@
     "space": "vendor-{{ object.vendor_option_space.enterprise_id }}",
     "name": "{{ object.name }}",
     "code": {{ object.code }},
-    "data": "{{ object.data }}"{% if object.always_send %},
+    "data": "{{ kea_data }}"{% if object.always_send %},
     "always-send": true{% endif %}{% if not object.csv_format %},
     "csv-format": false{% endif %}
 

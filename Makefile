@@ -76,13 +76,13 @@ help: ## Show this help
 
 .PHONY: test
 test: ##[test] Run full test suite (reuses test DB)
-	NETBOX_PATH=$(NETBOX_PATH) \
+	NETBOX_PATH=$(NETBOX_PATH) PYTHONPATH=$(NETBOX_PATH):$(PYTHONPATH) \
 	python -m pytest $(TESTS_DIR) $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
 	@printf '\033[32m✔ Tests passed.\033[0m\n'
 
 .PHONY: test-fresh
 test-fresh: ##[test] Run full test suite with fresh database (--create-db)
-	NETBOX_PATH=$(NETBOX_PATH) \
+	NETBOX_PATH=$(NETBOX_PATH) PYTHONPATH=$(NETBOX_PATH):$(PYTHONPATH) \
 	python -m pytest $(TESTS_DIR) --create-db $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
 	@printf '\033[32m✔ Tests passed (fresh DB).\033[0m\n'
 
@@ -91,13 +91,13 @@ test-file: ##[test] Run a single test file (F=path/to/test.py)
 ifndef F
 	$(error Set F=<test file>, e.g. make test-file F=tests/test_reservation_modes.py)
 endif
-	NETBOX_PATH=$(NETBOX_PATH) \
+	NETBOX_PATH=$(NETBOX_PATH) PYTHONPATH=$(NETBOX_PATH):$(PYTHONPATH) \
 	python -m pytest $(F) $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
 	@printf '\033[32m✔ Tests passed.\033[0m\n'
 
 .PHONY: test-cov
 test-cov: ##[test] Run tests with coverage report
-	NETBOX_PATH=$(NETBOX_PATH) \
+	NETBOX_PATH=$(NETBOX_PATH) PYTHONPATH=$(NETBOX_PATH):$(PYTHONPATH) \
 	python -m pytest $(TESTS_DIR) --cov=$(PLUGIN_PKG) --cov-report=term-missing --cov-report=html $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
 	@printf '\033[32m✔ Coverage report written to htmlcov/\033[0m\n'
 

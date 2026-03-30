@@ -267,6 +267,17 @@ class OptionDefinitionImportView(generic.BulkImportView):
 class OptionDataView(generic.ObjectView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
 
+    def get_extra_context(self, request, instance):
+        ip_sources = list(instance.ip_sources.order_by("ordinal"))
+        for source in ip_sources:
+            source.resolved_ip = models.OptionData._resolve_ip(source.ip_source)
+        # Resolve effective data for KEA config preview (IP sources override manual data)
+        kea_dict = instance.to_kea_dict()
+        return {
+            "ip_sources": ip_sources,
+            "kea_data": kea_dict.get("data", instance.data),
+        }
+
 
 class OptionDataListView(generic.ObjectListView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")

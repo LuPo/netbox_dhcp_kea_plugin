@@ -12,6 +12,7 @@ from ..models import (
     Hook,
     HookGroup,
     OptionData,
+    OptionDataIPSource,
     OptionDefinition,
     StorkAgentGroup,
     StorkServer,
@@ -171,10 +172,28 @@ class OptionDefinitionSerializer(NetBoxModelSerializer):
         )
 
 
+class OptionDataIPSourceSerializer(serializers.ModelSerializer):
+    resolved_ip = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OptionDataIPSource
+        fields = (
+            "id",
+            "content_type",
+            "object_id",
+            "ordinal",
+            "resolved_ip",
+        )
+
+    def get_resolved_ip(self, obj):
+        return OptionData._resolve_ip(obj.ip_source)
+
+
 class OptionDataSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:optiondata-detail")
     definition = NestedOptionDefinitionSerializer(read_only=True)
     vendor_option_space = NestedVendorOptionSpaceSerializer(read_only=True)
+    ip_sources = OptionDataIPSourceSerializer(many=True, read_only=True)
 
     class Meta:
         model = OptionData
@@ -190,6 +209,7 @@ class OptionDataSerializer(NetBoxModelSerializer):
             "data",
             "always_send",
             "csv_format",
+            "ip_sources",
             "description",
             "tags",
             "custom_fields",
