@@ -627,16 +627,19 @@ class OptionDataForm(NetBoxModelForm):
                 try:
                     from netbox_dns.models import Record as DNSRecord
 
+                    dns_query_params = {"type": ["A", "AAAA", "CNAME"]}
                     if is_array:
                         self.fields["dns_record_sources"] = DynamicModelMultipleChoiceField(
-                            queryset=DNSRecord.objects.filter(type__in=("A", "AAAA", "CNAME")),
+                            queryset=DNSRecord.objects.all(),
+                            query_params=dns_query_params,
                             required=False,
                             label="DNS Records",
                             help_text="Select DNS A/AAAA or CNAME records. IPs resolved at KEA config generation time.",
                         )
                     else:
                         self.fields["dns_record_sources"] = DynamicModelChoiceField(
-                            queryset=DNSRecord.objects.filter(type__in=("A", "AAAA", "CNAME")),
+                            queryset=DNSRecord.objects.all(),
+                            query_params=dns_query_params,
                             required=False,
                             label="DNS Record",
                             help_text="Select a DNS A/AAAA or CNAME record. IP resolved at KEA config generation time.",
