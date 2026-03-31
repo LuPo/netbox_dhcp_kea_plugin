@@ -629,17 +629,17 @@ class OptionDataForm(NetBoxModelForm):
 
                     if is_array:
                         self.fields["dns_record_sources"] = DynamicModelMultipleChoiceField(
-                            queryset=DNSRecord.objects.filter(type="A"),
+                            queryset=DNSRecord.objects.filter(type__in=("A", "AAAA", "CNAME")),
                             required=False,
-                            label="DNS A Records",
-                            help_text="Select DNS A records. IPs resolved at KEA config generation time.",
+                            label="DNS Records",
+                            help_text="Select DNS A/AAAA or CNAME records. IPs resolved at KEA config generation time.",
                         )
                     else:
                         self.fields["dns_record_sources"] = DynamicModelChoiceField(
-                            queryset=DNSRecord.objects.filter(type="A"),
+                            queryset=DNSRecord.objects.filter(type__in=("A", "AAAA", "CNAME")),
                             required=False,
-                            label="DNS A Record",
-                            help_text="Select a DNS A record. IP resolved at KEA config generation time.",
+                            label="DNS Record",
+                            help_text="Select a DNS A/AAAA or CNAME record. IP resolved at KEA config generation time.",
                         )
                 except ImportError:
                     pass

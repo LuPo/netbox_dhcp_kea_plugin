@@ -1472,9 +1472,19 @@ class OptionData(NetBoxModel):
         ip_sources = self.ip_sources.order_by("ordinal")
         if ip_sources.exists():
             resolved = [self._resolve_ip(src.ip_source) for src in ip_sources]
-            resolved_ips = [ip for ip in resolved if ip]
-            if resolved_ips:
-                result["data"] = ", ".join(resolved_ips)
+            # Flatten (CNAME sources may resolve to multiple comma-separated IPs)
+            # and deduplicate while preserving order.
+            seen = set()
+            unique_ips = []
+            for entry in resolved:
+                if not entry:
+                    continue
+                for ip in entry.split(", "):
+                    if ip not in seen:
+                        seen.add(ip)
+                        unique_ips.append(ip)
+            if unique_ips:
+                result["data"] = ", ".join(unique_ips)
             else:
                 result["data"] = self.data  # fallback if all sources deleted
         else:
@@ -1490,7 +1500,12 @@ class OptionData(NetBoxModel):
 
     @staticmethod
     def _resolve_ip(obj):
-        """Extract IP string from an IPAddress or DNS Record object."""
+        """Extract IP string from an IPAddress or DNS Record object.
+
+        For A records, returns the record value (an IP address).
+        For CNAME records, follows the chain to the target A records and
+        returns their IPs as a comma-separated string.
+        """
         if obj is None:
             return None
         from ipam.models import IPAddress
@@ -1502,6 +1517,10 @@ class OptionData(NetBoxModel):
             from netbox_dns.models import Record as DNSRecord
 
             if isinstance(obj, DNSRecord):
+                if obj.type == "CNAME":
+                    a_records = DNSRecord.objects.filter(type="A", fqdn=obj.value)
+                    ips = [r.value for r in a_records]
+                    return ", ".join(ips) if ips else None
                 return obj.value
         except ImportError:
             pass
