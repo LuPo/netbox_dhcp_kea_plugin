@@ -213,10 +213,15 @@ class TestToKeaDictIPSources:
             data="fallback-value",
             csv_format=True,
         )
-        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip.pk, ordinal=0)
+        stale_pk = ip.pk
+        source = OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=stale_pk, ordinal=0)
 
-        # Delete the IP, making the GFK resolve to None
+        # Remove the IP source link first (ProtectedError prevents direct IP deletion),
+        # then delete the IP. Re-create the source with the now-stale object_id
+        # so the GFK resolves to None.
+        source.delete()
         ip.delete()
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=stale_pk, ordinal=0)
 
         # Refresh to clear cached GFK
         opt.refresh_from_db()

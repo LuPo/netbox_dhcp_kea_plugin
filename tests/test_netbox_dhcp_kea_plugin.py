@@ -336,3 +336,64 @@ class TestDHCPServer:
         assert "NormalClass" in eval_classes, (
             "Normal class should appear in subnet's evaluate-additional-classes (it was added to the M2M)"
         )
+
+
+import pytest
+
+
+@pytest.mark.django_db
+class TestOptionDefinitionFormDynamicFields:
+    """Tests for dynamic record_types field in OptionDefinitionForm."""
+
+    def test_record_types_hidden_when_option_type_is_string(self):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(data={"option_type": "string"})
+        assert "record_types" not in form.fields
+
+    def test_record_types_shown_when_option_type_is_record(self):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(data={"option_type": "record"})
+        assert "record_types" in form.fields
+
+    def test_record_types_hidden_by_default(self):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm()
+        assert "record_types" not in form.fields
+
+    def test_fieldsets_include_record_types_when_record(self):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(data={"option_type": "record"})
+        advanced_fieldset = form.fieldsets[1]
+        assert "record_types" in advanced_fieldset.items
+
+    def test_fieldsets_exclude_record_types_when_not_record(self):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(data={"option_type": "string"})
+        advanced_fieldset = form.fieldsets[1]
+        assert "record_types" not in advanced_fieldset.items
+
+    def test_record_types_shown_for_existing_record_instance(self, db):
+        from netbox_dhcp_kea_plugin.models import OptionDefinition
+
+        definition = OptionDefinition.objects.create(
+            name="record-option",
+            code=200,
+            option_type="record",
+            option_space="dhcp4",
+            record_types="uint8, boolean",
+        )
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(instance=definition)
+        assert "record_types" in form.fields
+
+    def test_record_types_hidden_for_existing_string_instance(self, option_definition):
+        from netbox_dhcp_kea_plugin.forms import OptionDefinitionForm
+
+        form = OptionDefinitionForm(instance=option_definition)
+        assert "record_types" not in form.fields

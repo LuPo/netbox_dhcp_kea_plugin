@@ -473,18 +473,6 @@ class OptionDefinitionForm(NetBoxModelForm):
         help_text="Vendor option space this definition belongs to",
     )
 
-    fieldsets = (
-        FieldSet(
-            "name",
-            InlineFields("code", "option_type", label="Code & Type"),
-            InlineFields("option_space", "vendor_option_space", label="Option Space"),
-            "description",
-            "tags",
-            name="Option Definition",
-        ),
-        FieldSet("is_array", "encapsulate", "record_types", name="Advanced"),
-    )
-
     class Meta:
         model = OptionDefinition
         fields = (
@@ -498,6 +486,32 @@ class OptionDefinitionForm(NetBoxModelForm):
             "record_types",
             "description",
             "tags",
+        )
+        widgets = {
+            "option_type": HTMXSelect(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        option_type = get_field_value(self, "option_type")
+        if option_type != "record":
+            self.fields.pop("record_types", None)
+
+    @property
+    def fieldsets(self):
+        advanced_fields = ["is_array", "encapsulate"]
+        if "record_types" in self.fields:
+            advanced_fields.append("record_types")
+        return (
+            FieldSet(
+                "name",
+                InlineFields("code", "option_type", label="Code & Type"),
+                InlineFields("option_space", "vendor_option_space", label="Option Space"),
+                "description",
+                "tags",
+                name="Option Definition",
+            ),
+            FieldSet(*advanced_fields, name="Advanced"),
         )
 
     def clean(self):

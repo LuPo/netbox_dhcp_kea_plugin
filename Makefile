@@ -62,10 +62,12 @@ help: ## Show this help
 	@printf '  \033[36m%-24s\033[0m %s\n' "STOP"         "Set to 1 to stop on first failure (-x)"
 	@printf '  \033[36m%-24s\033[0m %s\n' "EXTRA_FLAGS"  "Extra pytest flags (e.g. \"--tb=long -s\")"
 	@printf '  \033[36m%-24s\033[0m %s\n' "K"            "pytest -k expression (e.g. K=test_pool)"
+	@printf '  \033[36m%-24s\033[0m %s\n' "T"            "pytest node ID (e.g. T=tests/test_foo.py::TestClass::test_method)"
 	@printf '\n\033[1mExamples:\033[0m\n'
 	@printf '  make test                                       \033[2m# full suite (reuse DB)\033[0m\n'
 	@printf '  make test-fresh                                 \033[2m# full suite (recreate DB)\033[0m\n'
 	@printf '  make test-file F=tests/test_reservation_modes.py\033[2m# single file\033[0m\n'
+	@printf '  make test T=tests/test_models.py::TestFoo::test_bar \033[2m# single test by node ID\033[0m\n'
 	@printf '  make test K=test_pool STOP=1 VERBOSE=1          \033[2m# filter + stop + verbose\033[0m\n'
 	@printf '  make check                                      \033[2m# lint + types + test\033[0m\n'
 	@printf '\n'
@@ -77,7 +79,7 @@ help: ## Show this help
 .PHONY: test
 test: ##[test] Run full test suite (reuses test DB)
 	NETBOX_PATH=$(NETBOX_PATH) PYTHONPATH=$(NETBOX_PATH):$(PYTHONPATH) \
-	python -m pytest $(TESTS_DIR) $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
+	python -m pytest $(if $(T),$(T),$(TESTS_DIR)) $(PYTEST_FLAGS) $(if $(K),-k "$(K)")
 	@printf '\033[32m✔ Tests passed.\033[0m\n'
 
 .PHONY: test-fresh
