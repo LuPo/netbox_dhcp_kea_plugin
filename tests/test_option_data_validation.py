@@ -142,13 +142,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="routers", code=3, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=True,
+            name="routers",
+            code=3,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=True,
         )
         opt = OptionData(
-            distinctive_name="test-routers", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="192.168.1.1", csv_format=True,
+            distinctive_name="test-routers",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="192.168.1.1",
+            csv_format=True,
         )
         opt.clean()  # should not raise
 
@@ -156,13 +162,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="routers", code=3, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=True,
+            name="routers",
+            code=3,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=True,
         )
         opt = OptionData(
-            distinctive_name="test-bad-router", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="not-an-ip", csv_format=True,
+            distinctive_name="test-bad-router",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="not-an-ip",
+            csv_format=True,
         )
         with pytest.raises(ValidationError, match="valid IPv4"):
             opt.clean()
@@ -171,13 +183,20 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="ntp-servers", code=42, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=True, is_array=True,
+            name="ntp-servers",
+            code=42,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=True,
+            is_array=True,
         )
         opt = OptionData(
-            distinctive_name="test-ntp", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="8.8.8.8, 8.8.4.4", csv_format=True,
+            distinctive_name="test-ntp",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="8.8.8.8, 8.8.4.4",
+            csv_format=True,
         )
         opt.clean()  # should not raise
 
@@ -185,13 +204,20 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="ntp-servers", code=42, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=True, is_array=True,
+            name="ntp-servers",
+            code=42,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=True,
+            is_array=True,
         )
         opt = OptionData(
-            distinctive_name="test-ntp-bad", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="8.8.8.8, not-an-ip", csv_format=True,
+            distinctive_name="test-ntp-bad",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="8.8.8.8, not-an-ip",
+            csv_format=True,
         )
         with pytest.raises(ValidationError, match="valid IPv4"):
             opt.clean()
@@ -200,13 +226,20 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="routers", code=3, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=True, is_array=False,
+            name="routers",
+            code=3,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=True,
+            is_array=False,
         )
         opt = OptionData(
-            distinctive_name="test-multi-single", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="192.168.1.1, 192.168.1.2", csv_format=True,
+            distinctive_name="test-multi-single",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="192.168.1.1, 192.168.1.2",
+            csv_format=True,
         )
         with pytest.raises(ValidationError, match="does not accept multiple values"):
             opt.clean()
@@ -216,13 +249,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="custom-opt", code=100, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=False,
+            name="custom-opt",
+            code=100,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=False,
         )
         opt = OptionData(
-            distinctive_name="test-hex", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="C0A80101", csv_format=False,  # hex for 192.168.1.1
+            distinctive_name="test-hex",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="C0A80101",
+            csv_format=False,  # hex for 192.168.1.1
         )
         opt.clean()  # should not raise — hex validation only, not IP format
 
@@ -231,9 +270,12 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData
 
         opt = OptionData(
-            distinctive_name="test-no-def", definition=None,
-            option_space="dhcp4", delivery_type="standard",
-            data="anything", csv_format=True,
+            distinctive_name="test-no-def",
+            definition=None,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="anything",
+            csv_format=True,
         )
         opt.clean()  # should not raise
 
@@ -242,13 +284,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="empty-opt", code=101, option_type="ipv4-address",
-            option_space="dhcp4", is_standard=False,
+            name="empty-opt",
+            code=101,
+            option_type="ipv4-address",
+            option_space="dhcp4",
+            is_standard=False,
         )
         opt = OptionData(
-            distinctive_name="test-empty", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="", csv_format=True,
+            distinctive_name="test-empty",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
         )
         opt.clean()  # should not raise
 
@@ -256,13 +304,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="mtu", code=26, option_type="uint16",
-            option_space="dhcp4", is_standard=True,
+            name="mtu",
+            code=26,
+            option_type="uint16",
+            option_space="dhcp4",
+            is_standard=True,
         )
         opt = OptionData(
-            distinctive_name="test-mtu", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="1500", csv_format=True,
+            distinctive_name="test-mtu",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="1500",
+            csv_format=True,
         )
         opt.clean()  # should not raise
 
@@ -270,13 +324,19 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="mtu-bad", code=26, option_type="uint16",
-            option_space="dhcp4", is_standard=True,
+            name="mtu-bad",
+            code=26,
+            option_type="uint16",
+            option_space="dhcp4",
+            is_standard=True,
         )
         opt = OptionData(
-            distinctive_name="test-mtu-bad", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="70000", csv_format=True,
+            distinctive_name="test-mtu-bad",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="70000",
+            csv_format=True,
         )
         with pytest.raises(ValidationError, match="between 0 and 65535"):
             opt.clean()
@@ -285,12 +345,18 @@ class TestOptionDataCleanValidation:
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDefinition
 
         defn = OptionDefinition.objects.create(
-            name="ip-forwarding", code=19, option_type="boolean",
-            option_space="dhcp4", is_standard=True,
+            name="ip-forwarding",
+            code=19,
+            option_type="boolean",
+            option_space="dhcp4",
+            is_standard=True,
         )
         opt = OptionData(
-            distinctive_name="test-fwd", definition=defn,
-            option_space="dhcp4", delivery_type="standard",
-            data="true", csv_format=True,
+            distinctive_name="test-fwd",
+            definition=defn,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="true",
+            csv_format=True,
         )
         opt.clean()  # should not raise

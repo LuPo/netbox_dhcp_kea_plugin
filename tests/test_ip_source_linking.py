@@ -239,8 +239,12 @@ class TestToKeaDictIPSources:
             csv_format=True,
         )
         # Create in reverse ordinal order
-        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip_second.pk, ordinal=1)
-        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip_first.pk, ordinal=0)
+        OptionDataIPSource.objects.create(
+            option_data=opt, content_type=ipam_content_type, object_id=ip_second.pk, ordinal=1
+        )
+        OptionDataIPSource.objects.create(
+            option_data=opt, content_type=ipam_content_type, object_id=ip_first.pk, ordinal=0
+        )
 
         kea = opt.to_kea_dict()
         assert kea["data"] == "1.1.1.1, 2.2.2.2"
@@ -268,7 +272,6 @@ class TestToKeaDictIPSources:
 
     def test_ip_changed_reflected_in_to_kea_dict(self, ipv4_definition, ip_address_factory, ipam_content_type):
         """When the linked IP address changes, to_kea_dict() picks up the new value."""
-        from ipam.models import IPAddress
 
         from netbox_dhcp_kea_plugin.models import OptionData, OptionDataIPSource
 

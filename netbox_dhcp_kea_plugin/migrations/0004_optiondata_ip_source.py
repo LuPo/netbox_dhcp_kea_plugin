@@ -8,7 +8,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("contenttypes", "0002_remove_content_type_name"),
         ("extras", "0134_owner"),
@@ -21,9 +20,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False
-                    ),
+                    models.BigAutoField(auto_created=True, primary_key=True, serialize=False),
                 ),
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -40,9 +37,7 @@ class Migration(migrations.Migration):
                 (
                     "content_type",
                     models.ForeignKey(
-                        limit_choices_to=models.Q(
-                            ("app_label", "ipam"), ("model", "ipaddress")
-                        ),
+                        limit_choices_to=models.Q(("app_label", "ipam"), ("model", "ipaddress")),
                         on_delete=django.db.models.deletion.CASCADE,
                         to="contenttypes.contenttype",
                     ),
@@ -57,9 +52,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "tags",
-                    taggit.managers.TaggableManager(
-                        through="extras.TaggedItem", to="extras.Tag"
-                    ),
+                    taggit.managers.TaggableManager(through="extras.TaggedItem", to="extras.Tag"),
                 ),
             ],
             options={
