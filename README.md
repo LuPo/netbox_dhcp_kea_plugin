@@ -113,7 +113,8 @@ Option Data values are validated against the option definition's type when using
 For IP-type options (e.g. `routers`, `ntp-servers`), instead of entering IP addresses manually in the Data field, you can link to NetBox objects:
 
 - **IPAM IP Addresses**: Link to NetBox IPAM `IPAddress` objects
-- **DNS A Records**: Link to netbox-dns `Record` objects (requires `enable_netbox_dns: True`)
+- **DNS A/AAAA Records**: Link to netbox-dns `Record` objects (requires `enable_netbox_dns: True`)
+- **DNS CNAME Records**: Link to netbox-dns CNAME records — IPs are resolved by following the CNAME chain to target A records at config generation time
 
 When IP sources are linked:
 - The Data field is hidden in the form — IP sources replace manual entry
@@ -208,7 +209,7 @@ PLUGINS_CONFIG = {
 | `top_level_menu` | `True` | Display plugin as a top-level menu in the NetBox navigation |
 | `menu_name` | `'DHCP KEA'` | Label for the plugin menu |
 | `enable_stork` | `True` | Enable ISC Stork monitoring integration. When `False`, all Stork-related menu items, form fields, filters, API endpoints, and UI elements are hidden |
-| `enable_netbox_dns` | `False` | Enable netbox-dns integration for linking DNS A records as IP sources on Option Data |
+| `enable_netbox_dns` | `False` | Enable netbox-dns integration for linking DNS A/AAAA/CNAME records as IP sources on Option Data |
 | `model_defaults` | *(see below)* | Default values for model fields, including reservation modes and lease lifetimes |
 
 #### Model Defaults

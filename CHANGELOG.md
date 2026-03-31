@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.2 (2026-04-01)
+
+### Added
+- **DNS CNAME Record Support for IP Source Linking**
+  - DNS CNAME records can now be linked as IP sources on Option Data alongside A/AAAA records
+  - CNAME records are resolved by following the chain to their target A records at KEA config generation time
+  - A single CNAME source can resolve to multiple IPs when the target has multiple A records
+  - DNS Record selector now filters to A, AAAA, and CNAME record types
+
+- **Dynamic `record_types` Field on Option Definition Form**
+  - The `record_types` field is now hidden when `option_type` is not `record`
+  - Uses `HTMXSelect` widget on `option_type` for dynamic form reloading
+  - `fieldsets` property conditionally includes `record_types` in the Advanced fieldset
+
+### Changed
+- `OptionData.to_kea_dict()` deduplicates resolved IPs while preserving ordinal order — prevents duplicate entries when the same IP is linked via multiple sources (e.g. an A record and a CNAME pointing to it)
+- DNS Record IP source field label updated from "DNS A Records" to "DNS Records" to reflect broader type support
+
+### Fixed
+- `test_deleted_source_falls_back_to_data` test updated to work with `ProtectedError` on IP source deletion introduced in 0.7.0
+
 ## 0.7.0 (2026-03-31)
 
 ### Added
