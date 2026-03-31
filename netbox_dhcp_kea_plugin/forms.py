@@ -536,8 +536,9 @@ class OptionDataForm(NetBoxModelForm):
         required=True,
         query_params={
             "vendor_option_space_id": "$vendor_option_space",
+            "option_space": "$option_space",
         },
-        help_text="Option definition - filtered by vendor option space (or standard/custom if none selected)",
+        help_text="Option definition - filtered by vendor option space, or by option space when no vendor is selected",
     )
 
     # IP source fields — conditionally shown when definition is ipv4-address type.
@@ -572,11 +573,13 @@ class OptionDataForm(NetBoxModelForm):
 
         # Add HTMX attributes to the definition widget so the form reloads on change
         defn_widget = self.fields["definition"].widget
-        defn_widget.attrs.update({
-            "hx-get": ".",
-            "hx-include": "#form_fields",
-            "hx-target": "#form_fields",
-        })
+        defn_widget.attrs.update(
+            {
+                "hx-get": ".",
+                "hx-include": "#form_fields",
+                "hx-target": "#form_fields",
+            }
+        )
 
         # Determine if IP source fields should be shown based on selected definition
         show_ip_sources = False
@@ -662,8 +665,8 @@ class OptionDataForm(NetBoxModelForm):
                 "distinctive_name",
                 "delivery_type",
                 "vendor_option_space",
-                "definition",
                 "option_space",
+                "definition",
                 name="Option Selection",
             ),
         ]
@@ -674,7 +677,9 @@ class OptionDataForm(NetBoxModelForm):
         if "dns_record_sources" in self.fields:
             ip_source_items.append("dns_record_sources")
         if ip_source_items:
-            base.append(FieldSet(*ip_source_items, InlineFields("always_send", "csv_format", label="Flags"), name="IP Sources"))
+            base.append(
+                FieldSet(*ip_source_items, InlineFields("always_send", "csv_format", label="Flags"), name="IP Sources")
+            )
         else:
             base.append(FieldSet("data", InlineFields("always_send", "csv_format", label="Flags"), name="Value"))
         base.append(FieldSet("description", "tags", name="Metadata"))

@@ -88,7 +88,9 @@ class OptionDefinitionFilterSet(NetBoxModelFilterSet):
     vendor_option_space_id = django_filters.CharFilter(
         method="filter_vendor_option_space_id", label="Vendor Option Space (ID)"
     )
-    option_space = django_filters.ChoiceFilter(choices=OptionDefinition.OPTION_SPACE_CHOICES, label="Option Space")
+    option_space = django_filters.ChoiceFilter(
+        choices=OptionDefinition.OPTION_SPACE_CHOICES, label="Option Space", method="filter_option_space"
+    )
     option_type = django_filters.ChoiceFilter(choices=OptionDefinition.OPTION_TYPE_CHOICES, label="Option Type")
 
     class Meta:
@@ -110,6 +112,16 @@ class OptionDefinitionFilterSet(NetBoxModelFilterSet):
         if value is None or value == "" or value == "null" or value == "0":
             return queryset.filter(vendor_option_space__isnull=True)
         return queryset.filter(vendor_option_space_id=int(value))
+
+    def filter_option_space(self, queryset, name, value):
+        """Filter by option_space, but skip when a vendor option space is selected."""
+        if not value:
+            return queryset
+        # If vendor_option_space_id is set, vendor definitions have their own space — skip this filter
+        vos = self.data.get("vendor_option_space_id", "")
+        if vos and vos not in ("", "null", "0"):
+            return queryset
+        return queryset.filter(option_space=value)
 
     def search(self, queryset, name, value):
         if not value.strip():
