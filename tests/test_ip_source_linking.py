@@ -1,6 +1,7 @@
 """Tests for OptionData IP source linking and resolution."""
 
 import pytest
+from django import forms
 from django.contrib.contenttypes.models import ContentType
 
 
@@ -300,3 +301,271 @@ class TestToKeaDictIPSources:
         # to_kea_dict should resolve the new IP without any signal
         kea = opt.to_kea_dict()
         assert kea["data"] == "10.0.0.99"
+
+
+@pytest.fixture
+def record_ipv4_definition(db):
+    """Create a record(boolean, ipv4-address) OptionDefinition with is_array=True."""
+    from netbox_dhcp_kea_plugin.models import OptionDefinition
+
+    return OptionDefinition.objects.create(
+        name="record-with-ip",
+        code=200,
+        option_type="record",
+        record_types="boolean, ipv4-address",
+        option_space="dhcp4",
+        is_array=True,
+    )
+
+
+@pytest.fixture
+def record_ipv4_single_definition(db):
+    """Create a record(boolean, ipv4-address) OptionDefinition with is_array=False."""
+    from netbox_dhcp_kea_plugin.models import OptionDefinition
+
+    return OptionDefinition.objects.create(
+        name="record-single-ip",
+        code=201,
+        option_type="record",
+        record_types="boolean, ipv4-address",
+        option_space="dhcp4",
+        is_array=False,
+    )
+
+
+@pytest.fixture
+def record_no_ip_definition(db):
+    """Create a record(boolean, string) OptionDefinition without IP fields."""
+    from netbox_dhcp_kea_plugin.models import OptionDefinition
+
+    return OptionDefinition.objects.create(
+        name="slp-service-scope",
+        code=79,
+        option_type="record",
+        record_types="boolean, string",
+        option_space="dhcp4",
+        is_array=False,
+    )
+
+
+class TestOptionDefinitionRecordHelpers:
+    """Tests for OptionDefinition record-type helper methods."""
+
+    def test_parsed_record_types(self, record_ipv4_definition):
+        assert record_ipv4_definition.parsed_record_types() == ["boolean", "ipv4-address"]
+
+    def test_parsed_record_types_empty(self, ipv4_definition):
+        assert ipv4_definition.parsed_record_types() == []
+
+    def test_record_ip_field_index(self, record_ipv4_definition):
+        assert record_ipv4_definition.record_ip_field_index() == 1
+
+    def test_record_ip_field_index_none(self, record_no_ip_definition):
+        assert record_no_ip_definition.record_ip_field_index() is None
+
+
+class TestRecordTypeToKeaDict:
+    """Tests for to_kea_dict() with record-type IP source linking."""
+
+    def test_record_with_ip_sources_assembles_data(self, record_ipv4_definition, ip_address_factory, ipam_content_type):
+        """Record(boolean, ipv4-address) with IP sources assembles 'true, 10.0.0.1, 10.0.0.2'."""
+        from netbox_dhcp_kea_plugin.models import OptionData, OptionDataIPSource
+
+        ip1 = ip_address_factory("10.0.0.1/24")
+        ip2 = ip_address_factory("10.0.0.2/24")
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-record-ip",
+            definition=record_ipv4_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
+            record_manual_fields={"0": "true"},
+        )
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip1.pk, ordinal=0)
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip2.pk, ordinal=1)
+
+        kea = opt.to_kea_dict()
+        assert kea["data"] == "true, 10.0.0.1, 10.0.0.2"
+
+    def test_record_single_ip_assembles_data(
+        self, record_ipv4_single_definition, ip_address_factory, ipam_content_type
+    ):
+        """Record(boolean, ipv4-address) non-array assembles 'true, 10.0.0.5'."""
+        from netbox_dhcp_kea_plugin.models import OptionData, OptionDataIPSource
+
+        ip = ip_address_factory("10.0.0.5/24")
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-record-single-ip",
+            definition=record_ipv4_single_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
+            record_manual_fields={"0": "false"},
+        )
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip.pk, ordinal=0)
+
+        kea = opt.to_kea_dict()
+        assert kea["data"] == "false, 10.0.0.5"
+
+    def test_record_without_ip_fields_uses_data(self, record_no_ip_definition):
+        """Record(boolean, string) without record_manual_fields falls back to plain data field."""
+        from netbox_dhcp_kea_plugin.models import OptionData
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-slp-scope",
+            definition=record_no_ip_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="true, FPSLP, Unscoped",
+            csv_format=True,
+        )
+
+        kea = opt.to_kea_dict()
+        assert kea["data"] == "true, FPSLP, Unscoped"
+
+    def test_record_without_ip_fields_assembles_from_manual_fields(self, record_no_ip_definition):
+        """Record(boolean, string) with record_manual_fields assembles data from individual fields."""
+        from netbox_dhcp_kea_plugin.models import OptionData
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-slp-scope-manual",
+            definition=record_no_ip_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
+            record_manual_fields={"0": "true", "1": "FPSLP, Unscoped"},
+        )
+
+        kea = opt.to_kea_dict()
+        assert kea["data"] == "true, FPSLP, Unscoped"
+
+    def test_record_deduplicates_ips(self, record_ipv4_definition, ip_address_factory, ipam_content_type):
+        """Duplicate IPs from multiple sources are deduplicated."""
+        from netbox_dhcp_kea_plugin.models import OptionData, OptionDataIPSource
+
+        ip1 = ip_address_factory("10.0.0.1/24")
+        ip2 = ip_address_factory("10.0.0.1/25")  # same IP, different prefix
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-record-dedup",
+            definition=record_ipv4_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
+            record_manual_fields={"0": "true"},
+        )
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip1.pk, ordinal=0)
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip2.pk, ordinal=1)
+
+        kea = opt.to_kea_dict()
+        assert kea["data"] == "true, 10.0.0.1"
+
+
+@pytest.mark.django_db
+class TestRecordTypeForm:
+    """Tests for OptionDataForm in record-type IP source mode."""
+
+    def test_record_ip_form_shows_record_fields_and_ip_sources(self, record_ipv4_definition):
+        """Record(boolean, ipv4-address) form shows boolean CharField + IP source selectors."""
+        from netbox_dhcp_kea_plugin.forms import OptionDataForm
+
+        form = OptionDataForm(data={"definition": record_ipv4_definition.pk})
+        assert "record_field_0" in form.fields, "Should have boolean record field"
+        assert "record_field_1" not in form.fields, "IP position should not have a text field"
+        assert "ipam_ip_sources" in form.fields, "Should have IP source selector"
+        assert "data" not in form.fields, "Data field should be hidden"
+
+    def test_record_no_ip_form_shows_individual_fields(self, record_no_ip_definition):
+        """Record(boolean, string) without IP fields shows individual record fields."""
+        from netbox_dhcp_kea_plugin.forms import OptionDataForm
+
+        form = OptionDataForm(data={"definition": record_no_ip_definition.pk})
+        assert "data" not in form.fields, "Data field should be hidden for record types"
+        assert "record_field_0" in form.fields, "Should have boolean field"
+        assert "record_field_1" in form.fields, "Should have string field"
+        assert "ipam_ip_sources" not in form.fields, "No IP sources for non-IP record"
+        # Boolean field should be a ChoiceField
+        assert isinstance(form.fields["record_field_0"], forms.ChoiceField)
+
+    def test_record_ip_fieldsets_contain_record_fields(self, record_ipv4_definition):
+        """Fieldsets include 'Record Fields' section with manual fields and IP sources."""
+        from netbox_dhcp_kea_plugin.forms import OptionDataForm
+
+        form = OptionDataForm(data={"definition": record_ipv4_definition.pk})
+        fieldset_names = [fs.name for fs in form.fieldsets]
+        assert "Record Fields" in fieldset_names
+
+    def test_record_single_ip_uses_single_select(self, record_ipv4_single_definition):
+        """Non-array record uses single-select for IP sources."""
+        from netbox_dhcp_kea_plugin.forms import OptionDataForm
+
+        form = OptionDataForm(data={"definition": record_ipv4_single_definition.pk})
+        assert "ipam_ip_sources" in form.fields
+        # Single-select is DynamicModelChoiceField, not DynamicModelMultipleChoiceField
+        from utilities.forms.fields import DynamicModelChoiceField
+
+        assert isinstance(form.fields["ipam_ip_sources"], DynamicModelChoiceField)
+
+
+class TestOptionDataSerializerData:
+    """Tests that the API serializer returns resolved data."""
+
+    def test_serializer_resolves_record_ip_data(self, record_ipv4_definition, ip_address_factory, ipam_content_type):
+        """API data field returns assembled record data with resolved IPs."""
+        from netbox_dhcp_kea_plugin.api.serializers import OptionDataSerializer
+        from netbox_dhcp_kea_plugin.models import OptionData, OptionDataIPSource
+
+        ip = ip_address_factory("10.0.0.1/24")
+        opt = OptionData.objects.create(
+            distinctive_name="test-api-record",
+            definition=record_ipv4_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="",
+            csv_format=True,
+            record_manual_fields={"0": "true"},
+        )
+        OptionDataIPSource.objects.create(option_data=opt, content_type=ipam_content_type, object_id=ip.pk, ordinal=0)
+
+        serializer = OptionDataSerializer(opt, context={"request": None})
+        assert serializer.data["data"] == "true, 10.0.0.1"
+
+    def test_serializer_returns_plain_data_for_simple_option(self, ipv4_definition):
+        """API data field returns plain data for non-record options without IP sources."""
+        from netbox_dhcp_kea_plugin.api.serializers import OptionDataSerializer
+        from netbox_dhcp_kea_plugin.models import OptionData
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-api-simple",
+            definition=ipv4_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="10.0.0.1",
+            csv_format=True,
+        )
+
+        serializer = OptionDataSerializer(opt, context={"request": None})
+        assert serializer.data["data"] == "10.0.0.1"
+
+    def test_serializer_resolves_record_no_ip_data(self, record_no_ip_definition):
+        """API data field returns assembled data for record types without IP fields."""
+        from netbox_dhcp_kea_plugin.api.serializers import OptionDataSerializer
+        from netbox_dhcp_kea_plugin.models import OptionData
+
+        opt = OptionData.objects.create(
+            distinctive_name="test-api-slp",
+            definition=record_no_ip_definition,
+            option_space="dhcp4",
+            delivery_type="standard",
+            data="true, FPSLP, Unscoped",
+            csv_format=True,
+        )
+
+        serializer = OptionDataSerializer(opt, context={"request": None})
+        assert serializer.data["data"] == "true, FPSLP, Unscoped"

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.3 (2026-04-07)
+
+### Added
+- **Record-Type Option Data Form with Individual Fields**
+  - Record-type option definitions (e.g., `record(boolean, ipv4-address)`) now show individual form fields for each position in the record instead of a single Data text field
+  - Boolean record fields render as a select dropdown (True/False)
+  - String and other non-IP fields render as text inputs
+  - IP-type fields within records get IPAM/DNS source selectors — single or multi-select based on `is_array` and position (only the last field in a KEA record can be an array)
+
+- **Record-Type IP Source Linking**
+  - New `record_manual_fields` JSONField on `OptionData` stores non-IP field values separately (e.g., `{"0": "true"}`)
+  - `OptionData.to_kea_dict()` assembles the final data by interleaving manual fields and resolved IPs at correct positions (e.g., `"true, 10.0.0.1, 10.0.0.2"`)
+  - `OptionDefinition` gains `parsed_record_types()` and `record_ip_field_index()` helper methods
+
+### Changed
+- `OptionData.clean()` skips type validation for IP-position fields in record types — IPs come from validated NetBox objects and need no re-checking
+- Record-type options with commas in the data field no longer trigger the "not an array" validation error
+- API `data` field on OptionData now returns resolved data from `to_kea_dict()` instead of raw stored value — shows assembled record fields and resolved IP sources
+
+### Migrations
+- `0005_optiondata_record_manual_fields` — adds `record_manual_fields` JSONField to `OptionData`
+
 ## 0.7.2 (2026-04-01)
 
 ### Added

@@ -1183,12 +1183,27 @@ class OptionDefinition(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:optiondefinition", args=[self.pk])
 
+    IP_TYPES = {"ipv4-address", "ipv6-address"}
+
     @property
     def space_name(self):
         """Return the effective space name for KEA config"""
         if self.vendor_option_space:
             return self.vendor_option_space.name
         return self.option_space
+
+    def parsed_record_types(self):
+        """Return a list of type strings from the comma-separated record_types field."""
+        if not self.record_types:
+            return []
+        return [t.strip() for t in self.record_types.split(",")]
+
+    def record_ip_field_index(self):
+        """Return the index of the first IP-type field in record_types, or None."""
+        for i, t in enumerate(self.parsed_record_types()):
+            if t in self.IP_TYPES:
+                return i
+        return None
 
     def to_kea_dict(self):
         """Return a dictionary representation for KEA option-def configuration.
@@ -1274,6 +1289,11 @@ class OptionData(NetBoxModel):
         help_text="How to deliver this option: standard (direct), Option 43, or VIVSO (Option 125)",
     )
     data = models.TextField(blank=True, default="", help_text="Option value/data")
+    record_manual_fields = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="For record-type options with IP sources: JSON dict mapping field positions to manual values.",
+    )
     always_send = models.BooleanField(
         default=False,
         help_text="Always send this option even if not requested by client",
@@ -1339,10 +1359,22 @@ class OptionData(NetBoxModel):
                 self.vendor_option_space = self.definition.vendor_option_space
 
         # Type-based validation of data against definition's option_type
-        if self.csv_format and self.data and self.definition:
+        # For record types with IP sources, validate only the manual fields — IP
+        # positions are filled from validated NetBox objects and need no re-checking.
+        if self.record_manual_fields and self.definition and self.definition.option_type == "record":
+            record_types = self.definition.parsed_record_types()
+            ip_index = self.definition.record_ip_field_index()
+            for idx_str, val in self.record_manual_fields.items():
+                i = int(idx_str)
+                if i == ip_index or not val or i >= len(record_types):
+                    continue
+                self._validate_typed_value(val, record_types[i])
+        elif self.csv_format and self.data and self.definition:
             values = [v.strip() for v in self.data.split(",")] if self.definition.is_array else [self.data.strip()]
-            # Single-value options must not contain commas
-            if not self.definition.is_array and "," in self.data:
+            # Single-value options must not contain commas, unless the definition
+            # is a "record" type where commas separate fields within a single value
+            # (e.g., slp-service-scope: "true, FPSLP, Unscoped").
+            if not self.definition.is_array and self.definition.option_type != "record" and "," in self.data:
                 raise ValidationError(
                     {"data": "This option does not accept multiple values (definition is not an array)."}
                 )
@@ -1470,7 +1502,28 @@ class OptionData(NetBoxModel):
 
         # Add data — resolve from IP sources if linked, otherwise use manual entry
         ip_sources = self.ip_sources.order_by("ordinal")
-        if ip_sources.exists():
+
+        if self.record_manual_fields and self.definition and self.definition.option_type == "record":
+            # Record-type with IP sources: assemble from manual fields + resolved IPs
+            record_types = self.definition.parsed_record_types()
+            ip_index = self.definition.record_ip_field_index()
+            parts = []
+            for i, type_name in enumerate(record_types):
+                if i == ip_index:
+                    # Resolve IP sources for this position
+                    resolved = [self._resolve_ip(src.ip_source) for src in ip_sources]
+                    seen = set()
+                    for entry in resolved:
+                        if not entry:
+                            continue
+                        for ip in entry.split(", "):
+                            if ip not in seen:
+                                seen.add(ip)
+                                parts.append(ip)
+                else:
+                    parts.append(self.record_manual_fields.get(str(i), ""))
+            result["data"] = ", ".join(parts)
+        elif ip_sources.exists():
             resolved = [self._resolve_ip(src.ip_source) for src in ip_sources]
             # Flatten (CNAME sources may resolve to multiple comma-separated IPs)
             # and deduplicate while preserving order.

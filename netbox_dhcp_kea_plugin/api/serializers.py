@@ -194,6 +194,11 @@ class OptionDataSerializer(NetBoxModelSerializer):
     definition = NestedOptionDefinitionSerializer(read_only=True)
     vendor_option_space = NestedVendorOptionSpaceSerializer(read_only=True)
     ip_sources = OptionDataIPSourceSerializer(many=True, read_only=True)
+    data = serializers.SerializerMethodField()
+
+    def get_data(self, obj):
+        """Return resolved data from to_kea_dict() for record/IP-source options."""
+        return obj.to_kea_dict().get("data", obj.data)
 
     class Meta:
         model = OptionData
