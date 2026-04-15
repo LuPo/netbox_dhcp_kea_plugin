@@ -1570,14 +1570,39 @@ class OptionData(NetBoxModel):
             from netbox_dns.models import Record as DNSRecord
 
             if isinstance(obj, DNSRecord):
+                if obj.type in ("A", "AAAA"):
+                    return obj.value
                 if obj.type == "CNAME":
-                    a_records = DNSRecord.objects.filter(type="A", fqdn=obj.value)
-                    ips = [r.value for r in a_records]
+                    ips = OptionData._resolve_cname_chain(obj.value, DNSRecord)
                     return ", ".join(ips) if ips else None
                 return obj.value
         except ImportError:
             pass
         return None
+
+    @staticmethod
+    def _resolve_cname_chain(fqdn, DNSRecord, max_depth=10):
+        """Follow a CNAME chain until A/AAAA records are reached.
+
+        Returns a list of IP address strings. Stops after *max_depth* hops
+        to guard against circular CNAME references.
+        """
+        visited = set()
+        current = fqdn
+        for __ in range(max_depth):
+            if current in visited:
+                break
+            visited.add(current)
+            # Look for A/AAAA records at this name
+            a_records = DNSRecord.objects.filter(fqdn=current, type__in=("A", "AAAA"))
+            if a_records.exists():
+                return [r.value for r in a_records]
+            # Follow one more CNAME hop
+            cname = DNSRecord.objects.filter(fqdn=current, type="CNAME").first()
+            if cname is None:
+                break
+            current = cname.value
+        return []
 
 
 class OptionDataIPSource(NetBoxModel):
