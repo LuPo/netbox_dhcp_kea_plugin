@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.7.3"
+__version__ = "0.8.0"
 
 
 from netbox.plugins import PluginConfig
@@ -22,6 +22,9 @@ class DHCPKEAConfig(PluginConfig):
         "menu_name": "DHCP KEA",
         "enable_stork": True,
         "enable_netbox_dns": False,
+        "enable_ddns": False,
+        "ddns_secret_backend": "plaintext",
+        "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
         "model_defaults": {
             "Subnet": {
                 "valid_lifetime": 3600,
@@ -98,6 +101,35 @@ class DHCPKEAConfig(PluginConfig):
 
         # Protect IP sources from deletion — GenericFK has no DB-level constraint
         self._register_ip_source_protection()
+
+        # DDNS depends on netbox-dns for Zone and NameServer objects
+        self._validate_ddns_dependencies()
+
+    @staticmethod
+    def _validate_ddns_dependencies():
+        """Raise if enable_ddns=True but netbox-dns isn't available."""
+        from django.conf import settings
+        from django.core.exceptions import ImproperlyConfigured
+
+        cfg = settings.PLUGINS_CONFIG.get("netbox_dhcp_kea_plugin", {})
+        if not cfg.get("enable_ddns"):
+            return
+
+        if not cfg.get("enable_netbox_dns"):
+            raise ImproperlyConfigured(
+                "netbox_dhcp_kea_plugin: enable_ddns=True requires "
+                "enable_netbox_dns=True — DDNS zones and nameservers are "
+                "pulled from the netbox-plugin-dns integration."
+            )
+
+        try:
+            import netbox_dns  # noqa: F401
+        except ImportError as exc:
+            raise ImproperlyConfigured(
+                "netbox_dhcp_kea_plugin: enable_ddns=True but "
+                "netbox_dns could not be imported. Install netbox-plugin-dns "
+                "and add it to PLUGINS."
+            ) from exc
 
     @staticmethod
     def _register_ip_source_protection():

@@ -7,6 +7,9 @@ from netbox.plugins.utils import get_plugin_config
 
 from .models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -17,6 +20,7 @@ from .models import (
     StorkServer,
     Subnet,
     SubnetPool,
+    TSIGKey,
     VendorOptionSpace,
 )
 
@@ -37,12 +41,18 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
     stork_agent_group = django_filters.ModelChoiceFilter(
         queryset=StorkAgentGroup.objects.all(), label="Stork Agent Group"
     )
+    d2_daemon = django_filters.ModelChoiceFilter(queryset=D2Daemon.objects.all(), label="D2 Daemon")
+    ddns_policy = django_filters.ModelChoiceFilter(queryset=DDNSPolicy.objects.all(), label="DDNS Policy")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             if "stork_agent_group" in self.filters:
                 del self.filters["stork_agent_group"]
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            for fname in ("d2_daemon", "ddns_policy"):
+                if fname in self.filters:
+                    del self.filters[fname]
 
     class Meta:
         model = DHCPServer
@@ -55,6 +65,8 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
             "ha_auto_failover",
             "stork_agent_group",
             "ctrl_socket_type",
+            "d2_daemon",
+            "ddns_policy",
         ]
 
     def search(self, queryset, name, value):
@@ -313,6 +325,80 @@ class StorkAgentGroupFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = StorkAgentGroup
         fields = ["id", "name", "stork_server", "operating_mode", "server"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+# --- DDNS FilterSets ---
+
+
+class TSIGKeyFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = TSIGKey
+        fields = ["id", "name", "algorithm", "secret_backend"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class D2DaemonFilterSet(NetBoxModelFilterSet):
+    ncr_protocol = django_filters.ChoiceFilter(choices=[("UDP", "UDP"), ("TCP", "TCP")])
+
+    class Meta:
+        model = D2Daemon
+        fields = ["id", "name", "ip_address", "port", "ncr_protocol", "ncr_format"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class DDNSDomainFilterSet(NetBoxModelFilterSet):
+    d2_daemon = django_filters.ModelChoiceFilter(queryset=D2Daemon.objects.all())
+    tsig_key = django_filters.ModelChoiceFilter(queryset=TSIGKey.objects.all())
+
+    class Meta:
+        model = DDNSDomain
+        fields = ["id", "d2_daemon", "zone", "tsig_key"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(d2_daemon__name__icontains=value))
+
+
+class DDNSPolicyFilterSet(NetBoxModelFilterSet):
+    server = django_filters.ModelChoiceFilter(
+        field_name="servers",
+        queryset=DHCPServer.objects.all(),
+        label="DHCP Server",
+    )
+    subnet = django_filters.ModelChoiceFilter(
+        field_name="subnets",
+        queryset=Subnet.objects.all(),
+    )
+    client_class = django_filters.ModelChoiceFilter(
+        field_name="client_classes",
+        queryset=ClientClass.objects.all(),
+    )
+
+    class Meta:
+        model = DDNSPolicy
+        fields = [
+            "id",
+            "name",
+            "ddns_send_updates",
+            "ddns_conflict_resolution_mode",
+            "server",
+            "subnet",
+            "client_class",
+        ]
 
     def search(self, queryset, name, value):
         if not value.strip():

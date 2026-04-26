@@ -7,6 +7,9 @@ from rest_framework import serializers
 
 from ..models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -18,6 +21,7 @@ from ..models import (
     StorkServer,
     Subnet,
     SubnetPool,
+    TSIGKey,
     VendorOptionSpace,
 )
 
@@ -232,6 +236,9 @@ class DHCPServerSerializer(NetBoxModelSerializer):
     ha_relationship = serializers.SerializerMethodField()
     ha_url = serializers.SerializerMethodField()
     stork_agent_group = NestedStorkAgentGroupSerializer(read_only=True)
+    d2_daemon = serializers.SerializerMethodField()
+    effective_d2_daemon = serializers.SerializerMethodField()
+    ddns_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = DHCPServer
@@ -259,6 +266,12 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "stork_agent_group",
+            "d2_daemon",
+            "effective_d2_daemon",
+            "ddns_enable_updates",
+            "ddns_sender_ip",
+            "ddns_sender_port",
+            "ddns_policy",
             "ctrl_socket_type",
             "ctrl_socket_http_address",
             "ctrl_socket_http_port",
@@ -273,6 +286,39 @@ class DHCPServerSerializer(NetBoxModelSerializer):
         super().__init__(*args, **kwargs)
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             self.fields.pop("stork_agent_group", None)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            for f in (
+                "d2_daemon",
+                "effective_d2_daemon",
+                "ddns_enable_updates",
+                "ddns_sender_ip",
+                "ddns_sender_port",
+                "ddns_policy",
+            ):
+                self.fields.pop(f, None)
+
+    def _daemon_dict(self, daemon):
+        if daemon is None:
+            return None
+        return {"id": daemon.id, "name": daemon.name}
+
+    def get_d2_daemon(self, obj):
+        return self._daemon_dict(obj.d2_daemon)
+
+    def get_effective_d2_daemon(self, obj):
+        daemon = obj.effective_d2_daemon
+        if daemon is None:
+            return None
+        result = self._daemon_dict(daemon)
+        result["inherited_from_ha_relationship"] = bool(
+            obj.ha_relationship_id and obj.ha_relationship.d2_daemon_id == daemon.id
+        )
+        return result
+
+    def get_ddns_policy(self, obj):
+        if obj.ddns_policy is None:
+            return None
+        return {"id": obj.ddns_policy.id, "name": obj.ddns_policy.name}
 
     def get_ha_url(self, obj):
         return obj.ha_url
@@ -290,6 +336,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
 class ClientClassSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:clientclass-detail")
     option_data = OptionDataSerializer(many=True, read_only=True)
+    ddns_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientClass
@@ -305,11 +352,22 @@ class ClientClassSerializer(NetBoxModelSerializer):
             "next_server",
             "server_hostname",
             "boot_file_name",
+            "ddns_policy",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("ddns_policy", None)
+
+    def get_ddns_policy(self, obj):
+        if obj.ddns_policy is None:
+            return None
+        return {"id": obj.ddns_policy.id, "name": obj.ddns_policy.name}
 
 
 class SubnetSerializer(NetBoxModelSerializer):
@@ -320,6 +378,7 @@ class SubnetSerializer(NetBoxModelSerializer):
     client_class = NestedClientClassSerializer(read_only=True)
     evaluate_additional_classes = NestedClientClassSerializer(many=True, read_only=True)
     router_ip = serializers.SerializerMethodField()
+    ddns_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = Subnet
@@ -340,15 +399,26 @@ class SubnetSerializer(NetBoxModelSerializer):
             "reservations_in_subnet",
             "reservations_out_of_pool",
             "reservations_only",
+            "ddns_policy",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("ddns_policy", None)
+
     def get_router_ip(self, obj):
         """Return the calculated router IP address."""
         return obj.get_router_ip()
+
+    def get_ddns_policy(self, obj):
+        if obj.ddns_policy is None:
+            return None
+        return {"id": obj.ddns_policy.id, "name": obj.ddns_policy.name}
 
 
 class SubnetPoolSerializer(NetBoxModelSerializer):
@@ -389,6 +459,7 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_dhcp_kea_plugin-api:dhcpharelationship-detail"
     )
     servers = NestedDHCPServerSerializer(many=True, read_only=True)
+    d2_daemon = serializers.SerializerMethodField()
 
     class Meta:
         model = DHCPHARelationship
@@ -409,11 +480,25 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
             "http_client_threads",
             "description",
             "servers",
+            "d2_daemon",
+            "ddns_enable_updates",
+            "ddns_policy",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            for f in ("d2_daemon", "ddns_enable_updates", "ddns_policy"):
+                self.fields.pop(f, None)
+
+    def get_d2_daemon(self, obj):
+        if obj.d2_daemon is None:
+            return None
+        return {"id": obj.d2_daemon.id, "name": obj.d2_daemon.name}
 
 
 class NestedStorkServerSerializer(WritableNestedSerializer):
@@ -494,3 +579,144 @@ class StorkAgentGroupSerializer(NetBoxModelSerializer):
     def get_servers(self, obj):
         servers = obj.servers.all()
         return NestedDHCPServerSerializer(servers, many=True, context=self.context).data
+
+
+# --- DDNS Serializers ---
+
+
+class NestedTSIGKeySerializer(WritableNestedSerializer):
+    class Meta:
+        model = TSIGKey
+        fields = ["id", "url", "display", "name", "algorithm"]
+
+
+class NestedD2DaemonSerializer(WritableNestedSerializer):
+    class Meta:
+        model = D2Daemon
+        fields = ["id", "url", "display", "name", "port"]
+
+
+class NestedDDNSPolicySerializer(WritableNestedSerializer):
+    class Meta:
+        model = DDNSPolicy
+        fields = ["id", "url", "display", "name"]
+
+
+class TSIGKeySerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:tsigkey-detail")
+
+    class Meta:
+        model = TSIGKey
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "algorithm",
+            "digest_bits",
+            "secret_backend",
+            "secret_plaintext",
+            "secret_ref",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request") if self.context else None
+        if request is None or not request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"):
+            self.fields.pop("secret_plaintext", None)
+
+
+class D2DaemonSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-detail")
+    ip_address = IPAddressSerializer(nested=True, read_only=True)
+    domains_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = D2Daemon
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "listener_mode",
+            "ip_address",
+            "port",
+            "control_socket_path",
+            "ncr_protocol",
+            "ncr_format",
+            "domains_count",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+    def get_domains_count(self, obj):
+        return obj.domains.count()
+
+
+class DDNSDomainSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-detail")
+    d2_daemon = NestedD2DaemonSerializer(read_only=True)
+    tsig_key = NestedTSIGKeySerializer(read_only=True)
+    zone = serializers.SerializerMethodField()
+    is_reverse = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = DDNSDomain
+        fields = (
+            "id",
+            "url",
+            "display",
+            "d2_daemon",
+            "zone",
+            "tsig_key",
+            "is_reverse",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+    def get_zone(self, obj):
+        if obj.zone_id is None:
+            return None
+        return {"id": obj.zone_id, "name": obj.zone.name}
+
+
+class DDNSPolicySerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:ddnspolicy-detail")
+
+    class Meta:
+        model = DDNSPolicy
+        fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "description",
+            "ddns_send_updates",
+            "ddns_override_no_update",
+            "ddns_override_client_update",
+            "ddns_replace_client_name",
+            "ddns_generated_prefix",
+            "ddns_qualifying_suffix",
+            "hostname_char_set",
+            "hostname_char_replacement",
+            "ddns_update_on_renew",
+            "ddns_conflict_resolution_mode",
+            "ddns_ttl_percent",
+            "ddns_ttl",
+            "ddns_ttl_min",
+            "ddns_ttl_max",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )

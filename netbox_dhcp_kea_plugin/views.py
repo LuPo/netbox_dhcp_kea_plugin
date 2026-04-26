@@ -372,6 +372,7 @@ class DHCPServerView(generic.ObjectView):
             "unreachable_subnets": unreachable_subnets,
             "unreachable_pools": unreachable_pools,
             "enable_stork": get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"),
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -517,9 +518,12 @@ class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
 
     def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
         return {
             "kea_config_hex": instance.to_kea_json(ascii_format=False, indent=4),
             "kea_config_ascii": instance.to_kea_json(ascii_format=True, indent=4),
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -696,6 +700,8 @@ class SubnetView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         import json
 
+        from netbox.plugins.utils import get_plugin_config
+
         # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
         # These classes are already evaluated globally by KEA, so listing them in
         # evaluate-additional-classes is redundant.
@@ -705,6 +711,7 @@ class SubnetView(generic.ObjectView):
             "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
             "pool_count": instance.subnet_pools.count(),
             "redundant_eval_classes": redundant_eval_classes,
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -772,6 +779,13 @@ class SubnetImportView(generic.BulkImportView):
 # DHCPHARelationship Views
 class DHCPHARelationshipView(generic.ObjectView):
     queryset = models.DHCPHARelationship.objects.prefetch_related("servers")
+
+    def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
+        return {
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
+        }
 
 
 class DHCPHARelationshipListView(generic.ObjectListView):
@@ -1144,4 +1158,276 @@ class StorkAgentGroupConfigView(generic.ObjectView):
                 "tab": self.tab,
                 "env_content": env_content,
             },
+        )
+
+
+# --- TSIGKey Views ---
+
+
+class TSIGKeyView(generic.ObjectView):
+    queryset = models.TSIGKey.objects.all()
+
+    def get_extra_context(self, request, instance):
+        return {
+            "can_view_secret": request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"),
+        }
+
+
+class TSIGKeyListView(generic.ObjectListView):
+    queryset = models.TSIGKey.objects.all()
+    table = tables.TSIGKeyTable
+    filterset = filtersets.TSIGKeyFilterSet
+    filterset_form = forms.TSIGKeyFilterForm
+
+
+class TSIGKeyEditView(generic.ObjectEditView):
+    queryset = models.TSIGKey.objects.all()
+    form = forms.TSIGKeyForm
+
+
+class TSIGKeyDeleteView(generic.ObjectDeleteView):
+    queryset = models.TSIGKey.objects.all()
+
+
+class TSIGKeyBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.TSIGKey.objects.all()
+    filterset = filtersets.TSIGKeyFilterSet
+    table = tables.TSIGKeyTable
+
+
+class TSIGKeyImportView(generic.BulkImportView):
+    queryset = models.TSIGKey.objects.all()
+    model_form = forms.TSIGKeyImportForm
+
+
+# --- D2Daemon Views ---
+
+
+class D2DaemonView(generic.ObjectView):
+    queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("domains")
+
+
+class D2DaemonListView(generic.ObjectListView):
+    queryset = models.D2Daemon.objects.annotate(
+        domains_count=Count("domains", distinct=True),
+    )
+    table = tables.D2DaemonTable
+    filterset = filtersets.D2DaemonFilterSet
+    filterset_form = forms.D2DaemonFilterForm
+
+
+class D2DaemonEditView(generic.ObjectEditView):
+    queryset = models.D2Daemon.objects.all()
+    form = forms.D2DaemonForm
+
+
+class D2DaemonDeleteView(generic.ObjectDeleteView):
+    queryset = models.D2Daemon.objects.all()
+
+
+class D2DaemonBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.D2Daemon.objects.all()
+    filterset = filtersets.D2DaemonFilterSet
+    table = tables.D2DaemonTable
+
+
+class D2DaemonImportView(generic.BulkImportView):
+    queryset = models.D2Daemon.objects.all()
+    model_form = forms.D2DaemonImportForm
+
+
+def get_d2daemon_domains_count(obj):
+    return obj.domains.count()
+
+
+@register_model_view(models.D2Daemon, name="domains", path="domains")
+class D2DaemonDomainsView(generic.ObjectView):
+    queryset = models.D2Daemon.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/d2daemon_domains.html"
+    tab = ViewTab(
+        label="Domains",
+        badge=get_d2daemon_domains_count,
+        permission="netbox_dhcp_kea_plugin.view_d2daemon",
+    )
+
+    def get(self, request, pk):
+        daemon = self.get_object(pk=pk)
+        domains = daemon.domains.select_related("zone", "tsig_key").prefetch_related("zone__nameservers")
+        return render(
+            request,
+            self.template_name,
+            {"object": daemon, "domains": domains, "tab": self.tab},
+        )
+
+
+@register_model_view(models.D2Daemon, name="config", path="config")
+class D2DaemonConfigView(generic.ObjectView):
+    queryset = models.D2Daemon.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/d2daemon_config.html"
+    tab = ViewTab(
+        label="Configuration",
+        permission="netbox_dhcp_kea_plugin.view_d2daemon",
+    )
+
+    def get(self, request, pk):
+        daemon = self.get_object(pk=pk)
+        config = daemon.to_kea_dict()
+        return render(
+            request,
+            self.template_name,
+            {
+                "object": daemon,
+                "tab": self.tab,
+                "config_json": json.dumps(config, indent=2),
+            },
+        )
+
+
+# --- DDNSDomain Views ---
+
+
+class DDNSDomainView(generic.ObjectView):
+    queryset = models.DDNSDomain.objects.select_related("d2_daemon", "zone", "tsig_key").prefetch_related(
+        "zone__nameservers"
+    )
+
+
+class DDNSDomainListView(generic.ObjectListView):
+    queryset = models.DDNSDomain.objects.all()
+    table = tables.DDNSDomainTable
+    filterset = filtersets.DDNSDomainFilterSet
+    filterset_form = forms.DDNSDomainFilterForm
+
+
+class DDNSDomainEditView(generic.ObjectEditView):
+    queryset = models.DDNSDomain.objects.all()
+    form = forms.DDNSDomainForm
+
+
+class DDNSDomainDeleteView(generic.ObjectDeleteView):
+    queryset = models.DDNSDomain.objects.all()
+
+
+class DDNSDomainBulkEditView(generic.BulkEditView):
+    queryset = models.DDNSDomain.objects.all()
+    filterset = filtersets.DDNSDomainFilterSet
+    table = tables.DDNSDomainTable
+    form = forms.DDNSDomainBulkEditForm
+
+
+class DDNSDomainBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DDNSDomain.objects.all()
+    filterset = filtersets.DDNSDomainFilterSet
+    table = tables.DDNSDomainTable
+
+
+class DDNSDomainImportView(generic.BulkImportView):
+    queryset = models.DDNSDomain.objects.all()
+    model_form = forms.DDNSDomainImportForm
+
+
+# --- DDNSPolicy Views ---
+
+
+class DDNSPolicyView(generic.ObjectView):
+    queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "client_classes")
+
+
+class DDNSPolicyListView(generic.ObjectListView):
+    queryset = models.DDNSPolicy.objects.annotate(
+        servers_count=Count("servers", distinct=True),
+        subnets_count=Count("subnets", distinct=True),
+        client_classes_count=Count("client_classes", distinct=True),
+    )
+    table = tables.DDNSPolicyTable
+    filterset = filtersets.DDNSPolicyFilterSet
+    filterset_form = forms.DDNSPolicyFilterForm
+
+
+class DDNSPolicyEditView(generic.ObjectEditView):
+    queryset = models.DDNSPolicy.objects.all()
+    form = forms.DDNSPolicyForm
+
+
+class DDNSPolicyDeleteView(generic.ObjectDeleteView):
+    queryset = models.DDNSPolicy.objects.all()
+
+
+class DDNSPolicyBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DDNSPolicy.objects.all()
+    filterset = filtersets.DDNSPolicyFilterSet
+    table = tables.DDNSPolicyTable
+
+
+class DDNSPolicyImportView(generic.BulkImportView):
+    queryset = models.DDNSPolicy.objects.all()
+    model_form = forms.DDNSPolicyImportForm
+
+
+def get_ddnspolicy_servers_count(obj):
+    return obj.servers.count()
+
+
+def get_ddnspolicy_subnets_count(obj):
+    return obj.subnets.count()
+
+
+def get_ddnspolicy_client_classes_count(obj):
+    return obj.client_classes.count()
+
+
+@register_model_view(models.DDNSPolicy, name="servers", path="servers")
+class DDNSPolicyServersView(generic.ObjectView):
+    queryset = models.DDNSPolicy.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_servers.html"
+    tab = ViewTab(
+        label="Servers",
+        badge=get_ddnspolicy_servers_count,
+        permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
+    )
+
+    def get(self, request, pk):
+        policy = self.get_object(pk=pk)
+        return render(
+            request,
+            self.template_name,
+            {"object": policy, "servers": policy.servers.all(), "tab": self.tab},
+        )
+
+
+@register_model_view(models.DDNSPolicy, name="subnets", path="subnets")
+class DDNSPolicySubnetsView(generic.ObjectView):
+    queryset = models.DDNSPolicy.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_subnets.html"
+    tab = ViewTab(
+        label="Subnets",
+        badge=get_ddnspolicy_subnets_count,
+        permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
+    )
+
+    def get(self, request, pk):
+        policy = self.get_object(pk=pk)
+        return render(
+            request,
+            self.template_name,
+            {"object": policy, "subnets": policy.subnets.all(), "tab": self.tab},
+        )
+
+
+@register_model_view(models.DDNSPolicy, name="clientclasses", path="client-classes")
+class DDNSPolicyClientClassesView(generic.ObjectView):
+    queryset = models.DDNSPolicy.objects.all()
+    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_clientclasses.html"
+    tab = ViewTab(
+        label="Client Classes",
+        badge=get_ddnspolicy_client_classes_count,
+        permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
+    )
+
+    def get(self, request, pk):
+        policy = self.get_object(pk=pk)
+        return render(
+            request,
+            self.template_name,
+            {"object": policy, "client_classes": policy.client_classes.all(), "tab": self.tab},
         )

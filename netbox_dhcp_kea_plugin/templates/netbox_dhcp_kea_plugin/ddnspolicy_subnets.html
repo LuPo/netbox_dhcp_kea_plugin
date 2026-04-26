@@ -1,0 +1,40 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        {% if subnets %}
+        <div class="card">
+            <h5 class="card-header">Subnets Using This Policy</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Subnet</th>
+                            <th>Server</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subnet in subnets %}
+                        <tr>
+                            <td><a href="{{ subnet.get_absolute_url }}">{{ subnet }}</a></td>
+                            <td>
+                                {% if subnet.server %}
+                                <a href="{{ subnet.server.get_absolute_url }}">{{ subnet.server.name }}</a>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No subnets reference this policy.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

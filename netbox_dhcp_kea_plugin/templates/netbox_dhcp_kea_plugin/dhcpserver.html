@@ -150,9 +150,13 @@
                         <td>{{ object.ctrl_socket_unix_path }}</td>
                     </tr>
                     {% endif %}
-                    <tr>
-                        <th colspan="2" class="table-light">Reservation Mode Defaults</th>
-                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h5 class="card-header">Reservation Mode Defaults</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
                     <tr>
                         <th>Reservations Global</th>
                         <td>
@@ -186,6 +190,76 @@
                 </table>
             </div>
         </div>
+        {% if enable_ddns %}
+        <div class="card">
+            <h5 class="card-header">DDNS</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>D2 Daemon</th>
+                        <td>
+                            {% with eff=object.effective_d2_daemon %}
+                            {% if eff %}
+                            <a href="{{ eff.get_absolute_url }}">{{ eff.name }}</a>
+                            {% if object.ha_relationship and object.ha_relationship.d2_daemon_id == eff.id %}
+                            <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Updates Enabled</th>
+                        <td>
+                            {% with src=object.ha_relationship %}
+                            {% if src and src.d2_daemon_id %}
+                                {% if object.ddns_enable_updates %}
+                                <i class="mdi mdi-check-bold text-success"></i>
+                                {% else %}
+                                <i class="mdi mdi-close-thick text-danger"></i>
+                                {% endif %}
+                                <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
+                            {% else %}
+                                {% if object.ddns_enable_updates %}
+                                <i class="mdi mdi-check-bold text-success"></i>
+                                {% else %}
+                                <i class="mdi mdi-close-thick text-danger"></i>
+                                {% endif %}
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>DDNS Policy</th>
+                        <td>
+                            {% with eff=object.effective_ddns_policy %}
+                            {% if eff %}
+                            <a href="{{ eff.get_absolute_url }}">{{ eff.name }}</a>
+                                {% if object.ha_relationship.ddns_policy_id %}
+                                <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Sender</th>
+                        <td>
+                            {% if object.ddns_sender_ip or object.ddns_sender_port %}
+                            {{ object.ddns_sender_ip|default:"—" }}{% if object.ddns_sender_port %}:{{ object.ddns_sender_port }}{% endif %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% endif %}
         <div class="card mt-3">
             <h5 class="card-header">Configuration Summary</h5>
             <div class="card-body">

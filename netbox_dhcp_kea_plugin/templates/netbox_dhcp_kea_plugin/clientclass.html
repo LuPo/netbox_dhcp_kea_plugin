@@ -44,6 +44,18 @@
                         <td>{{ object.boot_file_name }}</td>
                     </tr>
                     {% endif %}
+                    {% if enable_ddns %}
+                    <tr>
+                        <th>DDNS Policy</th>
+                        <td>
+                            {% if object.ddns_policy %}
+                            <a href="{{ object.ddns_policy.get_absolute_url }}">{{ object.ddns_policy.name }}</a>
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>

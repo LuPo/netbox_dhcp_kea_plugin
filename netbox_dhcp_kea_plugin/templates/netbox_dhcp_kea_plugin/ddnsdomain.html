@@ -1,0 +1,57 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">DDNS Domain</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>D2 Daemon</th>
+                        <td><a href="{{ object.d2_daemon.get_absolute_url }}">{{ object.d2_daemon.name }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Zone</th>
+                        <td>{{ object.zone }}</td>
+                    </tr>
+                    <tr>
+                        <th>Direction</th>
+                        <td>{% if object.is_reverse %}Reverse{% else %}Forward{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th>TSIG Key</th>
+                        <td>
+                            {% if object.tsig_key %}
+                            <a href="{{ object.tsig_key.get_absolute_url }}">{{ object.tsig_key.name }}</a>
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Zone Nameservers</h5>
+            <div class="card-body">
+                {% if object.zone and object.zone.nameservers.all %}
+                <ul class="list-unstyled mb-0">
+                    {% for ns in object.zone.nameservers.all %}
+                    <li>{{ ns }}</li>
+                    {% endfor %}
+                </ul>
+                <p class="text-muted small mt-2 mb-0">
+                    IPs are resolved at config-emit time from netbox-dns A/AAAA records.
+                </p>
+                {% else %}
+                <p class="text-muted mb-0">Zone has no nameservers assigned.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.8.0 (2026-04-26)
+
+### Added — Dynamic DNS (DDNS) support for Kea 3.0+
+Models the full `kea-dhcp-ddns` (D2) configuration surface and the per-server / per-subnet / per-class `ddns-*` knobs that `kea-dhcp4`/`kea-dhcp6` can render. Gated behind the `enable_ddns` plugin setting (which requires `enable_netbox_dns=True` — TSIG keys are plugin-local but zones and nameservers come from `netbox-plugin-dns`).
+
+- **New models**
+  - `TSIGKey` — RFC 2845 keys with algorithm choices, optional digest-bits truncation, and a pluggable `secret_backend` registry (v1 ships `plaintext`; `vault` reserved for future). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste `tsig-keygen` output verbatim or just save and let the plugin mint one. Plaintext reveal is gated by a dedicated `view_secret_tsigkey` permission.
+  - `D2Daemon` — one row per logical D2 service. `listener_mode` chooses between `local` (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and `remote` (single shared instance pinned to an IPAM record). Includes NCR transport, control-socket path (defaults from `d2_default_control_socket_path` plugin setting), and a per-daemon `/api/.../d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
+  - `DDNSDomain` — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward/reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the zone's `NameServer` records (A/AAAA/CNAME chain) at config-emit time. Create form is multi-zone — pick any combination of forward and reverse zones in one shot.
+  - `DDNSPolicy` — reusable `ddns-*` override group (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix`/`-qualifying-suffix`, `hostname-char-set`/`-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — `to_kea_overrides()` emits only the keys the operator set, kebab-cased.
+
+- **Existing model changes** (all nullable FKs, `on_delete=SET_NULL`)
+  - `DHCPServer.d2_daemon`, `ddns_enable_updates`, `ddns_sender_ip`, `ddns_sender_port`, `ddns_policy`
+  - `DHCPHARelationship.d2_daemon`, `ddns_enable_updates`, `ddns_policy`
+  - `Subnet.ddns_policy`
+  - `ClientClass.ddns_policy`
+
+- **HA-pair precedence** — `DHCPServer.effective_d2_daemon` and `effective_ddns_policy` properties: when the server's HA relationship has a value set, that wins (peers must agree on the D2 target and the `ddns-*` policy). Sender IP/port stay per-server (the local source endpoint is always per-host). The DHCPServer detail page shows the effective values with an "inherited from HA relationship" badge.
+
+- **Kea config emission** — no Python-side merging of override hierarchies. Each non-null `DDNSPolicy.to_kea_overrides()` is emitted verbatim at the JSON level the policy is attached to (server-level → `Dhcp4`/`Dhcp6` root, subnet-level → subnet dict, class-level → client-class dict). Kea resolves the precedence chain itself when processing packets.
+
+- **Bulk edit** — `DDNSDomain` got a bulk-edit view + form so you can set `d2_daemon` / `tsig_key` on many rows at once.
+
+- **Quick-add** — `tsig_key` field on `DDNSDomain` form has the `+` quick-add button so a new TSIG key can be created inline without leaving the form.
+
+### Plugin settings
+- `enable_ddns` (default `False`) — master switch; nav, URLs, API routes, form fields, and serializer fields are all gated by it.
+- `ddns_secret_backend` (default `"plaintext"`) — backend identifier for `TSIGKey.get_secret()`.
+- `d2_default_control_socket_path` (default `"/tmp/kea-dhcp-ddns-ctrl.sock"`) — pre-fills the control socket field on new `D2Daemon` rows.
+
 ## 0.7.3 (2026-04-07)
 
 ### Added

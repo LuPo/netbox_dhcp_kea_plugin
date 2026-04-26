@@ -31,6 +31,7 @@ This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configur
 - **HA Relationships**: Configure High Availability relationships between DHCP servers
 - **Stork Servers**: Manage ISC Stork monitoring server instances
 - **Stork Agent Groups**: Configure Stork agent groups that link DHCP servers to a Stork monitoring server
+- **TSIG Keys, D2 Daemons, DDNS Domains, DDNS Policies**: Optional Kea 3.0+ Dynamic DNS modelling (see [Dynamic DNS (DDNS)](#dynamic-dns-ddns))
 
 ### Stork Monitoring Integration
 
@@ -41,6 +42,26 @@ This plugin bridges the gap between NetBox IPAM and ISC KEA DHCP server configur
 - TLS and authentication options for Stork server connections
 - Stork features are fully optional — disable with `enable_stork: False` in plugin settings
 - API endpoints support `Accept: text/plain` for easy integration with Ansible `uri` module
+
+### Dynamic DNS (DDNS)
+
+Optional Kea 3.0+ Dynamic DNS support — model `kea-dhcp-ddns` (D2) instances, TSIG keys, forward/reverse zones, and the `ddns-*` policy knobs that `kea-dhcp4`/`kea-dhcp6` render at server / subnet / client-class scope.
+
+DDNS support is **disabled by default** and requires `enable_netbox_dns: True` (zones and nameservers are sourced from [`netbox-plugin-dns`](https://github.com/peteeckel/netbox-plugin-dns); TSIG keys are plugin-local). Enable with `enable_ddns: True` in `PLUGINS_CONFIG` (see [Configuration](#configuration)) — when off, the navigation entries, URLs, API routes, and form fields are all hidden.
+
+- **Models**
+  - `TSIGKey` — RFC 2845 keys with algorithm choices (`HMAC-MD5`/`SHA1`/`SHA224`/`SHA256`/`SHA384`/`SHA512`), optional digest-bits truncation, and a pluggable `secret_backend` registry (v1 ships `plaintext`; `vault` reserved). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — you can paste `tsig-keygen` output verbatim or just save and let the plugin mint a fresh one. Plaintext reveal is gated by a dedicated `view_secret_tsigkey` permission.
+  - `D2Daemon` — one row per logical D2 service. `listener_mode` chooses between **local** (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and **remote** (single shared instance pinned to an IPAM record). Each daemon exposes a per-instance `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
+  - `DDNSDomain` — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward/reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the zone's `NameServer` records (A/AAAA/CNAME chain) when the config is rendered. The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
+  - `DDNSPolicy` — reusable `ddns-*` override group attachable at server / subnet / client-class scope (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix`/`-qualifying-suffix`, `hostname-char-set`/`-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — only the keys you set are emitted, kebab-cased.
+
+- **HA-pair precedence** — when a `DHCPServer` is in an HA relationship and the relationship has its own `d2_daemon` or `ddns_policy` set, the relationship's value wins (peers must agree on the D2 target and the policy knobs). Sender IP/port stay per-server because the local source endpoint is per-host. The DHCPServer detail page shows the effective values with an "inherited from HA relationship" badge.
+
+- **Local-D2 redundancy pattern (recommended for HA)** — set `listener_mode: local` on the `D2Daemon` shared by an HA pair, then deploy `kea-dhcp-ddns` on every peer host with the same rendered config. Each peer's `kea-dhcp4`/`6` posts NCRs to its own `127.0.0.1:53001`. If the active peer reboots, the standby's local D2 takes over with no DDNS gap.
+
+- **Kea config emission** — no Python-side merging of override hierarchies. Each non-null `DDNSPolicy.to_kea_overrides()` is emitted verbatim at the JSON level the policy is attached to (server-level → `Dhcp4`/`Dhcp6` root, subnet-level → subnet dict, class-level → client-class dict). Kea resolves the precedence chain itself when processing packets.
+
+- **Bulk edit + quick-add** — `DDNSDomain` has a bulk-edit form (set `d2_daemon` / `tsig_key` on many rows at once), and the `tsig_key` field on the DDNS Domain form has a `+` quick-add button so a new TSIG key can be created inline without leaving the form.
 
 ### High Availability (HA) Support
 
