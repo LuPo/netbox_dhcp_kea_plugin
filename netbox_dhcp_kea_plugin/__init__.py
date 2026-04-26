@@ -24,6 +24,7 @@ class DHCPKEAConfig(PluginConfig):
         "enable_netbox_dns": False,
         "enable_ddns": False,
         "ddns_secret_backend": "plaintext",
+        "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
         "model_defaults": {
             "Subnet": {
                 "valid_lifetime": 3600,

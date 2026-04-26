@@ -2227,6 +2227,14 @@ class D2DaemonForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Default the control socket path from plugin config when creating
+        # a new D2Daemon (existing rows keep whatever they were saved with).
+        # Set form.initial (not field.initial) — ModelForm populates initial
+        # from the empty model instance and that wins over field.initial.
+        if not self.instance.pk and not self.initial.get("control_socket_path"):
+            self.initial["control_socket_path"] = get_plugin_config(
+                "netbox_dhcp_kea_plugin", "d2_default_control_socket_path"
+            )
         # Hide ip_address and port when the daemon is in local-listener mode —
         # each peer runs its own D2 on 127.0.0.1 with the model default port.
         if get_field_value(self, "listener_mode") == D2Daemon.LISTENER_MODE_LOCAL:
