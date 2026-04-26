@@ -202,7 +202,7 @@
                             {% if eff %}
                             <a href="{{ eff.get_absolute_url }}">{{ eff.name }}</a>
                             {% if object.ha_relationship and object.ha_relationship.d2_daemon_id == eff.id %}
-                            <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
+                            <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
                             {% endif %}
                             {% else %}
                             <span class="text-muted">None</span>
@@ -220,7 +220,7 @@
                                 {% else %}
                                 <i class="mdi mdi-close-thick text-danger"></i>
                                 {% endif %}
-                                <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
+                                <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
                             {% else %}
                                 {% if object.ddns_enable_updates %}
                                 <i class="mdi mdi-check-bold text-success"></i>
@@ -232,33 +232,27 @@
                         </td>
                     </tr>
                     <tr>
-                        <th>Sender</th>
+                        <th>DDNS Policy</th>
                         <td>
-                            {% with src=object.ha_relationship %}
-                            {% if src and src.d2_daemon_id %}
-                                {% if src.ddns_sender_ip or src.ddns_sender_port %}
-                                {{ src.ddns_sender_ip|default:"—" }}{% if src.ddns_sender_port %}:{{ src.ddns_sender_port }}{% endif %}
-                                <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
-                                {% else %}
-                                <span class="text-muted">—</span>
+                            {% with eff=object.effective_ddns_policy %}
+                            {% if eff %}
+                            <a href="{{ eff.get_absolute_url }}">{{ eff.name }}</a>
+                                {% if object.ha_relationship.ddns_policy_id %}
+                                <span class="badge bg-info float-end" style="color: #ffffff;">inherited from HA relationship</span>
                                 {% endif %}
                             {% else %}
-                                {% if object.ddns_sender_ip or object.ddns_sender_port %}
-                                {{ object.ddns_sender_ip|default:"—" }}{% if object.ddns_sender_port %}:{{ object.ddns_sender_port }}{% endif %}
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
+                            <span class="text-muted">None</span>
                             {% endif %}
                             {% endwith %}
                         </td>
                     </tr>
                     <tr>
-                        <th>DDNS Policy</th>
+                        <th>Sender</th>
                         <td>
-                            {% if object.ddns_policy %}
-                            <a href="{{ object.ddns_policy.get_absolute_url }}">{{ object.ddns_policy.name }}</a>
+                            {% if object.ddns_sender_ip or object.ddns_sender_port %}
+                            {{ object.ddns_sender_ip|default:"—" }}{% if object.ddns_sender_port %}:{{ object.ddns_sender_port }}{% endif %}
                             {% else %}
-                            <span class="text-muted">None</span>
+                            <span class="text-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>

@@ -632,6 +632,18 @@ class DHCPServer(NetBoxModel):
             return self.ha_relationship.d2_daemon
         return self.d2_daemon
 
+    @property
+    def effective_ddns_policy(self):
+        """Return the DDNSPolicy that actually applies to this server.
+
+        HA precedence: when the server is in an HA relationship whose
+        ``ddns_policy`` is set, that wins so peers emit identical
+        ``ddns-*`` overrides at the Dhcp4/6 root level.
+        """
+        if self.ha_relationship_id and self.ha_relationship.ddns_policy_id:
+            return self.ha_relationship.ddns_policy
+        return self.ddns_policy
+
     def _effective_ddns_field(self, name, blank_sentinel=""):
         """Resolve a DDNS scalar with HA precedence.
 
@@ -657,12 +669,12 @@ class DHCPServer(NetBoxModel):
             "ncr-protocol": daemon.ncr_protocol,
             "ncr-format": daemon.ncr_format,
         }
-        sender_ip = self._effective_ddns_field("ddns_sender_ip")
-        if sender_ip:
-            block["sender-ip"] = sender_ip
-        sender_port = self._effective_ddns_field("ddns_sender_port")
-        if sender_port is not None:
-            block["sender-port"] = sender_port
+        # Sender IP/port are per-server (the local source endpoint that
+        # sends NCRs), not shared across HA peers — read directly from self.
+        if self.ddns_sender_ip:
+            block["sender-ip"] = self.ddns_sender_ip
+        if self.ddns_sender_port is not None:
+            block["sender-port"] = self.ddns_sender_port
         return block
 
     def get_ha_primary(self):
@@ -1129,8 +1141,9 @@ class DHCPServer(NetBoxModel):
         ddns_block = self.effective_ddns_block()
         if ddns_block is not None:
             dhcp4["dhcp-ddns"] = ddns_block
-        if self.ddns_policy_id is not None:
-            dhcp4.update(self.ddns_policy.to_kea_overrides())
+        eff_policy = self.effective_ddns_policy
+        if eff_policy is not None:
+            dhcp4.update(eff_policy.to_kea_overrides())
 
         return result
 
@@ -2779,16 +2792,16 @@ class DHCPHARelationship(NetBoxModel):
         default=True,
         help_text="DDNS enable-updates value used by all peers in this HA relationship",
     )
-    ddns_sender_ip = models.CharField(
-        max_length=45,
-        blank=True,
-        default="",
-        help_text="Source IP all peers use to send NCRs (optional)",
-    )
-    ddns_sender_port = models.PositiveIntegerField(
+    ddns_policy = models.ForeignKey(
+        "DDNSPolicy",
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        help_text="Source port all peers use to send NCRs (optional)",
+        related_name="ha_relationships",
+        help_text=(
+            "DDNS policy shared by all peers in this HA relationship. "
+            "When set, overrides each member server's standalone ddns_policy."
+        ),
     )
 
     class Meta:

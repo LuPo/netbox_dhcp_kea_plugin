@@ -284,13 +284,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="dhcpharelationship",
-            name="ddns_sender_ip",
-            field=models.CharField(blank=True, default="", max_length=45),
-        ),
-        migrations.AddField(
-            model_name="dhcpharelationship",
-            name="ddns_sender_port",
-            field=models.PositiveIntegerField(blank=True, null=True),
+            name="ddns_policy",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="ha_relationships",
+                to="netbox_dhcp_kea_plugin.ddnspolicy",
+            ),
         ),
         migrations.AddField(
             model_name="subnet",

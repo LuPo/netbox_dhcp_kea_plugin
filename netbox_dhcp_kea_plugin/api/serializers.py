@@ -482,8 +482,7 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
             "servers",
             "d2_daemon",
             "ddns_enable_updates",
-            "ddns_sender_ip",
-            "ddns_sender_port",
+            "ddns_policy",
             "tags",
             "custom_fields",
             "created",
@@ -493,7 +492,7 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
-            for f in ("d2_daemon", "ddns_enable_updates", "ddns_sender_ip", "ddns_sender_port"):
+            for f in ("d2_daemon", "ddns_enable_updates", "ddns_policy"):
                 self.fields.pop(f, None)
 
     def get_d2_daemon(self, obj):

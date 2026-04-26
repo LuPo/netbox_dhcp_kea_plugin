@@ -1,10 +1,11 @@
 """HA-relationship precedence rules for the D2 daemon and DDNS sender block.
 
 When a DHCPServer belongs to an HA relationship and that relationship has its
-own ``d2_daemon`` set, the relationship's DDNS block (d2_daemon +
-ddns_enable_updates + ddns_sender_ip + ddns_sender_port) wins and the
-server's own values are ignored. Removing the relationship reverts the server
-to its own values.
+own ``d2_daemon`` set, the relationship's d2_daemon and ddns_enable_updates
+win and the server's own values for those two are ignored. Sender IP/port are
+per-server (the local source endpoint) and are not overridden by the HA
+relationship. Removing the relationship reverts the server to its own
+d2_daemon/enable_updates values.
 """
 
 import pytest
@@ -115,11 +116,10 @@ def test_dhcpserver_to_kea_dict_uses_ha_d2_block(
     server = dhcp_server_factory(ha_relationship=ha_relationship, ha_role="primary")
     server.d2_daemon = d2_a
     server.ddns_sender_ip = "192.0.2.10"
+    server.ddns_sender_port = 5555
     server.save()
     ha_relationship.d2_daemon = d2_b
     ha_relationship.ddns_enable_updates = False
-    ha_relationship.ddns_sender_ip = "192.0.2.99"
-    ha_relationship.ddns_sender_port = 5555
     ha_relationship.save()
     server.refresh_from_db()
 
@@ -127,8 +127,55 @@ def test_dhcpserver_to_kea_dict_uses_ha_d2_block(
     dhcp4 = cfg.get("Dhcp4", {})
     block = dhcp4.get("dhcp-ddns")
     assert block is not None
+    # HA relationship wins for d2_daemon target + enable_updates flag
     assert block["server-ip"] == str(d2_b.ip_address.address.ip)
     assert block["server-port"] == d2_b.port
     assert block["enable-updates"] is False
-    assert block["sender-ip"] == "192.0.2.99"
+    # Sender stays per-server — never overridden by HA
+    assert block["sender-ip"] == "192.0.2.10"
     assert block["sender-port"] == 5555
+
+
+def test_effective_ddns_policy_returns_ha_when_set(
+    dhcp_server_factory, ha_relationship
+):
+    from netbox_dhcp_kea_plugin.models import DDNSPolicy
+
+    own = DDNSPolicy.objects.create(name="own", ddns_qualifying_suffix="own.example.com")
+    ha_pol = DDNSPolicy.objects.create(name="ha", ddns_qualifying_suffix="ha.example.com")
+    server = dhcp_server_factory(ha_relationship=ha_relationship, ha_role="primary")
+    server.ddns_policy = own
+    server.save()
+    ha_relationship.ddns_policy = ha_pol
+    ha_relationship.save()
+    server.refresh_from_db()
+    assert server.effective_ddns_policy.pk == ha_pol.pk
+
+
+def test_effective_ddns_policy_falls_back_to_own(dhcp_server_factory, ha_relationship):
+    from netbox_dhcp_kea_plugin.models import DDNSPolicy
+
+    own = DDNSPolicy.objects.create(name="own2", ddns_qualifying_suffix="own.example.com")
+    server = dhcp_server_factory(ha_relationship=ha_relationship, ha_role="primary")
+    server.ddns_policy = own
+    server.save()
+    assert ha_relationship.ddns_policy_id is None
+    assert server.effective_ddns_policy.pk == own.pk
+
+
+def test_dhcpserver_to_kea_dict_uses_ha_ddns_policy(
+    dhcp_server_factory, ha_relationship
+):
+    from netbox_dhcp_kea_plugin.models import DDNSPolicy
+
+    own = DDNSPolicy.objects.create(name="srv", ddns_qualifying_suffix="srv.example.com")
+    ha_pol = DDNSPolicy.objects.create(name="hap", ddns_qualifying_suffix="ha.example.com")
+    server = dhcp_server_factory(ha_relationship=ha_relationship, ha_role="primary")
+    server.ddns_policy = own
+    server.save()
+    ha_relationship.ddns_policy = ha_pol
+    ha_relationship.save()
+    server.refresh_from_db()
+
+    dhcp4 = server.to_kea_dict().get("Dhcp4", {})
+    assert dhcp4.get("ddns-qualifying-suffix") == "ha.example.com"

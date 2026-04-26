@@ -1649,6 +1649,14 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "Shared Kea D2 daemon for all member servers. When set, each member's standalone D2 daemon is ignored."
         ),
     )
+    ddns_policy = DynamicModelChoiceField(
+        queryset=DDNSPolicy.objects.all(),
+        required=False,
+        label="DDNS policy",
+        help_text=(
+            "Shared DDNS policy for all member servers. When set, each member's standalone DDNS policy is ignored."
+        ),
+    )
 
     fieldsets = (
         FieldSet("name", "mode", "description", "tags", name="General"),
@@ -1667,7 +1675,7 @@ class DHCPHARelationshipForm(NetBoxModelForm):
         FieldSet(
             "ddns_enable_updates",
             "d2_daemon",
-            InlineFields("ddns_sender_ip", "ddns_sender_port", label="Sender"),
+            "ddns_policy",
             name="DDNS",
         ),
     )
@@ -1689,20 +1697,14 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "description",
             "d2_daemon",
             "ddns_enable_updates",
-            "ddns_sender_ip",
-            "ddns_sender_port",
+            "ddns_policy",
             "tags",
         )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
-            for fname in (
-                "d2_daemon",
-                "ddns_enable_updates",
-                "ddns_sender_ip",
-                "ddns_sender_port",
-            ):
+            for fname in ("d2_daemon", "ddns_enable_updates", "ddns_policy"):
                 if fname in self.fields:
                     del self.fields[fname]
 
