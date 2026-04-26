@@ -263,17 +263,6 @@ _menu_groups = [
     ),
 ]
 
-if enable_stork:
-    _menu_groups.append(
-        (
-            "Stork Monitoring",
-            (
-                storkserver_menu_item,
-                storkagentgroup_menu_item,
-            ),
-        ),
-    )
-
 if enable_ddns:
     _menu_groups.append(
         (
@@ -283,6 +272,17 @@ if enable_ddns:
                 d2daemon_menu_item,
                 ddnsdomain_menu_item,
                 ddnspolicy_menu_item,
+            ),
+        ),
+    )
+
+if enable_stork:
+    _menu_groups.append(
+        (
+            "Stork Monitoring",
+            (
+                storkserver_menu_item,
+                storkagentgroup_menu_item,
             ),
         ),
     )
@@ -306,8 +306,6 @@ else:
         optiondata_menu_item,
         vendoroptionspace_menu_item,
     ]
-    if enable_stork:
-        _flat_items.extend([storkserver_menu_item, storkagentgroup_menu_item])
     if enable_ddns:
         _flat_items.extend(
             [
@@ -317,4 +315,7 @@ else:
                 ddnspolicy_menu_item,
             ]
         )
+    if enable_stork:
+        _flat_items.extend([storkserver_menu_item, storkagentgroup_menu_item])
+
     menu_items = tuple(_flat_items)
