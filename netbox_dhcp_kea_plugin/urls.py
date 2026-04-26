@@ -337,6 +337,7 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
         path("ddns-domains/", views.DDNSDomainListView.as_view(), name="ddnsdomain_list"),
         path("ddns-domains/add/", views.DDNSDomainEditView.as_view(), name="ddnsdomain_add"),
         path("ddns-domains/import/", views.DDNSDomainImportView.as_view(), name="ddnsdomain_bulk_import"),
+        path("ddns-domains/edit/", views.DDNSDomainBulkEditView.as_view(), name="ddnsdomain_bulk_edit"),
         path("ddns-domains/delete/", views.DDNSDomainBulkDeleteView.as_view(), name="ddnsdomain_bulk_delete"),
         path("ddns-domains/<int:pk>/", views.DDNSDomainView.as_view(), name="ddnsdomain"),
         path("ddns-domains/<int:pk>/edit/", views.DDNSDomainEditView.as_view(), name="ddnsdomain_edit"),

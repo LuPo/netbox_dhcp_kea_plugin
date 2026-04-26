@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
 from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.forms import (
+    NetBoxModelBulkEditForm,
     NetBoxModelFilterSetForm,
     NetBoxModelForm,
     NetBoxModelImportForm,
@@ -2253,14 +2254,6 @@ except ImportError:  # netbox_dns is optional unless enable_ddns=True
 
 class DDNSDomainForm(NetBoxModelForm):
     d2_daemon = DynamicModelChoiceField(queryset=D2Daemon.objects.all())
-    if _DNSZone is not None:
-        zone = DynamicModelChoiceField(
-            queryset=_DNSZone.objects.all(),
-            help_text=(
-                "Forward or reverse zone managed by this D2 daemon. "
-                "Authoritative DNS servers are taken from the zone's nameservers."
-            ),
-        )
     tsig_key = DynamicModelChoiceField(
         queryset=TSIGKey.objects.all(),
         required=False,
@@ -2282,6 +2275,86 @@ class DDNSDomainForm(NetBoxModelForm):
                 "DDNSDomainForm requires netbox-plugin-dns to be installed."
             )
         super().__init__(*args, **kwargs)
+        if self.instance.pk is None:
+            # Create mode: pick any number of zones (forward and/or reverse).
+            # One DDNSDomain row will be created per selected zone; direction
+            # is derived from each zone's name at config-emission time.
+            self.fields["zone"] = DynamicModelMultipleChoiceField(
+                queryset=_DNSZone.objects.all(),
+                label="Zones",
+                help_text=(
+                    "Select one or more forward and/or reverse zones managed "
+                    "by this D2 daemon. One DDNS Domain row is created per "
+                    "selected zone."
+                ),
+            )
+        else:
+            # Edit mode: a row binds exactly one zone.
+            self.fields["zone"] = DynamicModelChoiceField(
+                queryset=_DNSZone.objects.all(),
+                help_text=(
+                    "Forward or reverse zone managed by this D2 daemon. "
+                    "Authoritative DNS servers are taken from the zone's "
+                    "nameservers."
+                ),
+            )
+
+    def _post_clean(self):
+        # In create mode, ``zone`` is a queryset of multiple Zones — Django's
+        # ModelForm._post_clean() would try to assign it to the single-FK
+        # ``instance.zone`` and ValueError. Temporarily swap in the first
+        # selected zone so model-level validation has a real instance, then
+        # restore the queryset for our save() override.
+        zones = self.cleaned_data.get("zone")
+        if (
+            self.instance.pk is None
+            and zones is not None
+            and not isinstance(zones, _DNSZone)
+        ):
+            zone_list = list(zones)
+            if zone_list:
+                self.cleaned_data["zone"] = zone_list[0]
+                try:
+                    super()._post_clean()
+                finally:
+                    self.cleaned_data["zone"] = zone_list
+                return
+        super()._post_clean()
+
+    def save(self, commit=True):
+        # Edit path: standard single-instance save.
+        if self.instance.pk:
+            return super().save(commit=commit)
+
+        zones_or_one = self.cleaned_data.get("zone")
+        zones = (
+            [zones_or_one]
+            if isinstance(zones_or_one, _DNSZone)
+            else list(zones_or_one or [])
+        )
+        d2_daemon = self.cleaned_data["d2_daemon"]
+        tsig_key = self.cleaned_data.get("tsig_key")
+        tags = self.cleaned_data.get("tags") or []
+
+        created = []
+        for z in zones:
+            obj, was_created = DDNSDomain.objects.get_or_create(
+                d2_daemon=d2_daemon,
+                zone=z,
+                defaults={"tsig_key": tsig_key},
+            )
+            new_tsig_pk = tsig_key.pk if tsig_key else None
+            if not was_created and obj.tsig_key_id != new_tsig_pk:
+                obj.tsig_key = tsig_key
+                obj.save()
+            if tags:
+                obj.tags.set(tags)
+            created.append(obj)
+
+        # Point self.instance at one of the new rows so the view's success
+        # message and redirect have something to chew on.
+        self.instance = created[0] if created else self.instance
+        return self.instance
 
 
 class DDNSDomainFilterForm(NetBoxModelFilterSetForm):
@@ -2301,6 +2374,15 @@ class DDNSDomainImportForm(NetBoxModelImportForm):
     class Meta:
         model = DDNSDomain
         fields = ("d2_daemon", "zone", "tsig_key")
+
+
+class DDNSDomainBulkEditForm(NetBoxModelBulkEditForm):
+    d2_daemon = DynamicModelChoiceField(queryset=D2Daemon.objects.all(), required=False)
+    tsig_key = DynamicModelChoiceField(queryset=TSIGKey.objects.all(), required=False)
+
+    model = DDNSDomain
+    fieldsets = (FieldSet("d2_daemon", "tsig_key"),)
+    nullable_fields = ("tsig_key",)
 
 
 class DDNSPolicyForm(NetBoxModelForm):

@@ -1295,6 +1295,13 @@ class DDNSDomainDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSDomain.objects.all()
 
 
+class DDNSDomainBulkEditView(generic.BulkEditView):
+    queryset = models.DDNSDomain.objects.all()
+    filterset = filtersets.DDNSDomainFilterSet
+    table = tables.DDNSDomainTable
+    form = forms.DDNSDomainBulkEditForm
+
+
 class DDNSDomainBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSDomain.objects.all()
     filterset = filtersets.DDNSDomainFilterSet
