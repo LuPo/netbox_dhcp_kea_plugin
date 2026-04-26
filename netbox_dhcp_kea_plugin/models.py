@@ -3594,13 +3594,32 @@ class D2Daemon(NetBoxModel):
     in the emitted ``kea-dhcp-ddns.conf``.
     """
 
+    LISTENER_MODE_LOCAL = "local"
+    LISTENER_MODE_REMOTE = "remote"
+    LISTENER_MODE_CHOICES = (
+        (LISTENER_MODE_LOCAL, "Local (127.0.0.1, deployed per peer)"),
+        (LISTENER_MODE_REMOTE, "Remote (single shared instance)"),
+    )
+
     name = models.CharField(max_length=100, unique=True)
     description = models.CharField(max_length=200, blank=True)
+    listener_mode = models.CharField(
+        max_length=10,
+        choices=LISTENER_MODE_CHOICES,
+        default=LISTENER_MODE_LOCAL,
+        help_text=(
+            "'Local' renders ip-address=127.0.0.1; deploy one D2 instance "
+            "on every host running kea-dhcp4/6 that uses this row. "
+            "'Remote' uses the IPAM-tracked listener address."
+        ),
+    )
     ip_address = models.ForeignKey(
         IPAddress,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="d2_daemons",
-        help_text="IP address the D2 daemon listens on for NameChangeRequests",
+        help_text="IP address the D2 daemon listens on (required only when listener_mode is 'remote')",
     )
     port = models.PositiveIntegerField(
         default=53001,
@@ -3636,8 +3655,19 @@ class D2Daemon(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:d2daemon", args=[self.pk])
 
+    def clean(self):
+        super().clean()
+        if self.listener_mode == self.LISTENER_MODE_REMOTE and self.ip_address is None:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                {"ip_address": "Required when listener mode is 'remote'."}
+            )
+
     @property
     def listener_ip(self):
+        if self.listener_mode == self.LISTENER_MODE_LOCAL:
+            return "127.0.0.1"
         if self.ip_address is None:
             return None
         return str(self.ip_address.address.ip)

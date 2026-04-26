@@ -644,6 +644,7 @@ class D2DaemonSerializer(NetBoxModelSerializer):
             "display",
             "name",
             "description",
+            "listener_mode",
             "ip_address",
             "port",
             "control_socket_path",

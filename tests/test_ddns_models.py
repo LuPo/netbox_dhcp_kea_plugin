@@ -344,3 +344,30 @@ def test_d2daemon_to_kea_dict_emits_unique_tsig_keys(
     assert "tsig-keys" in config
     assert len(config["tsig-keys"]) == 1
     assert config["tsig-keys"][0]["name"] == tsig_key.name
+
+
+def test_d2daemon_listener_ip_local_mode(db):
+    from netbox_dhcp_kea_plugin.models import D2Daemon
+
+    d = D2Daemon.objects.create(name="local-only", listener_mode="local")
+    assert d.listener_ip == "127.0.0.1"
+    assert d.to_kea_dict()["DhcpDdns"]["ip-address"] == "127.0.0.1"
+
+
+def test_d2daemon_listener_ip_remote_mode(db):
+    from ipam.models import IPAddress
+
+    from netbox_dhcp_kea_plugin.models import D2Daemon
+
+    ip = IPAddress.objects.create(address="10.99.0.50/24")
+    d = D2Daemon.objects.create(name="remote-only", listener_mode="remote", ip_address=ip)
+    assert d.listener_ip == "10.99.0.50"
+
+
+def test_d2daemon_remote_mode_requires_ip_address(db):
+    from netbox_dhcp_kea_plugin.models import D2Daemon
+
+    d = D2Daemon(name="bad-remote", listener_mode="remote")
+    with pytest.raises(ValidationError) as exc:
+        d.full_clean()
+    assert "ip_address" in exc.value.message_dict

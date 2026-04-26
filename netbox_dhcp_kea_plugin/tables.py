@@ -693,6 +693,7 @@ class TSIGKeyTable(NetBoxTable):
 
 class D2DaemonTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="Name")
+    listener_mode = tables.Column(verbose_name="Mode")
     ip_address = tables.Column(linkify=True, verbose_name="Listener IP")
     port = tables.Column(verbose_name="Port")
     ncr_protocol = tables.Column(verbose_name="NCR Protocol")
@@ -710,6 +711,7 @@ class D2DaemonTable(NetBoxTable):
         fields = (
             "pk",
             "name",
+            "listener_mode",
             "ip_address",
             "port",
             "ncr_protocol",
@@ -720,6 +722,7 @@ class D2DaemonTable(NetBoxTable):
         )
         default_columns = (
             "name",
+            "listener_mode",
             "ip_address",
             "port",
             "ncr_protocol",

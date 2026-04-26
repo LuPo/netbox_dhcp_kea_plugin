@@ -2193,12 +2193,17 @@ class TSIGKeyImportForm(NetBoxModelImportForm):
 class D2DaemonForm(NetBoxModelForm):
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all(),
-        help_text="Listener IP for NameChangeRequests from kea-dhcp4/6",
+        required=False,
+        help_text="Listener IP for NameChangeRequests from kea-dhcp4/6 (only when mode is 'remote')",
     )
 
     fieldsets = (
         FieldSet("name", "description", "tags", name="General"),
-        FieldSet(InlineFields("ip_address", "port", label="Listener"), name="NCR Listener"),
+        FieldSet(
+            "listener_mode",
+            InlineFields("ip_address", "port", label="Listener"),
+            name="NCR Listener",
+        ),
         FieldSet("ncr_protocol", "ncr_format", name="NCR Transport"),
         FieldSet("control_socket_path", name="Control Socket"),
     )
@@ -2208,6 +2213,7 @@ class D2DaemonForm(NetBoxModelForm):
         fields = (
             "name",
             "description",
+            "listener_mode",
             "ip_address",
             "port",
             "ncr_protocol",
@@ -2215,6 +2221,17 @@ class D2DaemonForm(NetBoxModelForm):
             "control_socket_path",
             "tags",
         )
+        widgets = {
+            "listener_mode": HTMXSelect(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Hide ip_address and port when the daemon is in local-listener mode —
+        # each peer runs its own D2 on 127.0.0.1 with the model default port.
+        if get_field_value(self, "listener_mode") == D2Daemon.LISTENER_MODE_LOCAL:
+            for fname in ("ip_address", "port"):
+                self.fields.pop(fname, None)
 
 
 class D2DaemonFilterForm(NetBoxModelFilterSetForm):
@@ -2231,6 +2248,7 @@ class D2DaemonImportForm(NetBoxModelImportForm):
     ip_address = CSVModelChoiceField(
         queryset=IPAddress.objects.all(),
         to_field_name="address",
+        required=False,
     )
 
     class Meta:
@@ -2238,6 +2256,7 @@ class D2DaemonImportForm(NetBoxModelImportForm):
         fields = (
             "name",
             "description",
+            "listener_mode",
             "ip_address",
             "port",
             "ncr_protocol",

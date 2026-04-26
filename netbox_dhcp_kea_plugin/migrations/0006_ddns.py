@@ -76,6 +76,7 @@ class Migration(migrations.Migration):
                 ),
                 ("name", models.CharField(max_length=100, unique=True)),
                 ("description", models.CharField(blank=True, max_length=200)),
+                ("listener_mode", models.CharField(default="local", max_length=10)),
                 ("port", models.PositiveIntegerField(default=53001)),
                 (
                     "control_socket_path",
@@ -86,6 +87,8 @@ class Migration(migrations.Migration):
                 (
                     "ip_address",
                     models.ForeignKey(
+                        blank=True,
+                        null=True,
                         on_delete=django.db.models.deletion.PROTECT,
                         related_name="d2_daemons",
                         to="ipam.ipaddress",

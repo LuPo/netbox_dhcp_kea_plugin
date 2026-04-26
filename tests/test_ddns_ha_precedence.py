@@ -21,7 +21,7 @@ def d2_a(db):
     from netbox_dhcp_kea_plugin.models import D2Daemon
 
     ip = IPAddress.objects.create(address="10.0.1.50/24")
-    return D2Daemon.objects.create(name="d2-a", ip_address=ip)
+    return D2Daemon.objects.create(name="d2-a", listener_mode="remote", ip_address=ip)
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def d2_b(db):
     from netbox_dhcp_kea_plugin.models import D2Daemon
 
     ip = IPAddress.objects.create(address="10.0.1.51/24")
-    return D2Daemon.objects.create(name="d2-b", ip_address=ip)
+    return D2Daemon.objects.create(name="d2-b", listener_mode="remote", ip_address=ip)
 
 
 @pytest.fixture
