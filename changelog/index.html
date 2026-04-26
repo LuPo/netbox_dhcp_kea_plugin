@@ -1,0 +1,2447 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://LuPo.github.io/netbox-dhcp-kea-plugin/changelog/">
+      
+      
+        <link rel="prev" href="../contributing/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Changelog - NetBox DHCP-KEA Plugin</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="preference" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="NetBox DHCP-KEA Plugin" class="md-header__button md-logo" aria-label="NetBox DHCP-KEA Plugin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetBox DHCP-KEA Plugin
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    LuPo/netbox-dhcp-kea-plugin
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="NetBox DHCP-KEA Plugin" class="md-nav__button md-logo" aria-label="NetBox DHCP-KEA Plugin" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetBox DHCP-KEA Plugin
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    LuPo/netbox-dhcp-kea-plugin
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#changelog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changelog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Changelog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#080-2026-04-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.8.0 (2026-04-26)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.8.0 (2026-04-26)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added--dynamic-dns-ddns-support-for-kea-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — Dynamic DNS (DDNS) support for Kea 3.0+
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#073-2026-04-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.3 (2026-04-07)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.3 (2026-04-07)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#072-2026-04-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.2 (2026-04-01)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.2 (2026-04-01)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#070-2026-03-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.0 (2026-03-31)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.0 (2026-03-31)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#060-2026-03-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.6.0 (2026-03-29)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.6.0 (2026-03-29)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#055-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.5 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.5 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#053-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.3 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.3 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#052-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.2 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.2 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#051-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.1 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.1 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#030-2026-02-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0 (2026-02-06)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.3.0 (2026-02-06)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#025-2026-02-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.5 (2026-02-06)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.5 (2026-02-06)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#024-2026-02-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.4 (2026-02-05)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.4 (2026-02-05)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#023-2026-02-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.3 (2026-02-28)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.3 (2026-02-28)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#022-2026-02-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.2 (2026-02-04)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.2 (2026-02-04)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#021-2026-01-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.1 (2026-01-30)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.1 (2026-01-30)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#020-2026-01-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.0 (2026-01-27)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.0 (2026-01-27)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#010-2026-01-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.1.0 (2026-01-18)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#changelog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changelog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Changelog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#080-2026-04-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.8.0 (2026-04-26)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.8.0 (2026-04-26)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added--dynamic-dns-ddns-support-for-kea-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — Dynamic DNS (DDNS) support for Kea 3.0+
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#073-2026-04-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.3 (2026-04-07)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.3 (2026-04-07)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#072-2026-04-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.2 (2026-04-01)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.2 (2026-04-01)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#070-2026-03-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.0 (2026-03-31)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.7.0 (2026-03-31)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#060-2026-03-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.6.0 (2026-03-29)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.6.0 (2026-03-29)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#055-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.5 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.5 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#053-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.3 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.3 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#052-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.2 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.2 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#051-2026-03-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.5.1 (2026-03-18)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.5.1 (2026-03-18)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#030-2026-02-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.0 (2026-02-06)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.3.0 (2026-02-06)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#025-2026-02-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.5 (2026-02-06)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.5 (2026-02-06)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#024-2026-02-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.4 (2026-02-05)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.4 (2026-02-05)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#023-2026-02-28" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.3 (2026-02-28)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.3 (2026-02-28)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#022-2026-02-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.2 (2026-02-04)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.2 (2026-02-04)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#021-2026-01-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.1 (2026-01-30)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.1 (2026-01-30)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#020-2026-01-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.0 (2026-01-27)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="0.2.0 (2026-01-27)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#010-2026-01-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.1.0 (2026-01-18)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Changelog</h1>
+
+<h2 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h2>
+<h3 id="080-2026-04-26">0.8.0 (2026-04-26)<a class="headerlink" href="#080-2026-04-26" title="Permanent link">&para;</a></h3>
+<h4 id="added--dynamic-dns-ddns-support-for-kea-30">Added — Dynamic DNS (DDNS) support for Kea 3.0+<a class="headerlink" href="#added--dynamic-dns-ddns-support-for-kea-30" title="Permanent link">&para;</a></h4>
+<p>Models the full <code>kea-dhcp-ddns</code> (D2) configuration surface and the per-server / per-subnet / per-class <code>ddns-*</code> knobs that <code>kea-dhcp4</code>/<code>kea-dhcp6</code> can render. Gated behind the <code>enable_ddns</code> plugin setting (which requires <code>enable_netbox_dns=True</code> — TSIG keys are plugin-local but zones and nameservers come from <code>netbox-plugin-dns</code>).</p>
+<ul>
+<li><strong>New models</strong></li>
+<li><code>TSIGKey</code> — RFC 2845 keys with algorithm choices, optional digest-bits truncation, and a pluggable <code>secret_backend</code> registry (v1 ships <code>plaintext</code>; <code>vault</code> reserved for future). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste <code>tsig-keygen</code> output verbatim or just save and let the plugin mint one. Plaintext reveal is gated by a dedicated <code>view_secret_tsigkey</code> permission.</li>
+<li><code>D2Daemon</code> — one row per logical D2 service. <code>listener_mode</code> chooses between <code>local</code> (renders <code>127.0.0.1</code>; deploy one D2 instance per peer for HA-pair DDNS redundancy) and <code>remote</code> (single shared instance pinned to an IPAM record). Includes NCR transport, control-socket path (defaults from <code>d2_default_control_socket_path</code> plugin setting), and a per-daemon <code>/api/.../d2-daemons/&lt;id&gt;/kea-config/</code> endpoint that emits a complete <code>kea-dhcp-ddns.conf</code>.</li>
+<li><code>DDNSDomain</code> — binds a <code>D2Daemon</code> to a <code>netbox_dns.Zone</code>. Forward/reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the zone's <code>NameServer</code> records (A/AAAA/CNAME chain) at config-emit time. Create form is multi-zone — pick any combination of forward and reverse zones in one shot.</li>
+<li>
+<p><code>DDNSPolicy</code> — reusable <code>ddns-*</code> override group (<code>ddns-send-updates</code>, <code>ddns-override-no-update</code>, <code>ddns-replace-client-name</code>, <code>ddns-generated-prefix</code>/<code>-qualifying-suffix</code>, <code>hostname-char-set</code>/<code>-replacement</code>, conflict-resolution mode, TTL knobs). All fields nullable — <code>to_kea_overrides()</code> emits only the keys the operator set, kebab-cased.</p>
+</li>
+<li>
+<p><strong>Existing model changes</strong> (all nullable FKs, <code>on_delete=SET_NULL</code>)</p>
+</li>
+<li><code>DHCPServer.d2_daemon</code>, <code>ddns_enable_updates</code>, <code>ddns_sender_ip</code>, <code>ddns_sender_port</code>, <code>ddns_policy</code></li>
+<li><code>DHCPHARelationship.d2_daemon</code>, <code>ddns_enable_updates</code>, <code>ddns_policy</code></li>
+<li><code>Subnet.ddns_policy</code></li>
+<li>
+<p><code>ClientClass.ddns_policy</code></p>
+</li>
+<li>
+<p><strong>HA-pair precedence</strong> — <code>DHCPServer.effective_d2_daemon</code> and <code>effective_ddns_policy</code> properties: when the server's HA relationship has a value set, that wins (peers must agree on the D2 target and the <code>ddns-*</code> policy). Sender IP/port stay per-server (the local source endpoint is always per-host). The DHCPServer detail page shows the effective values with an "inherited from HA relationship" badge.</p>
+</li>
+<li>
+<p><strong>Kea config emission</strong> — no Python-side merging of override hierarchies. Each non-null <code>DDNSPolicy.to_kea_overrides()</code> is emitted verbatim at the JSON level the policy is attached to (server-level → <code>Dhcp4</code>/<code>Dhcp6</code> root, subnet-level → subnet dict, class-level → client-class dict). Kea resolves the precedence chain itself when processing packets.</p>
+</li>
+<li>
+<p><strong>Bulk edit</strong> — <code>DDNSDomain</code> got a bulk-edit view + form so you can set <code>d2_daemon</code> / <code>tsig_key</code> on many rows at once.</p>
+</li>
+<li>
+<p><strong>Quick-add</strong> — <code>tsig_key</code> field on <code>DDNSDomain</code> form has the <code>+</code> quick-add button so a new TSIG key can be created inline without leaving the form.</p>
+</li>
+</ul>
+<h4 id="plugin-settings">Plugin settings<a class="headerlink" href="#plugin-settings" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>enable_ddns</code> (default <code>False</code>) — master switch; nav, URLs, API routes, form fields, and serializer fields are all gated by it.</li>
+<li><code>ddns_secret_backend</code> (default <code>"plaintext"</code>) — backend identifier for <code>TSIGKey.get_secret()</code>.</li>
+<li><code>d2_default_control_socket_path</code> (default <code>"/tmp/kea-dhcp-ddns-ctrl.sock"</code>) — pre-fills the control socket field on new <code>D2Daemon</code> rows.</li>
+</ul>
+<h3 id="073-2026-04-07">0.7.3 (2026-04-07)<a class="headerlink" href="#073-2026-04-07" title="Permanent link">&para;</a></h3>
+<h4 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Record-Type Option Data Form with Individual Fields</strong></li>
+<li>Record-type option definitions (e.g., <code>record(boolean, ipv4-address)</code>) now show individual form fields for each position in the record instead of a single Data text field</li>
+<li>Boolean record fields render as a select dropdown (True/False)</li>
+<li>String and other non-IP fields render as text inputs</li>
+<li>
+<p>IP-type fields within records get IPAM/DNS source selectors — single or multi-select based on <code>is_array</code> and position (only the last field in a KEA record can be an array)</p>
+</li>
+<li>
+<p><strong>Record-Type IP Source Linking</strong></p>
+</li>
+<li>New <code>record_manual_fields</code> JSONField on <code>OptionData</code> stores non-IP field values separately (e.g., <code>{"0": "true"}</code>)</li>
+<li><code>OptionData.to_kea_dict()</code> assembles the final data by interleaving manual fields and resolved IPs at correct positions (e.g., <code>"true, 10.0.0.1, 10.0.0.2"</code>)</li>
+<li><code>OptionDefinition</code> gains <code>parsed_record_types()</code> and <code>record_ip_field_index()</code> helper methods</li>
+</ul>
+<h4 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>OptionData.clean()</code> skips type validation for IP-position fields in record types — IPs come from validated NetBox objects and need no re-checking</li>
+<li>Record-type options with commas in the data field no longer trigger the "not an array" validation error</li>
+<li>API <code>data</code> field on OptionData now returns resolved data from <code>to_kea_dict()</code> instead of raw stored value — shows assembled record fields and resolved IP sources</li>
+</ul>
+<h4 id="migrations">Migrations<a class="headerlink" href="#migrations" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>0005_optiondata_record_manual_fields</code> — adds <code>record_manual_fields</code> JSONField to <code>OptionData</code></li>
+</ul>
+<h3 id="072-2026-04-01">0.7.2 (2026-04-01)<a class="headerlink" href="#072-2026-04-01" title="Permanent link">&para;</a></h3>
+<h4 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>DNS CNAME Record Support for IP Source Linking</strong></li>
+<li>DNS CNAME records can now be linked as IP sources on Option Data alongside A/AAAA records</li>
+<li>CNAME records are resolved by following the chain to their target A records at KEA config generation time</li>
+<li>A single CNAME source can resolve to multiple IPs when the target has multiple A records</li>
+<li>
+<p>DNS Record selector now filters to A, AAAA, and CNAME record types</p>
+</li>
+<li>
+<p><strong>Dynamic <code>record_types</code> Field on Option Definition Form</strong></p>
+</li>
+<li>The <code>record_types</code> field is now hidden when <code>option_type</code> is not <code>record</code></li>
+<li>Uses <code>HTMXSelect</code> widget on <code>option_type</code> for dynamic form reloading</li>
+<li><code>fieldsets</code> property conditionally includes <code>record_types</code> in the Advanced fieldset</li>
+</ul>
+<h4 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>OptionData.to_kea_dict()</code> deduplicates resolved IPs while preserving ordinal order — prevents duplicate entries when the same IP is linked via multiple sources (e.g. an A record and a CNAME pointing to it)</li>
+<li>DNS Record IP source field label updated from "DNS A Records" to "DNS Records" to reflect broader type support</li>
+</ul>
+<h4 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>test_deleted_source_falls_back_to_data</code> test updated to work with <code>ProtectedError</code> on IP source deletion introduced in 0.7.0</li>
+</ul>
+<h3 id="070-2026-03-31">0.7.0 (2026-03-31)<a class="headerlink" href="#070-2026-03-31" title="Permanent link">&para;</a></h3>
+<h4 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Option Data Type-Based Validation</strong></li>
+<li><code>OptionData.clean()</code> validates the <code>data</code> field against the option definition's <code>option_type</code> when using CSV format</li>
+<li>Supported types: <code>ipv4-address</code>, <code>ipv6-address</code>, <code>ipv6-prefix</code>, <code>boolean</code>, <code>uint8/16/32</code>, <code>int8/16/32</code>, <code>fqdn</code></li>
+<li>Array enforcement: definitions with <code>is_array=True</code> accept comma-separated values; single-value definitions reject multiple values</li>
+<li>
+<p><code>_validate_typed_value()</code> static method is extensible for future types</p>
+</li>
+<li>
+<p><strong>IP Source Linking for Option Data</strong></p>
+</li>
+<li>New <code>OptionDataIPSource</code> through model links <code>OptionData</code> to IPAM <code>IPAddress</code> or netbox-dns <code>Record</code> objects via <code>GenericForeignKey</code></li>
+<li><code>OptionData.to_kea_dict()</code> resolves current IPs from linked sources at config generation time — no Django signals needed</li>
+<li>Multiple sources ordered by <code>ordinal</code> for array-type options (e.g. <code>ntp-servers</code>)</li>
+<li>Falls back to manual <code>data</code> field if all linked sources are deleted</li>
+<li><code>data</code> field is hidden in the form when an IP-type definition is selected — IP sources replace manual entry</li>
+<li>IP Sources panel on Option Data detail page shows linked objects with resolved IPs</li>
+<li>
+<p>All option data tables (list view, DHCP server, subnet, subnet pool, prefix panel) display resolved IP values</p>
+</li>
+<li>
+<p><strong>netbox-dns Integration (Optional)</strong></p>
+</li>
+<li>New <code>enable_netbox_dns</code> plugin setting (default: <code>False</code>) to enable linking DNS A records as IP sources</li>
+<li>When enabled, Option Data form shows DNS A Record selector alongside IPAM IP Address selector</li>
+<li>Supports both managed records (from IPAM dns_name) and user-created records</li>
+<li>
+<p>No hard migration dependency on netbox-dns — uses <code>GenericForeignKey</code> via <code>ContentType</code></p>
+</li>
+<li>
+<p><strong>Dynamic Option Data Form</strong></p>
+</li>
+<li><code>definition</code> field triggers HTMX form reload on change</li>
+<li>IP source fields (IPAM IP Address, DNS A Record) shown/hidden dynamically based on selected definition's <code>option_type</code></li>
+<li>Single-select vs multi-select automatically chosen based on <code>is_array</code> flag</li>
+<li>
+<p>Pre-populates IP source fields when editing existing Option Data with linked sources</p>
+</li>
+<li>
+<p><strong>API: IP Sources on Option Data</strong></p>
+</li>
+<li><code>OptionDataSerializer</code> includes nested <code>ip_sources</code> field (read-only) with <code>content_type</code>, <code>object_id</code>, <code>ordinal</code>, and <code>resolved_ip</code></li>
+</ul>
+<h4 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>OptionData.data</code> field is now <code>blank=True</code> to support IP-source-only options without dummy data</li>
+<li><code>OptionData.ascii_data</code> property resolves IP sources when linked, so all tables and templates show effective values</li>
+<li>Option Data detail page "KEA Configuration" preview now shows resolved IP data from <code>to_kea_dict()</code> instead of raw <code>data</code> field</li>
+<li>Makefile test targets now export <code>PYTHONPATH</code> alongside <code>NETBOX_PATH</code> so <code>pytest-django</code> can find the NetBox module</li>
+</ul>
+<h4 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h4>
+<ul>
+<li>URL import crash caused by <code>HTMXSelect</code> widget on <code>DynamicModelChoiceField</code> — <code>HTMXSelect</code> doesn't implement <code>add_query_params()</code> required by the API select widget; replaced with HTMX attributes on the default widget</li>
+<li><code>urlpatterns</code> assignment in <code>urls.py</code> moved before conditional Stork URL block to prevent <code>ImportError</code> when URL module import fails</li>
+<li><code>OptionDataIPSource.get_absolute_url()</code> now delegates to parent <code>OptionData</code> — prevents <code>NoReverseMatch</code> on delete confirmation pages</li>
+</ul>
+<h4 id="migrations_1">Migrations<a class="headerlink" href="#migrations_1" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>0004_optiondata_ip_source</code> — creates <code>OptionDataIPSource</code> table and makes <code>OptionData.data</code> blank/nullable</li>
+</ul>
+<h3 id="060-2026-03-29">0.6.0 (2026-03-29)<a class="headerlink" href="#060-2026-03-29" title="Permanent link">&para;</a></h3>
+<h4 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>KEA Reservation Mode Flags</strong></li>
+<li>Three reservation mode flags on both DHCP Server and Subnet models: <code>reservations-global</code>, <code>reservations-in-subnet</code>, <code>reservations-out-of-pool</code></li>
+<li>Server-level flags set the global <code>Dhcp4</code> block defaults; subnet-level flags can override per-subnet or inherit from the server</li>
+<li>Subnet fields are nullable (tri-state): <code>None</code> = inherit from server (omitted from KEA subnet config), <code>True</code>/<code>False</code> = explicit per-subnet override</li>
+<li><code>reservations_only</code> flag on Subnet disables dynamic pool generation entirely (subnet-only, not a KEA global parameter)</li>
+<li>
+<p><code>Subnet.get_effective_reservation_flag()</code> helper and <code>effective_reservations_*</code> properties resolve inherited values</p>
+</li>
+<li>
+<p><strong>Global Reservation Placement</strong></p>
+</li>
+<li>When <code>reservations-global</code> is effective for a subnet, reservations are placed in the <code>Dhcp4.reservations</code> array without <code>ip-address</code> (only <code>hw-address</code> + <code>hostname</code>)</li>
+<li>
+<p><code>DHCPServer.to_kea_dict()</code> collects global reservations from all subnets where effective <code>reservations_global</code> is <code>True</code></p>
+</li>
+<li>
+<p><strong>Pool Generation Modes</strong></p>
+</li>
+<li><code>reservations_out_of_pool=True</code> (default): pools built from available IPs only, excluding assigned addresses</li>
+<li><code>reservations_out_of_pool=False</code>: pools cover the full usable prefix range (KEA handles reservation/pool overlap at runtime)</li>
+<li><code>reservations_only=True</code>: no pools generated — only reserved hosts get IPs</li>
+<li>
+<p>IP Ranges defined in NetBox always take priority over computed pools</p>
+</li>
+<li>
+<p><strong>Configurable Defaults</strong></p>
+</li>
+<li>Reservation mode defaults configurable via <code>PLUGINS_CONFIG</code> under <code>model_defaults.Subnet</code></li>
+<li>
+<p>Applies to new DHCP server instances; new subnets default to "Inherit from Server"</p>
+</li>
+<li>
+<p><strong>UI Updates</strong></p>
+</li>
+<li>Subnet form shows tri-state select (Inherit from Server / Yes / No) for reservation mode fields</li>
+<li>Subnet detail page shows "Inherit (server: ...)" with resolved effective value when set to inherit</li>
+<li>DHCP Server form and detail page include "Reservation Mode Defaults" section</li>
+<li>
+<p>Filterset and table columns for reservation flags on both Server and Subnet</p>
+</li>
+<li>
+<p><strong>Comprehensive Tests</strong></p>
+</li>
+<li>38 tests covering all flag combinations, inheritance, pool generation, global reservation collection, and end-to-end KEA config output</li>
+</ul>
+<h4 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Subnet reservation mode fields changed from non-nullable <code>BooleanField</code> to nullable <code>BooleanField(null=True, default=None)</code> to support server inheritance</li>
+<li><code>get_default_reservations_*</code> functions and <code>get_model_default</code> helper moved earlier in <code>models.py</code> (before <code>DHCPServer</code> class) for reuse</li>
+</ul>
+<h4 id="migrations_2">Migrations<a class="headerlink" href="#migrations_2" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>0003_subnet_reservation_modes</code> — adds 4 reservation fields to Subnet</li>
+<li><code>0004_alter_subnet_reservations_global_and_more</code> — switches to callable defaults</li>
+<li><code>0005_dhcpserver_reservation_modes</code> — adds 3 reservation fields to DHCPServer</li>
+<li><code>0006_subnet_nullable_reservation_flags</code> — makes Subnet fields nullable + data migration converting old defaults to <code>None</code> (inherit)</li>
+</ul>
+<h3 id="055-2026-03-18">0.5.5 (2026-03-18)<a class="headerlink" href="#055-2026-03-18" title="Permanent link">&para;</a></h3>
+<h4 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Stork Server <code>db_user</code> Field</strong></li>
+<li>New <code>db_user</code> field on <code>StorkServer</code> model (CharField, default: <code>"stork"</code>) for PostgreSQL database user name</li>
+<li><code>to_env_content()</code> now outputs <code>STORK_DATABASE_USER_NAME</code> in the generated environment file</li>
+<li>Field included across serializer, forms (edit, import), detail template ("Database Connection" card), and tests</li>
+<li>
+<p>Database migration (<code>0021</code>) adds the field</p>
+</li>
+<li>
+<p><strong>DHCP Reservation MAC Address Validation</strong></p>
+</li>
+<li><code>get_kea_reservations()</code> now filters out reservations that lack a <code>hw-address</code> (MAC address), preventing <code>kea-dhcp4.service</code> validation failures — KEA requires either <code>hw-address</code> or <code>duid</code> for each reservation</li>
+<li><code>get_reservations()</code> still returns all reservations (including those without MAC) for UI display, with a new <code>has_hw_address</code> metadata flag</li>
+<li>Subnet reservations template highlights MAC-less reservations in yellow with a warning icon and tooltip</li>
+<li>Warning alert below the reservations table explains why highlighted rows are excluded from KEA config and how to fix them (assign a MAC address to the interface in NetBox)</li>
+<li>
+<p>KEA Reservations Configuration JSON panel now correctly reflects only valid (MAC-bearing) reservations</p>
+</li>
+<li>
+<p><strong>Stork Server Form Default</strong></p>
+</li>
+<li>
+<p><code>stork_version</code> field on <code>StorkServerForm</code> now pre-populates with <code>"stable"</code> when creating a new Stork server instance</p>
+</li>
+<li>
+<p><strong>Plugin <code>model_defaults</code> Configuration</strong></p>
+</li>
+<li>New <code>model_defaults</code> setting in <code>PLUGINS_CONFIG</code> allows operators to configure default field values per model</li>
+<li><code>model_defaults.Subnet.valid_lifetime</code> — default valid lifetime for new subnets (default: <code>3600</code>)</li>
+<li><code>model_defaults.Subnet.max_lifetime</code> — default max lifetime for new subnets (default: <code>7200</code>)</li>
+<li>Defaults apply to both the model layer (<code>Subnet.objects.create()</code>) and the form (pre-populated fields when adding a new subnet)</li>
+</ul>
+<h4 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Dynamic Control Socket Form Fields</strong></li>
+<li>Control socket fields (HTTP address/port, Unix path) now update dynamically when changing the "Control socket type" dropdown — no save/reload required</li>
+<li>Uses NetBox's <code>HTMXSelect</code> widget on <code>ctrl_socket_type</code>, matching the same UX pattern NetBox uses for 802.1Q VLAN mode on interfaces</li>
+<li>Converted <code>fieldsets</code> on <code>DHCPServerForm</code> from a static class attribute to a <code>@property</code> so that <code>InlineFields</code> labels (e.g. "HTTP Socket") are omitted when their child fields are not relevant, preventing orphaned labels in the form</li>
+</ul>
+<h4 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Orphaned "HTTP Socket" label remained visible in the DHCP Server edit form when "Unix" was selected as the control socket type</li>
+<li>Reservations without a MAC address on their interface no longer cause <code>kea-dhcp4.service</code> config validation to fail</li>
+<li><strong>Subnet <code>valid_lifetime</code> validation enforced on <code>save()</code></strong> — <code>valid_lifetime</code> can no longer exceed <code>max_lifetime</code> when saving programmatically (e.g. via API or scripts); previously the check only ran during form validation (<code>clean()</code>)</li>
+</ul>
+<h3 id="053-2026-03-18">0.5.3 (2026-03-18)<a class="headerlink" href="#053-2026-03-18" title="Permanent link">&para;</a></h3>
+<h4 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>HA Address/Port/TLS Fields</strong></li>
+<li>Split <code>ha_url</code> (URLField) into three separate fields on <code>DHCPServer</code>:<ul>
+<li><code>ha_address</code> — IP address for HA communication (CharField)</li>
+<li><code>ha_port</code> — Port for HA communication (PositiveIntegerField, default: 8080)</li>
+<li><code>ha_tls</code> — Use TLS/HTTPS for HA communication (BooleanField, default: False)</li>
+</ul>
+</li>
+<li>New <code>ha_url</code> read-only property reconstructs the full URL (e.g. <code>http://192.168.1.1:8080/</code>) from the three fields</li>
+<li>
+<p>KEA configuration JSON output (<code>high-availability</code> peer <code>url</code>) remains a full URL — no downstream config changes required</p>
+</li>
+<li>
+<p><strong>IP Address Validation</strong></p>
+</li>
+<li><code>ha_address</code> is validated as a valid IP address (IPv4 or IPv6) using Python's <code>ipaddress</code> module</li>
+<li>
+<p><code>ctrl_socket_http_address</code> is validated as a valid IP address when provided</p>
+</li>
+<li>
+<p><strong>Port Collision Validation</strong></p>
+</li>
+<li>
+<p><code>ha_port</code> and <code>ctrl_socket_http_port</code> are validated to be different when the HTTP control socket is enabled, preventing accidental port conflicts on the same server</p>
+</li>
+<li>
+<p><strong>Form Layout Improvements</strong></p>
+</li>
+<li>HA fields use <code>InlineFields</code> for compact layout: <code>ha_address</code> and <code>ha_port</code> inline as "HA Peer", <code>ha_tls</code> and <code>ha_auto_failover</code> inline as "HA Options"</li>
+</ul>
+<h4 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>BREAKING</strong>: <code>ha_url</code> field removed from database — replaced by <code>ha_address</code>, <code>ha_port</code>, <code>ha_tls</code></li>
+<li>Migration <code>0018</code> parses existing <code>ha_url</code> values with <code>urllib.parse.urlparse</code> to populate the new fields automatically</li>
+<li>API serializer exposes <code>ha_address</code>, <code>ha_port</code>, <code>ha_tls</code> as writable fields and <code>ha_url</code> as a read-only computed field</li>
+<li>Import form accepts <code>ha_address</code>, <code>ha_port</code>, <code>ha_tls</code> instead of <code>ha_url</code></li>
+<li>Table columns updated: <code>ha_address</code>, <code>ha_port</code>, <code>ha_tls</code> replace <code>ha_url</code></li>
+<li>Default HA port changed from 8000 to 8080 (including fallback URLs in relay-config endpoints)</li>
+<li>DHCP Server detail template now shows HA Address, HA Port, HA TLS (badge), computed HA URL, and HA Auto Failover</li>
+</ul>
+<h3 id="052-2026-03-18">0.5.2 (2026-03-18)<a class="headerlink" href="#052-2026-03-18" title="Permanent link">&para;</a></h3>
+<h4 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Control Socket Support for DHCP Servers</strong></li>
+<li>New <code>ctrl_socket_http_enabled</code> (BooleanField), <code>ctrl_socket_http_address</code> (CharField, default <code>127.0.0.1</code>), and <code>ctrl_socket_http_port</code> (PositiveIntegerField, default <code>8000</code>) fields for HTTP control socket configuration</li>
+<li>New <code>ctrl_socket_unix_enabled</code> (BooleanField) and <code>ctrl_socket_unix_path</code> (CharField, default <code>/var/run/kea/kea-dhcp4-socket</code>) fields for Unix domain socket configuration</li>
+<li><code>DHCPServer.get_control_sockets()</code> method generates KEA-compatible <code>control-sockets</code> configuration list</li>
+<li><code>to_kea_dict()</code> now includes <code>control-sockets</code> in the generated <code>Dhcp4</code> configuration when sockets are enabled</li>
+<li>Model validation: required fields enforced when a socket type is enabled (address + port for HTTP; path for Unix)</li>
+<li>Full integration across serializers, forms (edit, import, filter), filtersets, tables, and detail template</li>
+<li>Database migration (<code>0017</code>) adds the control socket fields to <code>DHCPServer</code></li>
+<li>
+<p>Comprehensive test suite (<code>test_control_sockets.py</code>) covering model defaults, validation, <code>to_kea_dict</code> output, API, forms, filters, and tables</p>
+</li>
+<li>
+<p><strong>Stork Integration Tests</strong></p>
+</li>
+<li>Added comprehensive test coverage for Stork server and agent group models, forms, API, and configuration generation</li>
+<li>Removed unused import from migration and fixed stray return in <code>test_clientclass_redirect.py</code></li>
+</ul>
+<h4 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Form Layout with InlineFields</strong></li>
+<li>Refactored form <code>fieldsets</code> across the plugin to use <code>InlineFields</code> for grouping related inputs:<ul>
+<li><code>DHCPServerForm</code>: HTTP socket address/port, HA credentials</li>
+<li><code>StorkServerForm</code>: DB host/port, version/log level</li>
+<li><code>StorkAgentGroupForm</code>: Prometheus address/port, version/log level</li>
+<li><code>HookForm</code>: library name / standard flag</li>
+</ul>
+</li>
+<li>Added/adjusted <code>tags</code> fieldsets on all applicable forms</li>
+<li><code>fieldsets</code> placed at class level (not inside <code>Meta</code>) to match NetBox rendering expectations</li>
+<li>Updated tests to collect field names from both top-level strings and <code>InlineFields</code> groups</li>
+</ul>
+<h3 id="051-2026-03-18">0.5.1 (2026-03-18)<a class="headerlink" href="#051-2026-03-18" title="Permanent link">&para;</a></h3>
+<h4 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Stork Monitoring Integration</strong></li>
+<li>New <code>StorkServer</code> model for managing ISC Stork monitoring server instances</li>
+<li>New <code>StorkAgentGroup</code> model for configuring Stork agent groups linked to DHCP servers</li>
+<li><code>StorkServer.to_env_content()</code> generates environment files suitable for <code>/etc/stork/server.env</code></li>
+<li><code>StorkAgentGroup.to_env_content()</code> generates environment files suitable for <code>/etc/stork/agent.env</code></li>
+<li>Configurable <code>log_level</code> field (DEBUG, INFO, WARN, ERROR) on both Stork models, defaulting to INFO</li>
+<li>Prometheus exporter settings per agent group (address, port, per-subnet stats)</li>
+<li>TLS and authentication options for Stork server connections</li>
+<li>
+<p>Full CRUD views, forms, serializers, filters, tables, and templates for both Stork models</p>
+</li>
+<li>
+<p><strong>Stork Configuration API Endpoints</strong></p>
+</li>
+<li><code>GET /api/plugins/netbox-dhcp-kea-plugin/stork-servers/{id}/config/</code> returns plain-text server env file</li>
+<li><code>GET /api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/{id}/config/</code> returns generic agent env template with <code>&lt;AGENT_HOST_IP&gt;</code> placeholder</li>
+<li><code>GET /api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/{id}/config/?server={id}</code> returns resolved agent env file with concrete DHCP server IP</li>
+<li>
+<p>Custom <code>PlainTextRenderer</code> for DRF ensures <code>Accept: text/plain</code> works correctly (e.g. Ansible <code>uri</code> module)</p>
+</li>
+<li>
+<p><strong>Stork Optionality (<code>enable_stork</code> Setting)</strong></p>
+</li>
+<li>New plugin setting <code>enable_stork</code> (default: <code>True</code>) to toggle all Stork features</li>
+<li>When disabled: Stork menu items, form fields, filter fields, API endpoints, and UI elements are all hidden</li>
+<li>
+<p>Gating applied across navigation, forms (<code>DHCPServerForm</code>, <code>DHCPServerFilterForm</code>, <code>DHCPServerImportForm</code>), filtersets (<code>DHCPServerFilterSet</code>), API serializers (<code>DHCPServerSerializer</code>), API URL routes, and UI URL routes</p>
+</li>
+<li>
+<p><strong>Plugin Settings Documentation</strong></p>
+</li>
+<li>Added <code>enable_stork</code> to README configuration section</li>
+<li>Added plugin settings reference table to README</li>
+<li>Added Stork configuration generation and Ansible integration examples to README</li>
+<li>Added Stork API endpoints to REST API reference table</li>
+</ul>
+<h4 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>BREAKING</strong>: Converted <code>StorkAgentGroup.servers</code> from ManyToMany to <code>DHCPServer.stork_agent_group</code> ForeignKey — each DHCP server can now belong to at most one Stork agent group</li>
+<li>Data migration (<code>0015</code>) copies existing M2M assignments to the new FK column (first group by PK wins if a server belonged to multiple groups)</li>
+<li>Migration (<code>0016</code>) adds <code>log_level</code> fields to both Stork models</li>
+</ul>
+<h3 id="030-2026-02-06">0.3.0 (2026-02-06)<a class="headerlink" href="#030-2026-02-06" title="Permanent link">&para;</a></h3>
+<h4 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Subnet Pool Model</strong></li>
+<li>New <code>SubnetPool</code> model for pool-level DHCP configuration, annotating NetBox <code>IPRange</code> objects with KEA pool-level settings</li>
+<li>Pool-level <code>client_class</code> FK for restricting which clients can obtain addresses from a pool (KEA <code>client-class</code>)</li>
+<li>Pool-level <code>evaluate_additional_classes</code> M2M for triggering client class evaluation at pool scope (KEA <code>evaluate-additional-classes</code>)</li>
+<li>Pool-level <code>option_data</code> M2M for pool-specific DHCP options (KEA <code>option-data</code>)</li>
+<li><code>pool_range</code> property for consistent template-friendly display of pool address ranges</li>
+<li>Full CRUD views, forms, serializers, filters, and tables for SubnetPool management</li>
+<li>
+<p>Database migration (<code>0009</code>) creates the SubnetPool model</p>
+</li>
+<li>
+<p><strong>Subnet Client Class Restriction</strong></p>
+</li>
+<li>New <code>client_class</code> FK on <code>Subnet</code> model for a single restricting client class (KEA <code>client-class</code>)</li>
+<li>Separates the restricting class concept from additional evaluated classes, aligning with KEA semantics</li>
+<li>
+<p>Database migration (<code>0010</code>) adds the field and renames the existing M2M</p>
+</li>
+<li>
+<p><strong>KEA Client Class Validation</strong></p>
+</li>
+<li>Subnet-level: raises <code>ValidationError</code> if restricting <code>client_class</code> has <code>only_in_additional_list=True</code> (subnet would be permanently unreachable since no higher scope triggers evaluation)</li>
+<li>Pool-level: raises <code>ValidationError</code> if restricting <code>client_class</code> has <code>only_in_additional_list=True</code> and the parent subnet does not include the class in <code>evaluate_additional_classes</code></li>
+<li>
+<p>Cross-field validation: restricting <code>client_class</code> cannot also appear in <code>evaluate_additional_classes</code> on the same object (both model and form level)</p>
+</li>
+<li>
+<p><strong>Redundant Evaluate-Additional-Classes Notifications</strong></p>
+</li>
+<li>Info notification card on Subnet detail page when <code>evaluate_additional_classes</code> contains classes without <code>only_in_additional_list</code> enabled (KEA already evaluates these globally, making the listing redundant)</li>
+<li>Info notification card on Subnet Pool detail page with the same detection</li>
+<li>
+<p>Lists each redundant class with its name and test expression, with guidance to enable <code>only_in_additional_list</code> or remove the class from <code>evaluate-additional-classes</code></p>
+</li>
+<li>
+<p><strong>Server-Level Misconfiguration Detection</strong></p>
+</li>
+<li>New <code>DHCPServer.get_unreachable_subnet_restrictions()</code> method to find subnets with unreachable restricting classes</li>
+<li>New <code>DHCPServer.get_unreachable_pool_restrictions()</code> method to find pools with unreachable restricting classes</li>
+<li>HA-aware: standby/secondary servers return empty lists (they inherit config from the primary)</li>
+<li>
+<p>Danger alert cards on DHCP Server detail page listing unreachable subnets and pools with explanations and links</p>
+</li>
+<li>
+<p><strong>Demo Data Generation for Subnet Pools</strong></p>
+</li>
+<li><code>generate_kea_demo_data</code> command now creates IP Ranges and SubnetPool configurations</li>
+<li>Demonstrates correct KEA patterns: normal global classes as restrictions, <code>only_in_additional_list</code> classes with proper subnet-level evaluation, and pool-level <code>evaluate-additional-classes</code></li>
+<li>
+<p>Demo cleanup handles SubnetPool and IPRange objects</p>
+</li>
+<li>
+<p><strong>Test Coverage</strong></p>
+</li>
+<li>New unit tests for SubnetPool behavior, Subnet client class validations, server-level unreachable restriction helpers, KEA output consistency, and redundant evaluate-additional-classes detection.</li>
+</ul>
+<h4 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>BREAKING</strong>: Renamed <code>client_classes</code> M2M field on <code>Subnet</code> to <code>evaluate_additional_classes</code> to align with KEA terminology</li>
+<li>Subnet form: <code>evaluate_additional_classes</code> field now filters dropdown to show only client classes assigned to the selected server with <code>only_in_additional_list</code> enabled</li>
+<li>Subnet Pool form: <code>evaluate_additional_classes</code> field now filters dropdown to show only client classes with <code>only_in_additional_list</code> enabled</li>
+<li>Added <code>server_id</code> filter to <code>ClientClassFilterSet</code> for API-level filtering of client classes by server assignment</li>
+<li>API consumers must update field references from <code>client_classes</code> to <code>evaluate_additional_classes</code></li>
+<li>Database migration (<code>0010</code>) handles the rename automatically</li>
+<li><code>Subnet.get_all_subnet_client_classes()</code> and new <code>Subnet.get_all_pool_client_classes()</code> helpers collect client classes across both subnet and pool scopes</li>
+<li><code>DHCPServer.to_kea_dict()</code> now includes pool-level client classes in the generated KEA configuration</li>
+<li><code>DHCPServer.get_unused_only_in_additional_list_classes()</code> now also checks pool-level class references</li>
+</ul>
+<h4 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Pool address range display mismatch between list view and detail view (detail view was including subnet mask on addresses)</li>
+</ul>
+<h3 id="025-2026-02-06">0.2.5 (2026-02-06)<a class="headerlink" href="#025-2026-02-06" title="Permanent link">&para;</a></h3>
+<h4 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>BREAKING</strong>: Renamed <code>PrefixDHCPConfig</code> model to <code>Subnet</code> to align with KEA subnet terminology and avoid confusion with NetBox's IPAM <code>Prefix</code> model</li>
+<li>All class names updated: <code>SubnetSerializer</code>, <code>SubnetViewSet</code>, <code>SubnetFilterSet</code>, <code>SubnetForm</code>, <code>SubnetTable</code>, <code>SubnetView</code>, etc.</li>
+<li>URL path segments changed from <code>prefix-configs/</code> to <code>subnets/</code></li>
+<li>API endpoint changed from <code>prefix-dhcp-configs/</code> to <code>subnets/</code></li>
+<li>URL names changed from <code>prefixdhcpconfig_*</code> to <code>subnet_*</code></li>
+<li>Django permissions changed from <code>*_prefixdhcpconfig</code> to <code>*_subnet</code></li>
+<li>Template files renamed: <code>prefixdhcpconfig.html</code> → <code>subnet.html</code>, <code>prefixdhcpconfig_reservations.html</code> → <code>subnet_reservations.html</code></li>
+<li>Navigation menu label changed from "DHCP Prefixes" to "Subnets"</li>
+<li>Database migration (<code>0008</code>) handles the model and table rename automatically</li>
+</ul>
+<h3 id="024-2026-02-05">0.2.4 (2026-02-05)<a class="headerlink" href="#024-2026-02-05" title="Permanent link">&para;</a></h3>
+<h4 id="added_9">Added<a class="headerlink" href="#added_9" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Hook Support</strong></li>
+<li>New <code>Hook</code> and <code>HookGroup</code> models for managing KEA hook libraries</li>
+<li>Views and UI for configuring hook libraries on DHCP servers</li>
+<li>
+<p>Demo data generation now includes sample HookGroups with standard hooks assigned to servers</p>
+</li>
+<li>
+<p><strong>Option Definition Improvements</strong></p>
+</li>
+<li>Collect option-defs at server level for proper VIVSO (Vendor-Identifying Vendor-Specific Options) rendering</li>
+<li>Add <code>id</code> field to Subnet (formerly PrefixDHCPConfig) output for better identification</li>
+</ul>
+<h4 id="changed_10">Changed<a class="headerlink" href="#changed_10" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>BREAKING</strong>: Replaced <code>is_active</code> boolean field with <code>status</code> CharField on DHCPServer model</li>
+<li>Uses <code>DeviceStatusChoices</code> from NetBox's dcim.choices for consistency with native models</li>
+<li>Provides more granular status options (active, planned, staged, failed, offline, decommissioning, inventory)</li>
+<li>Migration automatically converts <code>is_active=True</code> to <code>status="active"</code> and <code>is_active=False</code> to <code>status="offline"</code></li>
+<li>Updated issue templates for versions and Python compatibility</li>
+<li>Linted tests with Ruff for code quality improvements</li>
+</ul>
+<h4 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Default <code>csv_format</code> to <code>True</code>; only emit <code>False</code> when explicitly set</li>
+</ul>
+<h3 id="023-2026-02-28">0.2.3 (2026-02-28)<a class="headerlink" href="#023-2026-02-28" title="Permanent link">&para;</a></h3>
+<h4 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Client Class server assignment now correctly notifies users when non-primary HA servers are redirected to primary</li>
+<li>Option data and client classes fields are now hidden when editing non-primary HA servers to prevent confusion</li>
+</ul>
+<h3 id="022-2026-02-04">0.2.2 (2026-02-04)<a class="headerlink" href="#022-2026-02-04" title="Permanent link">&para;</a></h3>
+<h4 id="added_10">Added<a class="headerlink" href="#added_10" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Client Class Improvements</strong></li>
+<li>Added <code>only_in_additional_list</code> field to align with KEA 3.0 behavior</li>
+<li>Support for <code>evaluate-additional-classes</code> subnet-level client class evaluation</li>
+<li>Made <code>test_expression</code> optional to support unconditional client classes</li>
+<li>Removed deprecated <code>local_definitions</code> field</li>
+<li>UI filtering to show only appropriate client classes in subnet configuration</li>
+<li>Warning indicators for unused <code>only_in_additional_list</code> classes on server detail pages</li>
+<li>Info indicators for unconditional (empty test) client classes</li>
+</ul>
+<h3 id="021-2026-01-30">0.2.1 (2026-01-30)<a class="headerlink" href="#021-2026-01-30" title="Permanent link">&para;</a></h3>
+<h4 id="added_11">Added<a class="headerlink" href="#added_11" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Implement Netbox management command to populate plugin with demo data</strong><ul>
+<li>Command: <code>python manage.py generate_kea_demo_data</code></li>
+<li>Accepts optional arguments <code>--clear</code>, <code>--force</code>, <code>--purge-demo-data</code></li>
+<li>Enable configuration of number of DHCP servers, prefixes, option data, and client classes to generate via plugin settings</li>
+<li>Creates sample DHCP servers, HA relationships, prefixes, option data, and client classes for testing and demonstration purposes</li>
+</ul>
+</li>
+</ul>
+<h3 id="020-2026-01-27">0.2.0 (2026-01-27)<a class="headerlink" href="#020-2026-01-27" title="Permanent link">&para;</a></h3>
+<h4 id="added_12">Added<a class="headerlink" href="#added_12" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>High Availability (HA) Support</strong></li>
+<li>New <code>DHCPHARelationship</code> model for managing HA relationships between DHCP servers</li>
+<li>New <code>DHCPHAPeer</code> model for defining server roles (primary, secondary, standby, backup) in HA relationships</li>
+<li>Support for KEA HA modes: hot-standby, load-balancing, passive-backup</li>
+<li>Automatic config sync from primary to all HA peers via <code>get_effective_*</code> methods</li>
+<li>HA-aware <code>to_kea_dict()</code> method that generates consistent configs across HA peers</li>
+<li>Protection against deleting or changing role of primary peer with existing configs</li>
+<li>
+<p><code>migrate_configs_to_new_primary()</code> helper for safely switching primary servers</p>
+</li>
+<li>
+<p><strong>UI Improvements</strong></p>
+</li>
+<li>Renamed "Prefix Configs" to "DHCP Prefixes" in navigation</li>
+<li>Added view (eye) button alongside edit button in DHCP Prefixes list</li>
+<li>Added HA Assignment and HA Role fields to DHCP Server detail view</li>
+<li>HA standby servers show info badge and card explaining config sync</li>
+<li>
+<p>Hidden "Subnets" tab, "Global Option Data" and "Client Classes" boxes for non-primary HA servers</p>
+</li>
+<li>
+<p><strong>Form Enhancements</strong></p>
+</li>
+<li>Auto-redirect to primary server when assigning prefixes to non-primary HA servers</li>
+<li>User notification when config is saved to primary instead of selected server</li>
+</ul>
+<h4 id="changed_11">Changed<a class="headerlink" href="#changed_11" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>SubnetTable</code> (formerly <code>PrefixDHCPConfigTable</code>) now uses custom <code>ViewEditActionsColumn</code> for better action buttons</li>
+<li>DHCP Server detail view reorganized for HA information display</li>
+</ul>
+<h3 id="010-2026-01-18">0.1.0 (2026-01-18)<a class="headerlink" href="#010-2026-01-18" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Initial implementation of the core models.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/netbox-community/cookiecutter-netbox-plugin" target="_blank" rel="noopener" title="Tweet" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M459.4 151.7c.3 4.5.3 9.1.3 13.6 0 138.7-105.6 298.6-298.6 298.6-59.5 0-114.7-17.2-161.1-47.1 8.4 1 16.6 1.3 25.3 1.3 49.1 0 94.2-16.6 130.3-44.8-46.1-1-84.8-31.2-98.1-72.8 6.5 1 13 1.6 19.8 1.6 9.4 0 18.8-1.3 27.6-3.6-48.1-9.7-84.1-52-84.1-103v-1.3c14 7.8 30.2 12.7 47.4 13.3-28.3-18.8-46.8-51-46.8-87.4 0-19.5 5.2-37.4 14.3-53C87.4 130.8 165 172.4 252.1 176.9c-1.6-7.8-2.6-15.9-2.6-24C249.5 95.1 296.3 48 354.4 48c30.2 0 57.5 12.7 76.7 33.1 23.7-4.5 46.5-13.3 66.6-25.3-7.8 24.4-24.4 44.8-46.1 57.8 21.1-2.3 41.6-8.1 60.4-16.2-14.3 20.8-32.2 39.3-52.6 54.3"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/netbox-community/cookiecutter-netbox-plugin" target="_blank" rel="noopener" title="Facebook" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256c0 120 82.7 220.8 194.2 248.5V334.2h-52.8V256h52.8v-33.7c0-87.1 39.4-127.5 125-127.5 16.2 0 44.2 3.2 55.7 6.4V172c-6-.6-16.5-1-29.6-1-42 0-58.2 15.9-58.2 57.2V256h83.6l-14.4 78.2H287v175.9C413.8 494.8 512 386.9 512 256"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/LuPo/netbox-dhcp-kea-plugin" target="_blank" rel="noopener" title="Github" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="mailto:wookasz@gmail.com" target="_blank" rel="noopener" title="" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m20 8-8 5-8-5V6l8 5 8-5m0-2H4c-1.11 0-2 .89-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.indexes", "navigation.instant", "navigation.tabs.sticky"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
