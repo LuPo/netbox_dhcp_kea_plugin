@@ -1,0 +1,110 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">DDNS Policy</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Override Flags</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Send Updates</th>
+                        <td>{{ object.ddns_send_updates|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Override No Update</th>
+                        <td>{{ object.ddns_override_no_update|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Override Client Update</th>
+                        <td>{{ object.ddns_override_client_update|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Update On Renew</th>
+                        <td>{{ object.ddns_update_on_renew|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Replace Client Name</th>
+                        <td>{{ object.ddns_replace_client_name|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Hostname</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Generated Prefix</th>
+                        <td>{{ object.ddns_generated_prefix|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Qualifying Suffix</th>
+                        <td>{{ object.ddns_qualifying_suffix|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hostname Char Set</th>
+                        <td>{{ object.hostname_char_set|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hostname Char Replacement</th>
+                        <td>{{ object.hostname_char_replacement|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Conflict Resolution</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Mode</th>
+                        <td>{{ object.ddns_conflict_resolution_mode|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">TTL</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>TTL Percent</th>
+                        <td>{{ object.ddns_ttl_percent|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>TTL</th>
+                        <td>{{ object.ddns_ttl|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>TTL Min</th>
+                        <td>{{ object.ddns_ttl_min|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>TTL Max</th>
+                        <td>{{ object.ddns_ttl_max|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

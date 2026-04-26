@@ -316,6 +316,40 @@ class DHCPServer(NetBoxModel):
         related_name="servers",
         help_text="Stork agent group configuration for this DHCP server",
     )
+    d2_daemon = models.ForeignKey(
+        "D2Daemon",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servers",
+        help_text=(
+            "D2 daemon this server forwards NCRs to. Ignored when the server "
+            "is in an HA relationship whose ``d2_daemon`` is set."
+        ),
+    )
+    ddns_enable_updates = models.BooleanField(
+        default=True,
+        help_text="Globally enable DDNS updates on this DHCP server (dhcp-ddns.enable-updates)",
+    )
+    ddns_sender_ip = models.CharField(
+        max_length=45,
+        blank=True,
+        default="",
+        help_text="Source IP the DHCP server uses to send NCRs (optional)",
+    )
+    ddns_sender_port = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Source port the DHCP server uses to send NCRs (optional)",
+    )
+    ddns_policy = models.ForeignKey(
+        "DDNSPolicy",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servers",
+        help_text="Server-level DDNS policy (ddns-* tunables)",
+    )
 
     # Control Socket
     CTRL_SOCKET_TYPE_CHOICES = (
@@ -585,6 +619,51 @@ class DHCPServer(NetBoxModel):
             return None
 
         return self.ha_relationship.to_kea_dict(this_server=self)
+
+    @property
+    def effective_d2_daemon(self):
+        """Return the D2Daemon that actually applies to this server.
+
+        HA precedence: if the server is in an HA relationship whose
+        ``d2_daemon`` is set, that wins — peers must agree on the
+        ``dhcp-ddns`` block.
+        """
+        if self.ha_relationship_id and self.ha_relationship.d2_daemon_id:
+            return self.ha_relationship.d2_daemon
+        return self.d2_daemon
+
+    def _effective_ddns_field(self, name, blank_sentinel=""):
+        """Resolve a DDNS scalar with HA precedence.
+
+        When the server is in an HA relationship whose ``d2_daemon`` is set,
+        the relationship's value wins so peers stay in sync. Otherwise the
+        server's own value is used. ``blank_sentinel`` lets callers treat
+        empty strings as "unset" without overriding meaningful zero/False
+        values on numeric/boolean fields.
+        """
+        if self.ha_relationship_id and self.ha_relationship.d2_daemon_id:
+            return getattr(self.ha_relationship, name)
+        return getattr(self, name)
+
+    def effective_ddns_block(self):
+        """Build the ``dhcp-ddns`` block for kea-dhcp4/6, or None if not configured."""
+        daemon = self.effective_d2_daemon
+        if daemon is None:
+            return None
+        block = {
+            "enable-updates": self._effective_ddns_field("ddns_enable_updates"),
+            "server-ip": daemon.listener_ip,
+            "server-port": daemon.port,
+            "ncr-protocol": daemon.ncr_protocol,
+            "ncr-format": daemon.ncr_format,
+        }
+        sender_ip = self._effective_ddns_field("ddns_sender_ip")
+        if sender_ip:
+            block["sender-ip"] = sender_ip
+        sender_port = self._effective_ddns_field("ddns_sender_port")
+        if sender_port is not None:
+            block["sender-port"] = sender_port
+        return block
 
     def get_ha_primary(self):
         """Get the primary server in this server's HA relationship, if any.
@@ -1042,6 +1121,16 @@ class DHCPServer(NetBoxModel):
 
         if hooks_libraries:
             dhcp4["hooks-libraries"] = hooks_libraries
+
+        # DDNS: emit connection block + server-level policy overrides.
+        # Kea resolves the override chain at packet-processing time —
+        # subnet- and class-level overrides are emitted separately in
+        # Subnet.to_kea_dict() / ClientClass.to_kea_dict().
+        ddns_block = self.effective_ddns_block()
+        if ddns_block is not None:
+            dhcp4["dhcp-ddns"] = ddns_block
+        if self.ddns_policy_id is not None:
+            dhcp4.update(self.ddns_policy.to_kea_overrides())
 
         return result
 
@@ -1681,6 +1770,14 @@ class ClientClass(NetBoxModel):
     )
     server_hostname = models.CharField(max_length=255, blank=True, help_text="Server hostname for PXE boot (sname)")
     boot_file_name = models.CharField(max_length=255, blank=True, help_text="Boot file name for PXE boot (file)")
+    ddns_policy = models.ForeignKey(
+        "DDNSPolicy",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_classes",
+        help_text="Class-level DDNS policy overrides (ddns-* tunables)",
+    )
 
     class Meta:
         ordering = ("name",)
@@ -1894,6 +1991,9 @@ class ClientClass(NetBoxModel):
         if self.boot_file_name:
             result["boot-file-name"] = self.boot_file_name
 
+        if self.ddns_policy_id is not None:
+            result.update(self.ddns_policy.to_kea_overrides())
+
         return result
 
     def to_kea_json(self, ascii_format=False, indent=4):
@@ -1982,6 +2082,14 @@ class Subnet(NetBoxModel):
         default=get_default_reservations_only,
         verbose_name="Reservations Only",
         help_text="Disable dynamic pool allocation — only reserved hosts will receive an IP from this subnet",
+    )
+    ddns_policy = models.ForeignKey(
+        "DDNSPolicy",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subnets",
+        help_text="Subnet-level DDNS policy overrides (ddns-* tunables)",
     )
 
     class Meta:
@@ -2445,6 +2553,9 @@ class Subnet(NetBoxModel):
             if reservations:
                 result["reservations"] = reservations
 
+        if self.ddns_policy_id is not None:
+            result.update(self.ddns_policy.to_kea_overrides())
+
         return result
 
 
@@ -2653,6 +2764,32 @@ class DHCPHARelationship(NetBoxModel):
     http_client_threads = models.PositiveIntegerField(default=4, help_text="Number of HTTP client threads (0 = auto)")
 
     description = models.CharField(max_length=200, blank=True)
+    d2_daemon = models.ForeignKey(
+        "D2Daemon",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ha_relationships",
+        help_text=(
+            "D2 daemon shared by all peers in this HA relationship. "
+            "When set, overrides each member server's standalone d2_daemon."
+        ),
+    )
+    ddns_enable_updates = models.BooleanField(
+        default=True,
+        help_text="DDNS enable-updates value used by all peers in this HA relationship",
+    )
+    ddns_sender_ip = models.CharField(
+        max_length=45,
+        blank=True,
+        default="",
+        help_text="Source IP all peers use to send NCRs (optional)",
+    )
+    ddns_sender_port = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Source port all peers use to send NCRs (optional)",
+    )
 
     class Meta:
         ordering = ("name",)
@@ -3239,3 +3376,467 @@ class StorkAgentGroup(NetBoxModel):
         if self.stork_server:
             return self.stork_server.url
         return None
+
+
+# ---------------------------------------------------------------------------
+# DDNS (kea-dhcp-ddns / D2) — models
+# ---------------------------------------------------------------------------
+
+TSIG_ALGORITHM_CHOICES = (
+    ("HMAC-MD5", "HMAC-MD5"),
+    ("HMAC-SHA1", "HMAC-SHA1"),
+    ("HMAC-SHA224", "HMAC-SHA224"),
+    ("HMAC-SHA256", "HMAC-SHA256"),
+    ("HMAC-SHA384", "HMAC-SHA384"),
+    ("HMAC-SHA512", "HMAC-SHA512"),
+)
+
+TSIG_SECRET_BACKEND_CHOICES = (
+    ("plaintext", "Plaintext (stored in NetBox DB)"),
+    ("vault", "HashiCorp Vault (by path reference)"),
+)
+
+NCR_PROTOCOL_CHOICES = (
+    ("UDP", "UDP"),
+    ("TCP", "TCP"),
+)
+
+NCR_FORMAT_CHOICES = (
+    ("JSON", "JSON"),
+)
+
+DDNS_REPLACE_CLIENT_NAME_CHOICES = (
+    ("never", "never"),
+    ("always", "always"),
+    ("when-present", "when-present"),
+    ("when-not-present", "when-not-present"),
+)
+
+# Kea 3.0+ — ddns-conflict-resolution-mode replaces the deprecated
+# boolean ddns-use-conflict-resolution. Do not emit the deprecated alias.
+DDNS_CONFLICT_RESOLUTION_MODE_CHOICES = (
+    ("check-with-dhcid", "check-with-dhcid"),
+    ("no-check-with-dhcid", "no-check-with-dhcid"),
+    ("check-exists-with-dhcid", "check-exists-with-dhcid"),
+    ("no-check-without-dhcid", "no-check-without-dhcid"),
+)
+
+
+class TSIGKey(NetBoxModel):
+    """RFC 2845 TSIG key used to authenticate DNS UPDATE messages sent by D2.
+
+    Secret storage is delegated to a pluggable backend (see
+    ``secret_backends.py``) so the v1 plaintext model can be replaced later
+    by Vault / external secret retrieval without any schema change.
+    """
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="TSIG key name as it appears in Kea (e.g. 'd2.example.com.')",
+    )
+    description = models.CharField(max_length=200, blank=True)
+    algorithm = models.CharField(
+        max_length=20,
+        choices=TSIG_ALGORITHM_CHOICES,
+        default="HMAC-SHA256",
+        help_text="TSIG HMAC algorithm",
+    )
+    digest_bits = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Truncated digest length in bits (optional; default is full length)",
+    )
+    secret_backend = models.CharField(
+        max_length=20,
+        choices=TSIG_SECRET_BACKEND_CHOICES,
+        default="plaintext",
+        help_text="Where the raw secret is sourced from at config-emission time",
+    )
+    secret_plaintext = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Base64-encoded TSIG secret (used when backend is 'plaintext')",
+    )
+    secret_ref = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="External reference (e.g. Vault path) — used when backend is non-plaintext",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "TSIG Key"
+        verbose_name_plural = "TSIG Keys"
+        permissions = [
+            ("view_secret_tsigkey", "Can view TSIG key plaintext secret"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:tsigkey", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if self.secret_backend == "plaintext":
+            if not self.secret_plaintext:
+                errors["secret_plaintext"] = "Plaintext backend requires a secret."
+            else:
+                # Must be valid base64
+                import base64 as _base64
+                import binascii as _binascii
+
+                try:
+                    _base64.b64decode(self.secret_plaintext, validate=True)
+                except (_binascii.Error, ValueError):
+                    errors["secret_plaintext"] = "Secret must be valid base64."
+        else:
+            if not self.secret_ref:
+                errors["secret_ref"] = (
+                    f"Backend '{self.secret_backend}' requires a reference."
+                )
+
+        # Digest-bits must be a positive multiple of 8 when set, and never
+        # exceed the underlying algorithm's natural output.
+        if self.digest_bits is not None:
+            if self.digest_bits <= 0 or self.digest_bits % 8:
+                errors["digest_bits"] = "digest_bits must be a positive multiple of 8."
+            max_bits = {
+                "HMAC-MD5": 128,
+                "HMAC-SHA1": 160,
+                "HMAC-SHA224": 224,
+                "HMAC-SHA256": 256,
+                "HMAC-SHA384": 384,
+                "HMAC-SHA512": 512,
+            }.get(self.algorithm)
+            if max_bits and self.digest_bits > max_bits:
+                errors["digest_bits"] = (
+                    f"digest_bits ({self.digest_bits}) exceeds algorithm output "
+                    f"size ({max_bits})."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def get_secret(self):
+        """Resolve the raw (base64) secret via the configured backend."""
+        from .secret_backends import resolve_secret
+
+        return resolve_secret(self)
+
+    def to_kea_dict(self):
+        """Emit the Kea tsig-keys entry for this key.
+
+        Only called at config-emission time — the caller is expected to have
+        the ``view_secret_tsigkey`` permission or to be rendering to a
+        deployment pipeline.
+        """
+        entry = {
+            "name": self.name,
+            "algorithm": self.algorithm.lower(),
+            "secret": self.get_secret(),
+        }
+        if self.digest_bits:
+            entry["digest-bits"] = self.digest_bits
+        return entry
+
+
+class D2Daemon(NetBoxModel):
+    """A kea-dhcp-ddns (D2) daemon instance.
+
+    Models the listener socket, control socket, and NCR (NameChangeRequest)
+    transport for one D2 process. DDNSDomain rows attached to this daemon
+    become entries under ``forward-ddns.ddns-domains`` / ``reverse-ddns.ddns-domains``
+    in the emitted ``kea-dhcp-ddns.conf``.
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=200, blank=True)
+    ip_address = models.ForeignKey(
+        IPAddress,
+        on_delete=models.PROTECT,
+        related_name="d2_daemons",
+        help_text="IP address the D2 daemon listens on for NameChangeRequests",
+    )
+    port = models.PositiveIntegerField(
+        default=53001,
+        help_text="Port the D2 daemon listens on (default: 53001)",
+    )
+    control_socket_path = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Unix domain socket path for D2 control channel (optional)",
+    )
+    ncr_protocol = models.CharField(
+        max_length=3,
+        choices=NCR_PROTOCOL_CHOICES,
+        default="UDP",
+        help_text="NameChangeRequest transport protocol",
+    )
+    ncr_format = models.CharField(
+        max_length=4,
+        choices=NCR_FORMAT_CHOICES,
+        default="JSON",
+        help_text="NameChangeRequest wire format",
+    )
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "D2 Daemon"
+        verbose_name_plural = "D2 Daemons"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:d2daemon", args=[self.pk])
+
+    @property
+    def listener_ip(self):
+        if self.ip_address is None:
+            return None
+        return str(self.ip_address.address.ip)
+
+    def to_kea_dict(self):
+        """Emit a full ``kea-dhcp-ddns.conf`` dictionary for this D2 daemon.
+
+        Domains are partitioned into forward/reverse based on the zone name
+        (``.in-addr.arpa`` or ``.ip6.arpa`` ⇒ reverse).
+        """
+        forward_domains = []
+        reverse_domains = []
+        tsig_keys = {}
+
+        for domain in self.domains.select_related("zone", "tsig_key").prefetch_related("zone__nameservers"):
+            domain_dict = domain.to_kea_dict()
+            if domain.is_reverse:
+                reverse_domains.append(domain_dict)
+            else:
+                forward_domains.append(domain_dict)
+            if domain.tsig_key_id and domain.tsig_key.name not in tsig_keys:
+                tsig_keys[domain.tsig_key.name] = domain.tsig_key.to_kea_dict()
+
+        dhcp_ddns = {
+            "ip-address": self.listener_ip,
+            "port": self.port,
+            "ncr-protocol": self.ncr_protocol,
+            "ncr-format": self.ncr_format,
+        }
+        if self.control_socket_path:
+            dhcp_ddns["control-socket"] = {
+                "socket-type": "unix",
+                "socket-name": self.control_socket_path,
+            }
+        if tsig_keys:
+            dhcp_ddns["tsig-keys"] = list(tsig_keys.values())
+        dhcp_ddns["forward-ddns"] = {"ddns-domains": forward_domains}
+        dhcp_ddns["reverse-ddns"] = {"ddns-domains": reverse_domains}
+
+        return {"DhcpDdns": dhcp_ddns}
+
+
+class DDNSDomain(NetBoxModel):
+    """A single forward or reverse DDNS domain entry on a D2 daemon.
+
+    Direction (forward vs reverse) is **derived** from the linked netbox-dns
+    Zone's name — a zone ending in ``.in-addr.arpa`` or ``.ip6.arpa`` is
+    reverse. This avoids the footgun of the direction field drifting out of
+    sync with the zone.
+    """
+
+    d2_daemon = models.ForeignKey(
+        "D2Daemon",
+        on_delete=models.CASCADE,
+        related_name="domains",
+        help_text="The D2 daemon that handles this domain",
+    )
+    # Zone and NameServer are FK'd through django's string-form model
+    # references with db_constraint=False so the plugin still migrates
+    # cleanly when netbox_dns isn't installed. Startup gating in
+    # __init__.py blocks enable_ddns=True without netbox_dns, so these
+    # columns are only ever populated when netbox_dns is present.
+    zone = models.ForeignKey(
+        "netbox_dns.Zone",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_constraint=False,
+        help_text="Forward or reverse zone that this domain serves",
+    )
+    tsig_key = models.ForeignKey(
+        "TSIGKey",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="domains",
+        help_text="TSIG key for authenticating updates (optional)",
+    )
+
+    class Meta:
+        ordering = ("d2_daemon", "zone")
+        verbose_name = "DDNS Domain"
+        verbose_name_plural = "DDNS Domains"
+        unique_together = (("d2_daemon", "zone"),)
+
+    def __str__(self):
+        return f"{self.zone} @ {self.d2_daemon}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:ddnsdomain", args=[self.pk])
+
+    @property
+    def is_reverse(self):
+        if self.zone_id is None:
+            return False
+        name = (self.zone.name or "").rstrip(".").lower()
+        return name.endswith(".in-addr.arpa") or name.endswith(".ip6.arpa") or name in (
+            "in-addr.arpa",
+            "ip6.arpa",
+        )
+
+    @staticmethod
+    def _resolve_nameserver_ips(ns_name):
+        """Resolve a nameserver FQDN to its A/AAAA IPs via netbox_dns.
+
+        Returns a list of IP strings (may be empty if no records exist or
+        netbox_dns isn't installed).
+        """
+        try:
+            from netbox_dns.models import Record as DNSRecord
+        except ImportError:
+            return []
+
+        fqdn = ns_name if ns_name.endswith(".") else f"{ns_name}."
+        ips = []
+        for rec in DNSRecord.objects.filter(fqdn=fqdn, type__in=("A", "AAAA")):
+            value = rec.value
+            if value and value not in ips:
+                ips.append(value)
+        return ips
+
+    def to_kea_dict(self):
+        """Emit a single ddns-domains entry.
+
+        ``dns-servers`` is derived from ``zone.nameservers`` — for each
+        NameServer the linked A/AAAA records in netbox_dns are resolved to
+        IPs. Nameservers with no resolvable IPs are silently skipped (Kea
+        requires IPs, not hostnames).
+        """
+        zone_name = self.zone.name
+        if not zone_name.endswith("."):
+            zone_name = zone_name + "."
+
+        dns_servers = []
+        for ns in self.zone.nameservers.all():
+            for ip in self._resolve_nameserver_ips(ns.name):
+                dns_servers.append({"ip-address": ip, "port": 53})
+
+        entry = {
+            "name": zone_name,
+            "dns-servers": dns_servers,
+        }
+        if self.tsig_key_id:
+            entry["key-name"] = self.tsig_key.name
+        return entry
+
+
+class DDNSPolicy(NetBoxModel):
+    """A reusable set of ``ddns-*`` override keys.
+
+    Attachable at any of server / subnet / client-class. Only non-null
+    fields are emitted at config-generation time — the Kea resolver itself
+    walks the override chain when processing packets. The plugin does
+    **not** merge layers in Python.
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=200, blank=True)
+
+    # Field name → Kea key mapping is done by to_kea_overrides() below.
+    ddns_send_updates = models.BooleanField(null=True, blank=True)
+    ddns_override_no_update = models.BooleanField(null=True, blank=True)
+    ddns_override_client_update = models.BooleanField(null=True, blank=True)
+    ddns_replace_client_name = models.CharField(
+        max_length=20,
+        choices=DDNS_REPLACE_CLIENT_NAME_CHOICES,
+        blank=True,
+        default="",
+        help_text="When Kea should replace the client-supplied FQDN",
+    )
+    ddns_generated_prefix = models.CharField(max_length=255, blank=True, default="")
+    ddns_qualifying_suffix = models.CharField(max_length=255, blank=True, default="")
+    hostname_char_set = models.CharField(max_length=255, blank=True, default="")
+    hostname_char_replacement = models.CharField(max_length=255, blank=True, default="")
+    ddns_update_on_renew = models.BooleanField(null=True, blank=True)
+    ddns_conflict_resolution_mode = models.CharField(
+        max_length=32,
+        choices=DDNS_CONFLICT_RESOLUTION_MODE_CHOICES,
+        blank=True,
+        default="",
+        help_text="Kea 3.0+ conflict resolution mode (replaces ddns-use-conflict-resolution)",
+    )
+    ddns_ttl_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="TTL as a fraction of lease lifetime (e.g. 0.3333 → 33%)",
+    )
+    ddns_ttl = models.PositiveIntegerField(null=True, blank=True)
+    ddns_ttl_min = models.PositiveIntegerField(null=True, blank=True)
+    ddns_ttl_max = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "DDNS Policy"
+        verbose_name_plural = "DDNS Policies"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:ddnspolicy", args=[self.pk])
+
+    # Kea key names are the kebab-cased Django field names — list the
+    # mapping explicitly for any that don't map trivially.
+    _KEA_FIELD_MAP = (
+        ("ddns_send_updates", "ddns-send-updates"),
+        ("ddns_override_no_update", "ddns-override-no-update"),
+        ("ddns_override_client_update", "ddns-override-client-update"),
+        ("ddns_replace_client_name", "ddns-replace-client-name"),
+        ("ddns_generated_prefix", "ddns-generated-prefix"),
+        ("ddns_qualifying_suffix", "ddns-qualifying-suffix"),
+        ("hostname_char_set", "hostname-char-set"),
+        ("hostname_char_replacement", "hostname-char-replacement"),
+        ("ddns_update_on_renew", "ddns-update-on-renew"),
+        ("ddns_conflict_resolution_mode", "ddns-conflict-resolution-mode"),
+        ("ddns_ttl_percent", "ddns-ttl-percent"),
+        ("ddns_ttl", "ddns-ttl"),
+        ("ddns_ttl_min", "ddns-ttl-min"),
+        ("ddns_ttl_max", "ddns-ttl-max"),
+    )
+
+    def to_kea_overrides(self):
+        """Return only the non-null/non-blank keys, kebab-cased for Kea.
+
+        String fields use ``""`` to mean "not set" (so they can round-trip
+        through CharField without null=True quirks). Decimals are emitted
+        as floats to match Kea's JSON schema.
+        """
+        result = {}
+        for field_name, kea_key in self._KEA_FIELD_MAP:
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            if isinstance(value, str) and value == "":
+                continue
+            if field_name == "ddns_ttl_percent":
+                value = float(value)
+            result[kea_key] = value
+        return result

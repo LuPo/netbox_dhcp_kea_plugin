@@ -1,0 +1,50 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        {% if domains %}
+        <div class="card">
+            <h5 class="card-header">DDNS Domains</h5>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Zone</th>
+                            <th>Direction</th>
+                            <th>TSIG Key</th>
+                            <th>Nameservers</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for domain in domains %}
+                        <tr>
+                            <td><a href="{{ domain.get_absolute_url }}">{{ domain.zone }}</a></td>
+                            <td>{% if domain.is_reverse %}Reverse{% else %}Forward{% endif %}</td>
+                            <td>
+                                {% if domain.tsig_key %}
+                                <a href="{{ domain.tsig_key.get_absolute_url }}">{{ domain.tsig_key.name }}</a>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for ns in domain.zone.nameservers.all %}
+                                {{ ns }}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                <span class="text-muted">—</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No DDNS domains are attached to this D2 daemon.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

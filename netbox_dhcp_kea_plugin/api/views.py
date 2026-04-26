@@ -20,6 +20,9 @@ class PlainTextRenderer(BaseRenderer):
 from .. import filtersets
 from ..models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -30,10 +33,14 @@ from ..models import (
     StorkServer,
     Subnet,
     SubnetPool,
+    TSIGKey,
     VendorOptionSpace,
 )
 from .serializers import (
     ClientClassSerializer,
+    D2DaemonSerializer,
+    DDNSDomainSerializer,
+    DDNSPolicySerializer,
     DHCPHARelationshipSerializer,
     DHCPServerSerializer,
     HookGroupSerializer,
@@ -44,6 +51,7 @@ from .serializers import (
     StorkServerSerializer,
     SubnetPoolSerializer,
     SubnetSerializer,
+    TSIGKeySerializer,
     VendorOptionSpaceSerializer,
 )
 
@@ -312,3 +320,38 @@ class StorkAgentGroupViewSet(NetBoxModelViewSet):
 
         env_content = agent_group.to_env_content(server=server)
         return Response(env_content)
+
+
+# ----- DDNS ViewSets -----
+
+
+class TSIGKeyViewSet(NetBoxModelViewSet):
+    queryset = TSIGKey.objects.all()
+    serializer_class = TSIGKeySerializer
+    filterset_class = filtersets.TSIGKeyFilterSet
+
+
+class D2DaemonViewSet(NetBoxModelViewSet):
+    queryset = D2Daemon.objects.select_related("ip_address").prefetch_related("domains")
+    serializer_class = D2DaemonSerializer
+    filterset_class = filtersets.D2DaemonFilterSet
+
+    @action(detail=True, methods=["get"], url_path="kea-config")
+    def kea_config(self, request, pk=None):
+        """
+        Return the complete kea-dhcp-ddns configuration for this D2 daemon.
+        """
+        daemon = self.get_object()
+        return Response(daemon.to_kea_dict())
+
+
+class DDNSDomainViewSet(NetBoxModelViewSet):
+    queryset = DDNSDomain.objects.select_related("d2_daemon", "tsig_key", "zone")
+    serializer_class = DDNSDomainSerializer
+    filterset_class = filtersets.DDNSDomainFilterSet
+
+
+class DDNSPolicyViewSet(NetBoxModelViewSet):
+    queryset = DDNSPolicy.objects.prefetch_related("servers", "subnets", "client_classes")
+    serializer_class = DDNSPolicySerializer
+    filterset_class = filtersets.DDNSPolicyFilterSet

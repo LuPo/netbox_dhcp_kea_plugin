@@ -292,3 +292,88 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
             name="storkagentgroup_config",
         ),
     ]
+
+if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+    urlpatterns += [
+        # TSIGKey URLs
+        path("tsig-keys/", views.TSIGKeyListView.as_view(), name="tsigkey_list"),
+        path("tsig-keys/add/", views.TSIGKeyEditView.as_view(), name="tsigkey_add"),
+        path("tsig-keys/import/", views.TSIGKeyImportView.as_view(), name="tsigkey_bulk_import"),
+        path("tsig-keys/delete/", views.TSIGKeyBulkDeleteView.as_view(), name="tsigkey_bulk_delete"),
+        path("tsig-keys/<int:pk>/", views.TSIGKeyView.as_view(), name="tsigkey"),
+        path("tsig-keys/<int:pk>/edit/", views.TSIGKeyEditView.as_view(), name="tsigkey_edit"),
+        path("tsig-keys/<int:pk>/delete/", views.TSIGKeyDeleteView.as_view(), name="tsigkey_delete"),
+        path(
+            "tsig-keys/<int:pk>/changelog/",
+            ObjectChangeLogView.as_view(),
+            name="tsigkey_changelog",
+            kwargs={"model": models.TSIGKey},
+        ),
+        # D2Daemon URLs
+        path("d2-daemons/", views.D2DaemonListView.as_view(), name="d2daemon_list"),
+        path("d2-daemons/add/", views.D2DaemonEditView.as_view(), name="d2daemon_add"),
+        path("d2-daemons/import/", views.D2DaemonImportView.as_view(), name="d2daemon_bulk_import"),
+        path("d2-daemons/delete/", views.D2DaemonBulkDeleteView.as_view(), name="d2daemon_bulk_delete"),
+        path("d2-daemons/<int:pk>/", views.D2DaemonView.as_view(), name="d2daemon"),
+        path("d2-daemons/<int:pk>/edit/", views.D2DaemonEditView.as_view(), name="d2daemon_edit"),
+        path("d2-daemons/<int:pk>/delete/", views.D2DaemonDeleteView.as_view(), name="d2daemon_delete"),
+        path(
+            "d2-daemons/<int:pk>/changelog/",
+            ObjectChangeLogView.as_view(),
+            name="d2daemon_changelog",
+            kwargs={"model": models.D2Daemon},
+        ),
+        path(
+            "d2-daemons/<int:pk>/domains/",
+            views.D2DaemonDomainsView.as_view(),
+            name="d2daemon_domains",
+        ),
+        path(
+            "d2-daemons/<int:pk>/config/",
+            views.D2DaemonConfigView.as_view(),
+            name="d2daemon_config",
+        ),
+        # DDNSDomain URLs
+        path("ddns-domains/", views.DDNSDomainListView.as_view(), name="ddnsdomain_list"),
+        path("ddns-domains/add/", views.DDNSDomainEditView.as_view(), name="ddnsdomain_add"),
+        path("ddns-domains/import/", views.DDNSDomainImportView.as_view(), name="ddnsdomain_bulk_import"),
+        path("ddns-domains/delete/", views.DDNSDomainBulkDeleteView.as_view(), name="ddnsdomain_bulk_delete"),
+        path("ddns-domains/<int:pk>/", views.DDNSDomainView.as_view(), name="ddnsdomain"),
+        path("ddns-domains/<int:pk>/edit/", views.DDNSDomainEditView.as_view(), name="ddnsdomain_edit"),
+        path("ddns-domains/<int:pk>/delete/", views.DDNSDomainDeleteView.as_view(), name="ddnsdomain_delete"),
+        path(
+            "ddns-domains/<int:pk>/changelog/",
+            ObjectChangeLogView.as_view(),
+            name="ddnsdomain_changelog",
+            kwargs={"model": models.DDNSDomain},
+        ),
+        # DDNSPolicy URLs
+        path("ddns-policies/", views.DDNSPolicyListView.as_view(), name="ddnspolicy_list"),
+        path("ddns-policies/add/", views.DDNSPolicyEditView.as_view(), name="ddnspolicy_add"),
+        path("ddns-policies/import/", views.DDNSPolicyImportView.as_view(), name="ddnspolicy_bulk_import"),
+        path("ddns-policies/delete/", views.DDNSPolicyBulkDeleteView.as_view(), name="ddnspolicy_bulk_delete"),
+        path("ddns-policies/<int:pk>/", views.DDNSPolicyView.as_view(), name="ddnspolicy"),
+        path("ddns-policies/<int:pk>/edit/", views.DDNSPolicyEditView.as_view(), name="ddnspolicy_edit"),
+        path("ddns-policies/<int:pk>/delete/", views.DDNSPolicyDeleteView.as_view(), name="ddnspolicy_delete"),
+        path(
+            "ddns-policies/<int:pk>/changelog/",
+            ObjectChangeLogView.as_view(),
+            name="ddnspolicy_changelog",
+            kwargs={"model": models.DDNSPolicy},
+        ),
+        path(
+            "ddns-policies/<int:pk>/servers/",
+            views.DDNSPolicyServersView.as_view(),
+            name="ddnspolicy_servers",
+        ),
+        path(
+            "ddns-policies/<int:pk>/subnets/",
+            views.DDNSPolicySubnetsView.as_view(),
+            name="ddnspolicy_subnets",
+        ),
+        path(
+            "ddns-policies/<int:pk>/client-classes/",
+            views.DDNSPolicyClientClassesView.as_view(),
+            name="ddnspolicy_clientclasses",
+        ),
+    ]

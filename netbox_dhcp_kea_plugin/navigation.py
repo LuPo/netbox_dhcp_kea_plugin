@@ -4,6 +4,7 @@ from netbox.plugins.utils import get_plugin_config
 menu_name = get_plugin_config("netbox_dhcp_kea_plugin", "menu_name")
 top_level_menu = get_plugin_config("netbox_dhcp_kea_plugin", "top_level_menu")
 enable_stork = get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork")
+enable_ddns = get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns")
 
 # Define menu items
 hook_menu_item = PluginMenuItem(
@@ -174,6 +175,64 @@ storkagentgroup_menu_item = PluginMenuItem(
     ),
 )
 
+# --- DDNS Menu Items ---
+
+tsigkey_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:tsigkey_list",
+    link_text="TSIG Keys",
+    permissions=["netbox_dhcp_kea_plugin.view_tsigkey"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:tsigkey_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_tsigkey"],
+        ),
+    ),
+)
+
+d2daemon_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:d2daemon_list",
+    link_text="D2 Daemons",
+    permissions=["netbox_dhcp_kea_plugin.view_d2daemon"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:d2daemon_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_d2daemon"],
+        ),
+    ),
+)
+
+ddnsdomain_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:ddnsdomain_list",
+    link_text="DDNS Domains",
+    permissions=["netbox_dhcp_kea_plugin.view_ddnsdomain"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:ddnsdomain_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_ddnsdomain"],
+        ),
+    ),
+)
+
+ddnspolicy_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:ddnspolicy_list",
+    link_text="DDNS Policies",
+    permissions=["netbox_dhcp_kea_plugin.view_ddnspolicy"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:ddnspolicy_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_ddnspolicy"],
+        ),
+    ),
+)
+
 
 # Build menu groups, conditionally including Stork
 _menu_groups = [
@@ -215,6 +274,19 @@ if enable_stork:
         ),
     )
 
+if enable_ddns:
+    _menu_groups.append(
+        (
+            "DDNS",
+            (
+                tsigkey_menu_item,
+                d2daemon_menu_item,
+                ddnsdomain_menu_item,
+                ddnspolicy_menu_item,
+            ),
+        ),
+    )
+
 if top_level_menu:
     menu = PluginMenu(
         label=menu_name,
@@ -236,4 +308,13 @@ else:
     ]
     if enable_stork:
         _flat_items.extend([storkserver_menu_item, storkagentgroup_menu_item])
+    if enable_ddns:
+        _flat_items.extend(
+            [
+                tsigkey_menu_item,
+                d2daemon_menu_item,
+                ddnsdomain_menu_item,
+                ddnspolicy_menu_item,
+            ]
+        )
     menu_items = tuple(_flat_items)

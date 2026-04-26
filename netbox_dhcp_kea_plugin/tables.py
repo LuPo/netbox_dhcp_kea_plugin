@@ -3,6 +3,9 @@ from netbox.tables import BooleanColumn, ChoiceFieldColumn, NetBoxTable
 
 from .models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -13,6 +16,7 @@ from .models import (
     StorkServer,
     Subnet,
     SubnetPool,
+    TSIGKey,
     VendorOptionSpace,
 )
 
@@ -653,5 +657,147 @@ class StorkAgentGroupTable(NetBoxTable):
             "agent_port",
             "prometheus_exporter_port",
             "servers_count",
+        )
+        exclude = ("id",)
+
+
+# --- DDNS Tables ---
+
+
+class TSIGKeyTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    algorithm = tables.Column(verbose_name="Algorithm")
+    digest_bits = tables.Column(verbose_name="Digest Bits")
+    secret_backend = tables.Column(verbose_name="Secret Backend")
+    description = tables.Column(verbose_name="Description")
+
+    class Meta(NetBoxTable.Meta):
+        model = TSIGKey
+        fields = (
+            "pk",
+            "name",
+            "algorithm",
+            "digest_bits",
+            "secret_backend",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "name",
+            "algorithm",
+            "secret_backend",
+            "description",
+        )
+        exclude = ("id",)
+
+
+class D2DaemonTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    ip_address = tables.Column(linkify=True, verbose_name="Listener IP")
+    port = tables.Column(verbose_name="Port")
+    ncr_protocol = tables.Column(verbose_name="NCR Protocol")
+    ncr_format = tables.Column(verbose_name="NCR Format")
+    domains_count = tables.Column(
+        verbose_name="Domains",
+        accessor="domains__count",
+        orderable=False,
+        linkify=False,
+    )
+    description = tables.Column(verbose_name="Description")
+
+    class Meta(NetBoxTable.Meta):
+        model = D2Daemon
+        fields = (
+            "pk",
+            "name",
+            "ip_address",
+            "port",
+            "ncr_protocol",
+            "ncr_format",
+            "domains_count",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "name",
+            "ip_address",
+            "port",
+            "ncr_protocol",
+            "domains_count",
+        )
+        exclude = ("id",)
+
+
+class DDNSDomainTable(NetBoxTable):
+    d2_daemon = tables.Column(linkify=True, verbose_name="D2 Daemon")
+    zone = tables.Column(linkify=True, verbose_name="Zone")
+    tsig_key = tables.Column(linkify=True, verbose_name="TSIG Key")
+    is_reverse = BooleanColumn(verbose_name="Reverse")
+
+    class Meta(NetBoxTable.Meta):
+        model = DDNSDomain
+        fields = (
+            "pk",
+            "d2_daemon",
+            "zone",
+            "tsig_key",
+            "is_reverse",
+            "actions",
+        )
+        default_columns = (
+            "d2_daemon",
+            "zone",
+            "tsig_key",
+            "is_reverse",
+        )
+        exclude = ("id",)
+
+
+class DDNSPolicyTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name="Name")
+    ddns_send_updates = BooleanColumn(verbose_name="Send Updates")
+    ddns_qualifying_suffix = tables.Column(verbose_name="Qualifying Suffix")
+    ddns_conflict_resolution_mode = tables.Column(verbose_name="Conflict Mode")
+    servers_count = tables.Column(
+        verbose_name="Servers",
+        accessor="servers__count",
+        orderable=False,
+        linkify=False,
+    )
+    subnets_count = tables.Column(
+        verbose_name="Subnets",
+        accessor="subnets__count",
+        orderable=False,
+        linkify=False,
+    )
+    client_classes_count = tables.Column(
+        verbose_name="Client Classes",
+        accessor="client_classes__count",
+        orderable=False,
+        linkify=False,
+    )
+    description = tables.Column(verbose_name="Description")
+
+    class Meta(NetBoxTable.Meta):
+        model = DDNSPolicy
+        fields = (
+            "pk",
+            "name",
+            "ddns_send_updates",
+            "ddns_qualifying_suffix",
+            "ddns_conflict_resolution_mode",
+            "servers_count",
+            "subnets_count",
+            "client_classes_count",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "name",
+            "ddns_send_updates",
+            "ddns_qualifying_suffix",
+            "servers_count",
+            "subnets_count",
+            "client_classes_count",
         )
         exclude = ("id",)

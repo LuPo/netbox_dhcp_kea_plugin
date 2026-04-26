@@ -20,6 +20,11 @@ router.register("ha-relationships", views.DHCPHARelationshipViewSet)
 if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
     router.register("stork-servers", views.StorkServerViewSet)
     router.register("stork-agent-groups", views.StorkAgentGroupViewSet)
+if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+    router.register("tsig-keys", views.TSIGKeyViewSet)
+    router.register("d2-daemons", views.D2DaemonViewSet)
+    router.register("ddns-domains", views.DDNSDomainViewSet)
+    router.register("ddns-policies", views.DDNSPolicyViewSet)
 
 urlpatterns = router.urls + [
     # Lookup DHCP relay config by prefix

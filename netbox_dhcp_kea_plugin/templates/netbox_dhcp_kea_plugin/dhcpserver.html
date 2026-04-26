@@ -128,6 +128,70 @@
                         </td>
                     </tr>
                     {% endif %}
+                    {% if enable_ddns %}
+                    <tr>
+                        <th colspan="2" class="table-light">DDNS</th>
+                    </tr>
+                    <tr>
+                        <th>D2 Daemon</th>
+                        <td>
+                            {% with eff=object.effective_d2_daemon %}
+                            {% if eff %}
+                            <a href="{{ eff.get_absolute_url }}">{{ eff.name }}</a>
+                            {% if object.ha_relationship and object.ha_relationship.d2_daemon_id == eff.id %}
+                            <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Updates Enabled</th>
+                        <td>
+                            {% with src=object.ha_relationship %}
+                            {% if src and src.d2_daemon_id %}
+                                {% if src.ddns_enable_updates %}Yes{% else %}No{% endif %}
+                                <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
+                            {% else %}
+                                {% if object.ddns_enable_updates %}Yes{% else %}No{% endif %}
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Sender</th>
+                        <td>
+                            {% with src=object.ha_relationship %}
+                            {% if src and src.d2_daemon_id %}
+                                {% if src.ddns_sender_ip or src.ddns_sender_port %}
+                                {{ src.ddns_sender_ip|default:"—" }}{% if src.ddns_sender_port %}:{{ src.ddns_sender_port }}{% endif %}
+                                <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            {% else %}
+                                {% if object.ddns_sender_ip or object.ddns_sender_port %}
+                                {{ object.ddns_sender_ip|default:"—" }}{% if object.ddns_sender_port %}:{{ object.ddns_sender_port }}{% endif %}
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>DDNS Policy</th>
+                        <td>
+                            {% if object.ddns_policy %}
+                            <a href="{{ object.ddns_policy.get_absolute_url }}">{{ object.ddns_policy.name }}</a>
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <th>Control Socket</th>
                         <td>

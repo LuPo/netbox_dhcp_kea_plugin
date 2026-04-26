@@ -1,0 +1,85 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">TSIG Key</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ object.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Algorithm</th>
+                        <td>{{ object.get_algorithm_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Digest Bits</th>
+                        <td>{{ object.digest_bits|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Secret</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Backend</th>
+                        <td>{{ object.get_secret_backend_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Secret</th>
+                        <td>
+                            {% if can_view_secret %}
+                                {% if object.secret_backend == 'plaintext' %}
+                                    <span id="tsig-secret-masked">••••••••••</span>
+                                    <span id="tsig-secret-clear" style="display:none;">{{ object.secret_plaintext }}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="tsig-secret-toggle">
+                                        <i class="mdi mdi-eye"></i> Reveal
+                                    </button>
+                                {% else %}
+                                    <span class="text-muted">{{ object.secret_ref|placeholder }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Hidden (requires <em>view_secret_tsigkey</em> permission)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if can_view_secret %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('tsig-secret-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        var masked = document.getElementById('tsig-secret-masked');
+        var clear = document.getElementById('tsig-secret-clear');
+        if (clear.style.display === 'none') {
+            clear.style.display = '';
+            masked.style.display = 'none';
+            btn.innerHTML = '<i class="mdi mdi-eye-off"></i> Hide';
+        } else {
+            clear.style.display = 'none';
+            masked.style.display = '';
+            btn.innerHTML = '<i class="mdi mdi-eye"></i> Reveal';
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}
