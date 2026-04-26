@@ -518,9 +518,12 @@ class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
 
     def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
         return {
             "kea_config_hex": instance.to_kea_json(ascii_format=False, indent=4),
             "kea_config_ascii": instance.to_kea_json(ascii_format=True, indent=4),
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -697,6 +700,8 @@ class SubnetView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         import json
 
+        from netbox.plugins.utils import get_plugin_config
+
         # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
         # These classes are already evaluated globally by KEA, so listing them in
         # evaluate-additional-classes is redundant.
@@ -706,6 +711,7 @@ class SubnetView(generic.ObjectView):
             "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
             "pool_count": instance.subnet_pools.count(),
             "redundant_eval_classes": redundant_eval_classes,
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -773,6 +779,13 @@ class SubnetImportView(generic.BulkImportView):
 # DHCPHARelationship Views
 class DHCPHARelationshipView(generic.ObjectView):
     queryset = models.DHCPHARelationship.objects.prefetch_related("servers")
+
+    def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
+        return {
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
+        }
 
 
 class DHCPHARelationshipListView(generic.ObjectListView):

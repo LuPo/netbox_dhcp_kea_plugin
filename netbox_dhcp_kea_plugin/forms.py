@@ -895,8 +895,7 @@ class DHCPServerForm(NetBoxModelForm):
         required=False,
         label="D2 daemon",
         help_text=(
-            "Kea D2 daemon to send NCRs to. Ignored when the server is in an "
-            "HA relationship that itself has a D2 daemon set."
+            "Kea D2 daemon to send NCRs to. Ignored when the server is in an HA relationship with D2 daemon set."
         ),
     )
     ddns_policy = DynamicModelChoiceField(
@@ -943,10 +942,10 @@ class DHCPServerForm(NetBoxModelForm):
             ),
             FieldSet("stork_agent_group", name="Stork Monitoring"),
             FieldSet(
-                "d2_daemon",
                 "ddns_enable_updates",
-                InlineFields("ddns_sender_ip", "ddns_sender_port", label="Sender"),
+                "d2_daemon",
                 "ddns_policy",
+                InlineFields("ddns_sender_ip", "ddns_sender_port", label="Sender"),
                 name="DDNS",
             ),
             FieldSet(
@@ -1647,8 +1646,7 @@ class DHCPHARelationshipForm(NetBoxModelForm):
         required=False,
         label="D2 daemon",
         help_text=(
-            "Shared Kea D2 daemon for all member servers. When set, each member's "
-            "standalone D2 daemon is ignored."
+            "Shared Kea D2 daemon for all member servers. When set, each member's standalone D2 daemon is ignored."
         ),
     )
 
@@ -1667,8 +1665,8 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             name="Multi-Threading",
         ),
         FieldSet(
-            "d2_daemon",
             "ddns_enable_updates",
+            "d2_daemon",
             InlineFields("ddns_sender_ip", "ddns_sender_port", label="Sender"),
             name="DDNS",
         ),
@@ -2261,9 +2259,7 @@ class DDNSDomainForm(NetBoxModelForm):
         help_text="TSIG key for authenticating updates to this zone (optional)",
     )
 
-    fieldsets = (
-        FieldSet("d2_daemon", "zone", "tsig_key", "tags", name="General"),
-    )
+    fieldsets = (FieldSet("d2_daemon", "zone", "tsig_key", "tags", name="General"),)
 
     class Meta:
         model = DDNSDomain
@@ -2271,9 +2267,7 @@ class DDNSDomainForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         if _DNSZone is None:
-            raise RuntimeError(
-                "DDNSDomainForm requires netbox-plugin-dns to be installed."
-            )
+            raise RuntimeError("DDNSDomainForm requires netbox-plugin-dns to be installed.")
         super().__init__(*args, **kwargs)
         if self.instance.pk is None:
             # Create mode: pick any number of zones (forward and/or reverse).
@@ -2306,11 +2300,7 @@ class DDNSDomainForm(NetBoxModelForm):
         # selected zone so model-level validation has a real instance, then
         # restore the queryset for our save() override.
         zones = self.cleaned_data.get("zone")
-        if (
-            self.instance.pk is None
-            and zones is not None
-            and not isinstance(zones, _DNSZone)
-        ):
+        if self.instance.pk is None and zones is not None and not isinstance(zones, _DNSZone):
             zone_list = list(zones)
             if zone_list:
                 self.cleaned_data["zone"] = zone_list[0]
@@ -2327,11 +2317,7 @@ class DDNSDomainForm(NetBoxModelForm):
             return super().save(commit=commit)
 
         zones_or_one = self.cleaned_data.get("zone")
-        zones = (
-            [zones_or_one]
-            if isinstance(zones_or_one, _DNSZone)
-            else list(zones_or_one or [])
-        )
+        zones = [zones_or_one] if isinstance(zones_or_one, _DNSZone) else list(zones_or_one or [])
         d2_daemon = self.cleaned_data["d2_daemon"]
         tsig_key = self.cleaned_data.get("tsig_key")
         tags = self.cleaned_data.get("tags") or []

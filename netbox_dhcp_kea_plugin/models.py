@@ -324,7 +324,7 @@ class DHCPServer(NetBoxModel):
         related_name="servers",
         help_text=(
             "D2 daemon this server forwards NCRs to. Ignored when the server "
-            "is in an HA relationship whose ``d2_daemon`` is set."
+            "is in an HA relationship with the field set."
         ),
     )
     ddns_enable_updates = models.BooleanField(
@@ -3401,9 +3401,7 @@ NCR_PROTOCOL_CHOICES = (
     ("TCP", "TCP"),
 )
 
-NCR_FORMAT_CHOICES = (
-    ("JSON", "JSON"),
-)
+NCR_FORMAT_CHOICES = (("JSON", "JSON"),)
 
 DDNS_REPLACE_CLIENT_NAME_CHOICES = (
     ("never", "never"),
@@ -3530,9 +3528,7 @@ class TSIGKey(NetBoxModel):
             self._normalize_secret()
         else:
             if not self.secret_ref:
-                errors["secret_ref"] = (
-                    f"Backend '{self.secret_backend}' requires a reference."
-                )
+                errors["secret_ref"] = f"Backend '{self.secret_backend}' requires a reference."
 
         # Digest-bits must be a positive multiple of 8 when set, and never
         # exceed the underlying algorithm's natural output.
@@ -3548,10 +3544,7 @@ class TSIGKey(NetBoxModel):
                 "HMAC-SHA512": 512,
             }.get(self.algorithm)
             if max_bits and self.digest_bits > max_bits:
-                errors["digest_bits"] = (
-                    f"digest_bits ({self.digest_bits}) exceeds algorithm output "
-                    f"size ({max_bits})."
-                )
+                errors["digest_bits"] = f"digest_bits ({self.digest_bits}) exceeds algorithm output size ({max_bits})."
 
         if errors:
             raise ValidationError(errors)
@@ -3727,9 +3720,14 @@ class DDNSDomain(NetBoxModel):
         if self.zone_id is None:
             return False
         name = (self.zone.name or "").rstrip(".").lower()
-        return name.endswith(".in-addr.arpa") or name.endswith(".ip6.arpa") or name in (
-            "in-addr.arpa",
-            "ip6.arpa",
+        return (
+            name.endswith(".in-addr.arpa")
+            or name.endswith(".ip6.arpa")
+            or name
+            in (
+                "in-addr.arpa",
+                "ip6.arpa",
+            )
         )
 
     @staticmethod

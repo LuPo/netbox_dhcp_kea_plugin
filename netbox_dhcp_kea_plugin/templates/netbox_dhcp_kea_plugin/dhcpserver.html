@@ -128,10 +128,73 @@
                         </td>
                     </tr>
                     {% endif %}
-                    {% if enable_ddns %}
                     <tr>
-                        <th colspan="2" class="table-light">DDNS</th>
+                        <th>Control Socket</th>
+                        <td>
+                            {% if object.ctrl_socket_type %}
+                            {{ object.get_ctrl_socket_type_display }}
+                            {% else %}
+                            <span class="text-muted">Disabled</span>
+                            {% endif %}
+                        </td>
                     </tr>
+                    {% if object.ctrl_socket_http_enabled %}
+                    <tr>
+                        <th>HTTP Socket</th>
+                        <td>{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if object.ctrl_socket_unix_enabled %}
+                    <tr>
+                        <th>Unix Socket</th>
+                        <td>{{ object.ctrl_socket_unix_path }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h5 class="card-header">Reservation Mode Defaults</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Reservations Global</th>
+                        <td>
+                            {% if object.reservations_global %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Reservations In-Subnet</th>
+                        <td>
+                            {% if object.reservations_in_subnet %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Reservations Out-of-Pool</th>
+                        <td>
+                            {% if object.reservations_out_of_pool %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% if enable_ddns %}
+        <div class="card">
+            <h5 class="card-header">DDNS</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
                     <tr>
                         <th>D2 Daemon</th>
                         <td>
@@ -152,10 +215,18 @@
                         <td>
                             {% with src=object.ha_relationship %}
                             {% if src and src.d2_daemon_id %}
-                                {% if src.ddns_enable_updates %}Yes{% else %}No{% endif %}
+                                {% if object.ddns_enable_updates %}
+                                <i class="mdi mdi-check-bold text-success"></i>
+                                {% else %}
+                                <i class="mdi mdi-close-thick text-danger"></i>
+                                {% endif %}
                                 <span class="badge bg-info ms-1" style="color: #ffffff;">inherited from HA relationship</span>
                             {% else %}
-                                {% if object.ddns_enable_updates %}Yes{% else %}No{% endif %}
+                                {% if object.ddns_enable_updates %}
+                                <i class="mdi mdi-check-bold text-success"></i>
+                                {% else %}
+                                <i class="mdi mdi-close-thick text-danger"></i>
+                                {% endif %}
                             {% endif %}
                             {% endwith %}
                         </td>
@@ -191,65 +262,10 @@
                             {% endif %}
                         </td>
                     </tr>
-                    {% endif %}
-                    <tr>
-                        <th>Control Socket</th>
-                        <td>
-                            {% if object.ctrl_socket_type %}
-                            {{ object.get_ctrl_socket_type_display }}
-                            {% else %}
-                            <span class="text-muted">Disabled</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% if object.ctrl_socket_http_enabled %}
-                    <tr>
-                        <th>HTTP Socket</th>
-                        <td>{{ object.ctrl_socket_http_address }}:{{ object.ctrl_socket_http_port }}</td>
-                    </tr>
-                    {% endif %}
-                    {% if object.ctrl_socket_unix_enabled %}
-                    <tr>
-                        <th>Unix Socket</th>
-                        <td>{{ object.ctrl_socket_unix_path }}</td>
-                    </tr>
-                    {% endif %}
-                    <tr>
-                        <th colspan="2" class="table-light">Reservation Mode Defaults</th>
-                    </tr>
-                    <tr>
-                        <th>Reservations Global</th>
-                        <td>
-                            {% if object.reservations_global %}
-                            <i class="mdi mdi-check-bold text-success"></i>
-                            {% else %}
-                            <i class="mdi mdi-close-thick text-danger"></i>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Reservations In-Subnet</th>
-                        <td>
-                            {% if object.reservations_in_subnet %}
-                            <i class="mdi mdi-check-bold text-success"></i>
-                            {% else %}
-                            <i class="mdi mdi-close-thick text-danger"></i>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Reservations Out-of-Pool</th>
-                        <td>
-                            {% if object.reservations_out_of_pool %}
-                            <i class="mdi mdi-check-bold text-success"></i>
-                            {% else %}
-                            <i class="mdi mdi-close-thick text-danger"></i>
-                            {% endif %}
-                        </td>
-                    </tr>
                 </table>
             </div>
         </div>
+        {% endif %}
         <div class="card mt-3">
             <h5 class="card-header">Configuration Summary</h5>
             <div class="card-body">
