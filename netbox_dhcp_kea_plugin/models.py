@@ -3457,7 +3457,11 @@ class TSIGKey(NetBoxModel):
         max_length=512,
         blank=True,
         default="",
-        help_text="Base64-encoded TSIG secret (used when backend is 'plaintext')",
+        help_text=(
+            "Base64-encoded TSIG secret (used when backend is 'plaintext'). "
+            "Leave blank or enter any non-base64 text to auto-generate a fresh "
+            "random secret matching the selected algorithm."
+        ),
     )
     secret_ref = models.CharField(
         max_length=512,
@@ -3480,22 +3484,50 @@ class TSIGKey(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:tsigkey", args=[self.pk])
 
+    _ALGORITHM_BYTE_LEN = {
+        "HMAC-MD5": 16,
+        "HMAC-SHA1": 20,
+        "HMAC-SHA224": 28,
+        "HMAC-SHA256": 32,
+        "HMAC-SHA384": 48,
+        "HMAC-SHA512": 64,
+    }
+
+    def _generate_secret(self):
+        import base64 as _base64
+        import secrets as _secrets
+
+        nbytes = self._ALGORITHM_BYTE_LEN.get(self.algorithm, 32)
+        return _base64.b64encode(_secrets.token_bytes(nbytes)).decode()
+
+    def _normalize_secret(self):
+        """If plaintext secret isn't valid base64 of the algorithm's natural
+        length, replace it with a freshly generated one. Idempotent."""
+        if self.secret_backend != "plaintext":
+            return
+        import base64 as _base64
+        import binascii as _binascii
+
+        expected_len = self._ALGORITHM_BYTE_LEN.get(self.algorithm)
+        if self.secret_plaintext:
+            try:
+                decoded = _base64.b64decode(self.secret_plaintext, validate=True)
+                if expected_len is None or len(decoded) == expected_len:
+                    return
+            except (_binascii.Error, ValueError):
+                pass
+        self.secret_plaintext = self._generate_secret()
+
+    def save(self, *args, **kwargs):
+        self._normalize_secret()
+        return super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
         errors = {}
 
         if self.secret_backend == "plaintext":
-            if not self.secret_plaintext:
-                errors["secret_plaintext"] = "Plaintext backend requires a secret."
-            else:
-                # Must be valid base64
-                import base64 as _base64
-                import binascii as _binascii
-
-                try:
-                    _base64.b64decode(self.secret_plaintext, validate=True)
-                except (_binascii.Error, ValueError):
-                    errors["secret_plaintext"] = "Secret must be valid base64."
+            self._normalize_secret()
         else:
             if not self.secret_ref:
                 errors["secret_ref"] = (

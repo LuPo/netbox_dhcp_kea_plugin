@@ -2264,6 +2264,7 @@ class DDNSDomainForm(NetBoxModelForm):
     tsig_key = DynamicModelChoiceField(
         queryset=TSIGKey.objects.all(),
         required=False,
+        quick_add=True,
         help_text="TSIG key for authenticating updates to this zone (optional)",
     )
 

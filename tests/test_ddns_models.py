@@ -118,7 +118,7 @@ def test_tsig_key_clean_accepts_valid_base64():
     key.full_clean()
 
 
-def test_tsig_key_clean_rejects_non_base64():
+def test_tsig_key_clean_regenerates_for_non_base64():
     from netbox_dhcp_kea_plugin.models import TSIGKey
 
     key = TSIGKey(
@@ -127,9 +127,10 @@ def test_tsig_key_clean_rejects_non_base64():
         secret_backend="plaintext",
         secret_plaintext="not!base64!!",
     )
-    with pytest.raises(ValidationError) as exc:
-        key.full_clean()
-    assert "secret_plaintext" in exc.value.message_dict
+    key.full_clean()
+    assert key.secret_plaintext != "not!base64!!"
+    decoded = base64.b64decode(key.secret_plaintext, validate=True)
+    assert len(decoded) == 32  # HMAC-SHA256 natural length
 
 
 def test_tsig_key_clean_rejects_oversize_digest_bits():
@@ -147,17 +148,18 @@ def test_tsig_key_clean_rejects_oversize_digest_bits():
     assert "digest_bits" in exc.value.message_dict
 
 
-def test_tsig_key_clean_requires_secret_for_plaintext_backend():
+def test_tsig_key_clean_generates_when_empty_plaintext():
     from netbox_dhcp_kea_plugin.models import TSIGKey
 
     key = TSIGKey(
         name="empty.",
-        algorithm="HMAC-SHA256",
+        algorithm="HMAC-SHA1",
         secret_backend="plaintext",
         secret_plaintext="",
     )
-    with pytest.raises(ValidationError):
-        key.full_clean()
+    key.full_clean()
+    decoded = base64.b64decode(key.secret_plaintext, validate=True)
+    assert len(decoded) == 20  # HMAC-SHA1 natural length
 
 
 def test_tsig_key_get_secret_plaintext(tsig_key):
