@@ -1,0 +1,191 @@
+---
+title: Features
+description: Detailed reference for every model and feature exposed by the plugin.
+---
+
+# Features
+
+This page is the reference catalogue of every model and capability the plugin exposes. For task-oriented walkthroughs see [Usage](usage.md); for design-level explanations of specific patterns see the [Guides](guides/index.md).
+
+## Core models
+
+- **DHCP Servers** — ISC Kea DHCP server instances linked to NetBox `IPAddress` objects, with HA peer details and control socket configuration.
+- **Vendor Option Spaces** — Vendor-specific option spaces identified by an IANA enterprise number; used for true vendor-encapsulated suboption stacks (option 125 / VIVSO).
+- **Option Definitions** — Custom DHCP option definitions (Kea `option-def`).
+- **Option Data** — DHCP option values (Kea `option-data`); attachable to servers, client classes, subnets, and subnet pools.
+- **Client Classes** — Client classification rules expressed as Kea test expressions.
+- **Subnets** — Link NetBox `Prefix` rows to DHCP subnet configurations with pools and options.
+- **Subnet Pools** — Pool-level configuration attached to a NetBox `IPRange` inside a subnet, optionally class-restricted with its own option data.
+- **HA Relationships** — High-availability groupings of DHCP servers (hot-standby, load-balancing, passive-backup).
+- **Stork Servers** — ISC Stork monitoring server instances (optional, gated by `enable_stork`).
+- **Stork Agent Groups** — Stork agent configurations linking DHCP servers to a Stork monitoring server.
+- **TSIG Keys, D2 Daemons, DDNS Domains, DDNS Policies** — Kea 3.0+ Dynamic DNS modelling (optional, gated by `enable_ddns`).
+
+## High Availability (HA)
+
+- Modes supported: `hot-standby`, `load-balancing`, `passive-backup`.
+- Per-server roles: `primary`, `secondary`, `standby`, `backup`.
+- HA peer connection is split into discrete fields (address, port, TLS toggle); the full URL is reconstructed automatically for Kea config output.
+- Automatic configuration sync from the primary to all HA peers.
+- HA-aware config generation guarantees consistent output across peers.
+- Protection against orphaned configs — the primary cannot be deleted or demoted while subnets and client classes reference it.
+- Easy primary migration when promoting a former secondary.
+- UI hides config-management controls on non-primary peers.
+
+## Control sockets
+
+DHCP servers can be configured with Kea control sockets for management access:
+
+- **HTTP control socket** — IP-validated address and port for the HTTP control agent.
+- **Unix control socket** — Filesystem path for the Unix domain socket.
+- **Dynamic form fields** — Selecting a control-socket type instantly shows or hides the relevant fields (uses the same HTMX pattern as NetBox's 802.1Q VLAN mode selector — no save or page reload required).
+- **Validation** — `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled; `ha_address` and `ctrl_socket_http_address` must be valid IP addresses.
+
+## Reservation modes
+
+Kea's reservation-mode flags are supported at both the **server** (global) and **subnet** (per-subnet) level, following Kea's native inheritance model.
+
+### Server-level defaults
+
+Every DHCP server has three reservation-mode flags that surface in the `Dhcp4` global block:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `reservations-global` | `False` | Look for host reservations in the global scope. |
+| `reservations-in-subnet` | `True` | Look for host reservations within each subnet. |
+| `reservations-out-of-pool` | `True` | Exclude reserved addresses from dynamic pool allocation. |
+
+Defaults are configurable through `PLUGINS_CONFIG` — see [Configuration — Model defaults](configuration.md#model-defaults).
+
+### Subnet-level overrides
+
+Each subnet can inherit the server defaults or override them:
+
+- **Inherit from server** *(default)* — The flag is omitted from the subnet config and Kea inherits from `Dhcp4`.
+- **Yes / No** — Explicit override emitted in the subnet config.
+
+Subnets also expose a `reservations_only` flag (not a Kea global) that disables dynamic pool generation entirely — only reserved hosts receive an IP.
+
+### Global vs. subnet reservation placement
+
+When `reservations-global` is effective for a subnet (either set explicitly or inherited from the server):
+
+- Reservations are placed in the `Dhcp4.reservations` array **without** `ip-address` (only `hw-address` + `hostname`).
+- The subnet's own `reservations` key is omitted.
+
+When `reservations-global` is not active, reservations sit at the subnet level with full `ip-address`, `hw-address`, and `hostname`.
+
+## Option data validation & IP source linking
+
+### Type-based validation
+
+Option Data values are validated against the option definition's type when CSV format is used:
+
+- **IP addresses** — `ipv4-address`, `ipv6-address`, `ipv6-prefix` checked as proper addresses or prefixes.
+- **Integers** — `uint8` / `uint16` / `uint32` / `int8` / `int16` / `int32` range-checked.
+- **Booleans** — must be `true`, `false`, `0`, or `1`.
+- **FQDN** — validated as a proper domain name.
+- **Arrays** — definitions flagged `is_array=True` accept comma-separated values; single-value definitions reject multiples.
+
+### IP source linking
+
+For IP-typed options (e.g. `routers`, `ntp-servers`), you can link to NetBox objects instead of typing IPs into the Data field:
+
+- **IPAM IP addresses** — link to NetBox IPAM `IPAddress` rows.
+- **DNS A / AAAA records** — link to `netbox-plugin-dns` `Record` rows (requires `enable_netbox_dns: True`).
+- **DNS CNAME records** — link to CNAME records; the chain is followed to target A records at config-generation time.
+
+When IP sources are linked:
+
+- The Data field is hidden in the form.
+- IPs are resolved from the linked objects at Kea config-generation time.
+- Changes to the linked address propagate automatically (no Django signals — the relationship is read at render time).
+- Array-type options support multiple sources ordered by `ordinal`.
+- If every linked source is deleted, the option falls back to the manual Data field.
+
+Enable netbox-dns integration:
+
+```python
+PLUGINS_CONFIG = {
+    "netbox_dhcp_kea_plugin": {
+        "enable_netbox_dns": True,
+    },
+}
+```
+
+## DHCP reservations
+
+The plugin auto-discovers DHCP reservations from NetBox IP address assignments:
+
+- **Auto-discovery** — IP addresses assigned to device or VM interfaces and flagged as Primary IP or OOB IP are collected as Kea host reservations.
+- **MAC address validation** — Only reservations carrying a `hw-address` (MAC on the interface) are included in the emitted Kea configuration. Kea requires either `hw-address` or `duid` on every reservation and will refuse to load any reservation where neither is set.
+- **UI warnings** — The reservations tab highlights entries without a MAC in yellow with an explanatory note (they will be excluded from the generated config).
+- **FHRP filtering** — FHRP group addresses are automatically excluded.
+
+## DHCP relay support
+
+The plugin surfaces DHCP relay target information so it can be consumed by Layer 3 network device configuration (the classic `ip helper-address` line).
+
+- **Integrated with the Prefix API** — query `/api/ipam/prefixes/{id}/` to receive relay targets inline.
+- **Dedicated lookup endpoint** — query by prefix CIDR with VRF support.
+- **HA-aware** — returns all server IPs in an HA relationship so redundant helpers can be configured downstream.
+
+See [Usage — Relay configuration](usage.md#relay-configuration) for the API examples and vendor snippets.
+
+## Stork monitoring integration
+
+When [`enable_stork: True`](configuration.md#core-settings) (the default):
+
+- Full management of ISC Stork server and agent group configurations from NetBox.
+- Generates environment files suitable for `/etc/stork/server.env` and `/etc/stork/agent.env`.
+- Configurable log levels (`DEBUG`, `INFO`, `WARN`, `ERROR`) on server and agent.
+- Prometheus exporter settings per agent group: bind address, port, per-subnet statistics toggle.
+- TLS and authentication options for Stork server connections.
+- All `text/plain` config endpoints are Ansible-friendly via `ansible.builtin.uri` — see [Usage — Stork configuration](usage.md#stork-configuration).
+
+To disable Stork entirely, set `enable_stork: False` in `PLUGINS_CONFIG`.
+
+## Dynamic DNS (DDNS)
+
+Optional Kea 3.0+ DDNS support — models the `kea-dhcp-ddns` (D2) configuration surface and the `ddns-*` policy knobs `kea-dhcp4`/`kea-dhcp6` render at server / subnet / client-class scope.
+
+Gated by `enable_ddns: True` and requires `enable_netbox_dns: True` (zones and nameservers are sourced from `netbox-plugin-dns`; TSIG keys are plugin-local).
+
+### Models
+
+- **`TSIGKey`** — RFC 2845 keys with algorithm choices (`HMAC-MD5` / `SHA1` / `SHA224` / `SHA256` / `SHA384` / `SHA512`), optional digest-bits truncation, and a pluggable `secret_backend` registry (`plaintext` shipped; `vault` reserved). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste `tsig-keygen` output verbatim or save and let the plugin mint one. Plaintext reveal is gated by the `view_secret_tsigkey` permission.
+- **`D2Daemon`** — one row per logical D2 service. `listener_mode` chooses between **local** (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and **remote** (single shared instance pinned to an IPAM record). Each daemon exposes a `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
+- **`DDNSDomain`** — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward / reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the zone's `NameServer` rows (A / AAAA / CNAME chain). The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
+- **`DDNSPolicy`** — reusable `ddns-*` override group attachable at server / subnet / client-class scope (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix` / `-qualifying-suffix`, `hostname-char-set` / `-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — only the keys you set are emitted, kebab-cased.
+
+### HA-pair precedence
+
+When a `DHCPServer` belongs to an HA relationship and the relationship has its own `d2_daemon` or `ddns_policy` set, the relationship's value wins (peers must agree on the D2 target and the policy knobs). Sender IP and port stay per-server because the local source endpoint is always per-host. The DHCPServer detail page surfaces the effective values with an "inherited from HA relationship" badge.
+
+### Local-D2 redundancy (recommended for HA)
+
+Set `listener_mode: local` on the `D2Daemon` shared by an HA pair, then deploy `kea-dhcp-ddns` on every peer host with the same rendered config. Each peer's `kea-dhcp4` posts NCRs to its own `127.0.0.1:53001`. If the active peer reboots, the standby's local D2 takes over with zero DDNS gap.
+
+### Kea config emission rules
+
+No Python-side merging of override hierarchies. Each non-null `DDNSPolicy.to_kea_overrides()` is emitted verbatim at the JSON level the policy is attached to:
+
+- server-level → `Dhcp4` / `Dhcp6` root
+- subnet-level → subnet dict
+- class-level → client-class dict
+
+Kea resolves the precedence chain itself when processing packets.
+
+### Bulk edit + quick-add
+
+- `DDNSDomain` has a bulk-edit form for setting `d2_daemon` / `tsig_key` on many rows at once.
+- The `tsig_key` field on the DDNS Domain form carries a `+` quick-add button so a new key can be created inline without leaving the form.
+
+## NetBox integration
+
+- DHCP configuration tab on Prefix detail pages.
+- Direct integration with NetBox's Prefix API (adds the `dhcp_config` field).
+- Full REST API surface for every model.
+- Tag support on every model.
+- Change logging and audit trail.
+- Bulk import / export through NetBox's standard CSV machinery.

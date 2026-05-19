@@ -1,0 +1,49 @@
+[project]
+site_name = "NetBox DHCP-KEA Plugin"
+site_url = "https://LuPo.github.io/netbox-dhcp-kea-plugin"
+site_description = "NetBox plugin for ISC Kea DHCP configuration"
+copyright = """
+Copyright &copy; 2026 Łukasz Polański
+"""
+
+nav = [
+  { "Home" = "index.md" },
+  { "Installation" = "installation.md" },
+  { "Configuration" = "configuration.md" },
+  { "Features" = "features.md" },
+  { "Usage" = "usage.md" },
+  { "Guides" = [
+      "guides/index.md",
+      { "Class-conditional option delivery" = "guides/class-conditional-option-delivery.md" },
+  ] },
+  { "Contributing" = "contributing.md" },
+  { "Changelog" = "changelog.md" },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.copy",
+  "content.code.annotate",
+  "content.tabs.link",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.path",
+  "navigation.top",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"

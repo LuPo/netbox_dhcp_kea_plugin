@@ -341,7 +341,7 @@ wheels = [
 
 [[package]]
 name = "netbox-dhcp-kea-plugin"
-version = "0.7.3"
+version = "0.8.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
