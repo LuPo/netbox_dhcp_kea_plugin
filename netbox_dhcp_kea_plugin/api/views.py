@@ -152,29 +152,7 @@ class SubnetViewSet(NetBoxModelViewSet):
         for configuring DHCP relay on Layer 3 devices.
         """
         config = self.get_object()
-        server = config.server
-
-        # Build relay targets list
-        relay_targets = []
-        if server.ha_relationship:
-            # HA: return all server IPs in the relationship
-            for s in server.ha_relationship.servers.all():
-                if s.ip_address:
-                    relay_targets.append(str(s.ip_address.address.ip))
-        elif server.ip_address:
-            # Standalone: just this server's IP
-            relay_targets.append(str(server.ip_address.address.ip))
-
-        return Response(
-            {
-                "server": {
-                    "name": server.name,
-                    "url": server.ha_url
-                    or (f"http://{server.ip_address.address.ip}:8080/" if server.ip_address else None),
-                },
-                "relay_targets": relay_targets,
-            }
-        )
+        return Response(config.get_relay_config())
 
 
 class SubnetPoolViewSet(NetBoxModelViewSet):
@@ -198,6 +176,11 @@ class PrefixRelayConfigView(APIView):
 
     Returns relay target IPs for configuring DHCP relay (ip helper-address).
     """
+
+    # NetBox applies TokenPermissions to every API view and inspects
+    # ``.queryset`` to resolve the model for permission checks. Without it,
+    # token-authenticated requests raise AssertionError before reaching get().
+    queryset = Prefix.objects.all()
 
     def get(self, request):
         prefix_str = request.query_params.get("prefix")
@@ -242,28 +225,10 @@ class PrefixRelayConfigView(APIView):
                 }
             )
 
-        server = dhcp_config.server
-
-        # Build relay targets list
-        relay_targets = []
-        if server.ha_relationship:
-            for s in server.ha_relationship.servers.all():
-                if s.ip_address:
-                    relay_targets.append(str(s.ip_address.address.ip))
-        elif server.ip_address:
-            relay_targets.append(str(server.ip_address.address.ip))
-
         return Response(
             {
                 "prefix": prefix_str,
-                "dhcp_config": {
-                    "server": {
-                        "name": server.name,
-                        "url": server.ha_url
-                        or (f"http://{server.ip_address.address.ip}:8080/" if server.ip_address else None),
-                    },
-                    "relay_targets": relay_targets,
-                },
+                "dhcp_config": dhcp_config.get_relay_config(),
             }
         )
 

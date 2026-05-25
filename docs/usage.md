@@ -35,8 +35,7 @@ GET /api/ipam/prefixes/{id}/
     "vrf": null,
     "dhcp_config": {
         "server": {
-            "name": "kea-dhcp-primary",
-            "url": "http://192.168.1.10:8080/"
+            "name": "kea-dhcp-primary"
         },
         "relay_targets": ["192.168.1.10", "192.168.1.11"]
     }
@@ -58,8 +57,7 @@ GET /api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=10.0.100.0/24&vrf=C
     "prefix": "10.0.100.0/24",
     "dhcp_config": {
         "server": {
-            "name": "kea-dhcp-primary",
-            "url": "http://192.168.1.10:8080/"
+            "name": "kea-dhcp-primary"
         },
         "relay_targets": ["192.168.1.10", "192.168.1.11"]
     }

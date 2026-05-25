@@ -65,25 +65,7 @@ class DHCPKEAConfig(PluginConfig):
             if not config or not config.server:
                 return None
 
-            server = config.server
-
-            # Build relay targets list
-            relay_targets = []
-            if server.ha_relationship:
-                for s in server.ha_relationship.servers.all():
-                    if s.ip_address:
-                        relay_targets.append(str(s.ip_address.address.ip))
-            elif server.ip_address:
-                relay_targets.append(str(server.ip_address.address.ip))
-
-            return {
-                "server": {
-                    "name": server.name,
-                    "url": server.ha_url
-                    or (f"http://{server.ip_address.address.ip}:8080/" if server.ip_address else None),
-                },
-                "relay_targets": relay_targets,
-            }
+            return config.get_relay_config()
 
         # Create the SerializerMethodField
         dhcp_config_field = serializers.SerializerMethodField()

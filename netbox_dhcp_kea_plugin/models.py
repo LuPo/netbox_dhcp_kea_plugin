@@ -493,6 +493,22 @@ class DHCPServer(NetBoxModel):
         port = self.ha_port or 8080
         return f"{scheme}://{self.ha_address}:{port}/"
 
+    @property
+    def relay_targets(self):
+        """DHCP relay target IPs (ip helper-address values) for this server.
+
+        For an HA member, returns every peer's IP so relays can target the
+        whole relationship; for a standalone server, just its own IP.
+        """
+        targets = []
+        if self.ha_relationship_id:
+            for peer in self.ha_relationship.servers.all():
+                if peer.ip_address:
+                    targets.append(str(peer.ip_address.address.ip))
+        elif self.ip_address:
+            targets.append(str(self.ip_address.address.ip))
+        return targets
+
     def clean(self):
         """Validate HA and control socket configuration."""
         super().clean()
@@ -2138,6 +2154,23 @@ class Subnet(NetBoxModel):
     @property
     def effective_reservations_out_of_pool(self):
         return self.get_effective_reservation_flag("reservations_out_of_pool")
+
+    def get_relay_config(self):
+        """Return the DHCP relay config for this subnet's server, or None.
+
+        Shape: ``{"server": {"name"}, "relay_targets": [ip, ...]}``.
+        Single source of truth for the REST serializer extension, the
+        ``relay-config`` API actions, and any future consumers.
+        """
+        server = self.server
+        if server is None:
+            return None
+        return {
+            "server": {
+                "name": server.name,
+            },
+            "relay_targets": server.relay_targets,
+        }
 
     def clean(self):
         super().clean()
