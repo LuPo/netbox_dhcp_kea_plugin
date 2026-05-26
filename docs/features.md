@@ -36,10 +36,29 @@ This page is the reference catalogue of every model and capability the plugin ex
 
 DHCP servers can be configured with Kea control sockets for management access:
 
-- **HTTP control socket** — IP-validated address and port for the HTTP control agent.
+- **HTTP control socket** — IP-validated address and port for the HTTP command channel.
 - **Unix control socket** — Filesystem path for the Unix domain socket.
 - **Dynamic form fields** — Selecting a control-socket type instantly shows or hides the relevant fields (uses the same HTMX pattern as NetBox's 802.1Q VLAN mode selector — no save or page reload required).
 - **Validation** — `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled; `ha_address` and `ctrl_socket_http_address` must be valid IP addresses.
+
+The plugin emits Kea 3.0's plural `control-sockets` array (`socket-type: http` with `socket-address` / `socket-port`, and `socket-type: unix` with `socket-name`). The standalone `kea-ctrl-agent` (Control Agent) is **removed in Kea 3.0** — the DHCP daemons open their HTTP / Unix control sockets directly, which is exactly what this block models. You no longer configure a separate CA process.
+
+### Is a control socket necessary?
+
+It depends entirely on what you want Kea to *do*. A control socket is **not** required to serve DHCP. It **is** required for the following:
+
+| Use case | Control socket | Why |
+|---|---|---|
+| Plain DHCP leasing | Not needed | `kea-dhcp4` / `kea-dhcp6` serve leases with no command channel at all. |
+| **High Availability** | Required (HTTP) | HA peers communicate over HTTP. Each peer's `high-availability` config references the other's control-channel URL; lease updates and HA state sync flow through it. Without an HTTP socket, HA cannot form. |
+| **Stork monitoring** | Required (Unix or HTTP) | The Stork agent connects to the daemon's control socket to pull config and statistics — a Unix socket is the usual local choice. Without it, Stork sees nothing. |
+| **Live management** — `config-reload`, lease commands, statistics via the command API | Required | All command-channel operations go through it. If you only push a full config file and restart the service, you don't need it. |
+
+!!! note "HA port vs. control-socket port"
+
+    In Kea 3.0, HA peers connect to each other's HTTP **control socket** endpoint. Make sure each server's HA peer URL (`ha_url`) points at a reachable HTTP control socket on the partner. The plugin forces `ha_port` and `ctrl_socket_http_port` to differ, which assumes a multi-listener setup — confirm this matches how your peers actually reach one another.
+
+D2 daemons have their own separate control socket (`control_socket_path`) — see [Dynamic DNS (DDNS)](#dynamic-dns-ddns).
 
 ## Reservation modes
 
