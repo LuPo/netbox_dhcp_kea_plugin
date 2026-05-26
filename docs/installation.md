@@ -16,7 +16,7 @@ description: Install the plugin into a NetBox deployment.
 ### With pip
 
 ```bash
-pip install git+https://github.com/LuPo/netbox-dhcp-kea-plugin
+pip install git+https://github.com/LuPo/netbox_dhcp_kea_plugin
 ```
 
 ### With netbox-docker
@@ -24,7 +24,7 @@ pip install git+https://github.com/LuPo/netbox-dhcp-kea-plugin
 Add the package to your `plugin_requirements.txt`:
 
 ```text
-git+https://github.com/LuPo/netbox-dhcp-kea-plugin
+git+https://github.com/LuPo/netbox_dhcp_kea_plugin
 ```
 
 See the [netbox-docker plugin instructions](https://github.com/netbox-community/netbox-docker/wiki/Using-Netbox-Plugins) for the full procedure.

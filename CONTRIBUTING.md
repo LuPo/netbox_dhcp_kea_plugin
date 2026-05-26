@@ -23,7 +23,7 @@ We love your input! We want to make contributing to this project as easy and tra
 
 ### Report Bugs
 
-Report bugs at https://github.com/LuPo/netbox-dhcp-kea-plugin/issues.
+Report bugs at https://github.com/LuPo/netbox_dhcp_kea_plugin/issues.
 
 If you are reporting a bug, please include:
 
@@ -49,7 +49,7 @@ articles, and such.
 
 ### Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/LuPo/netbox-dhcp-kea-plugin/issues.
+The best way to send feedback is to file an issue at https://github.com/LuPo/netbox_dhcp_kea_plugin/issues.
 
 If you are proposing a feature:
 
@@ -110,7 +110,7 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.md.
 3. The pull request should work for Python 3.8, 3.9, 3.10 and 3.11. Check
-   https://github.com/LuPo/netbox-dhcp-kea-plugin/actions
+   https://github.com/LuPo/netbox_dhcp_kea_plugin/actions
    and make sure that the tests pass for all supported Python versions.
 
 

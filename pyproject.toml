@@ -40,9 +40,9 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/LuPo/netbox-dhcp-kea-plugin/blob/main/README.md"
-Source = "https://github.com/LuPo/netbox-dhcp-kea-plugin"
-Tracker = "https://github.com/LuPo/netbox-dhcp-kea-plugin/issues"
+Documentation = "https://github.com/LuPo/netbox_dhcp_kea_plugin/blob/main/README.md"
+Source = "https://github.com/LuPo/netbox_dhcp_kea_plugin"
+Tracker = "https://github.com/LuPo/netbox_dhcp_kea_plugin/issues"
 
 [tool.setuptools.packages.find]
 include = ["netbox_dhcp_kea_plugin*"]

@@ -1,6 +1,6 @@
 [project]
 site_name = "NetBox DHCP-KEA Plugin"
-site_url = "https://LuPo.github.io/netbox-dhcp-kea-plugin"
+site_url = "https://lupo.github.io/netbox_dhcp_kea_plugin"
 site_description = "NetBox plugin for ISC Kea DHCP configuration"
 copyright = """
 Copyright &copy; 2026 Łukasz Polański

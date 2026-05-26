@@ -7,7 +7,7 @@ A NetBox plugin that models the **entire ISC Kea DHCP configuration surface** â€
 NetBox becomes the source of truth for *what Kea should be*; deploying the rendered config to the actual servers is left to your own IaC / CaC tooling (Ansible, GitLab CI, AWX, etc.).
 
 - Free software: GPL-3.0-only
-- Documentation: <https://LuPo.github.io/netbox-dhcp-kea-plugin/>
+- Documentation: <https://lupo.github.io/netbox_dhcp_kea_plugin/>
 
 ## Compatibility
 
@@ -18,7 +18,7 @@ NetBox becomes the source of truth for *what Kea should be*; deploying the rende
 ## Quick install
 
 ```bash
-pip install git+https://github.com/LuPo/netbox-dhcp-kea-plugin
+pip install git+https://github.com/LuPo/netbox_dhcp_kea_plugin
 ```
 
 Add `netbox_dhcp_kea_plugin` to `PLUGINS` in your NetBox configuration, run `python manage.py migrate`, and restart NetBox.
