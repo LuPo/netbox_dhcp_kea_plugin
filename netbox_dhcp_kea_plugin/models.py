@@ -6,7 +6,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
@@ -431,12 +431,23 @@ class DHCPServer(NetBoxModel):
 
         super().save(*args, **kwargs)
 
-        # Create service if template is set and IP is assigned to an object
-        if self.service_template and self.service_template != old_template:
+        # Reconcile the auto-created Application Service whenever a template is
+        # set. This covers three cases: a fresh server, a template change, and
+        # recovery when the back-reference was nulled (Service deleted with
+        # on_delete=SET_NULL) but the template is still present.
+        if self.service_template and (
+            self.service_template != old_template or self.service_id is None
+        ):
             self._create_service_from_template()
 
     def _create_service_from_template(self):
-        """Create an Application Service from the template on the parent object."""
+        """Ensure ``self.service`` points at the Application Service for this
+        server's IP parent object, creating it from the template if needed.
+
+        Idempotent: links an existing matching Service rather than duplicating
+        it, and guarantees the FK is populated whenever a template is set and
+        the IP has a parent object.
+        """
         if not self.ip_address or not self.ip_address.assigned_object:
             return  # IP not assigned to anything
 
@@ -446,31 +457,30 @@ class DHCPServer(NetBoxModel):
         if not parent_object:
             return
 
-        # Check if service already exists
-        existing = Service.objects.filter(
-            parent_object_type=ContentType.objects.get_for_model(parent_object),
-            parent_object_id=parent_object.pk,
-            name=self.service_template.name,
-            protocol=self.service_template.protocol,
-        ).exists()
+        parent_ct = ContentType.objects.get_for_model(parent_object)
+        match = {
+            "parent_object_type": parent_ct,
+            "parent_object_id": parent_object.pk,
+            "name": self.service_template.name,
+            "protocol": self.service_template.protocol,
+        }
 
-        if existing:
-            return
+        with transaction.atomic():
+            # Link the matching Service if it already exists; otherwise create it.
+            service = Service.objects.filter(**match).first()
+            if service is None:
+                service = Service.objects.create(
+                    ports=self.service_template.ports,
+                    description=self.service_template.description or f"DHCP Server: {self.name}",
+                    **match,
+                )
+            if self.ip_address not in service.ipaddresses.all():
+                service.ipaddresses.add(self.ip_address)
 
-        # Create the service
-        service = Service.objects.create(
-            parent_object_type=ContentType.objects.get_for_model(parent_object),
-            parent_object_id=parent_object.pk,
-            name=self.service_template.name,
-            protocol=self.service_template.protocol,
-            ports=self.service_template.ports,
-            description=self.service_template.description or f"DHCP Server: {self.name}",
-        )
-        service.ipaddresses.add(self.ip_address)
-
-        # Store reference to the created service
-        DHCPServer.objects.filter(pk=self.pk).update(service=service)
-        self.service = service
+            # Populate the back-reference in the same transaction so we can
+            # never end up with a Service but a null FK.
+            DHCPServer.objects.filter(pk=self.pk).update(service=service)
+            self.service = service
 
     def delete(self, *args, **kwargs):
         """Delete the auto-created Application Service when DHCPServer is deleted."""
