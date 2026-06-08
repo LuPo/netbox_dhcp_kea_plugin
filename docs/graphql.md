@@ -46,6 +46,24 @@ plugin types and to **native NetBox types**:
 | `SubnetPoolType` | `ip_range` → IPAM IP range | `subnet`, `client_class` |
 | `ClientClassType` | — | `servers` |
 
+### Computed fields
+
+`SubnetType` exposes one computed field beyond the stored columns:
+
+- **`available_out_of_pool_count: Int`** — the number of addresses available for a **static
+  reservation** on the subnet, honouring its effective out-of-pool policy. It starts from the
+  prefix's available IPs (NetBox already excludes assigned IPs and the network/broadcast) and
+  then:
+    - `reservations_only`, or `reservations-out-of-pool = False` → returns **all** available
+      addresses (in-pool reservations are permitted; Kea resolves any pool overlap at runtime —
+      this includes the case where no IP Range is defined and the pool spans the usable range);
+    - `reservations-out-of-pool = True` → subtracts the subnet's dynamic pool ranges (so the
+      count reflects only out-of-pool space); when no IP Range is defined the pool spans the
+      available space and the count is `0`.
+
+  This lets the caller show, per subnet, how many addresses can still be reserved — without
+  fetching the address list.
+
 ### Filtering
 
 List fields accept a `filters` argument. Plugin filters include relation filters into native
@@ -86,6 +104,7 @@ query {
     subnet_pools {
       ip_range { start_address end_address }
     }
+    available_out_of_pool_count
   }
 }
 ```

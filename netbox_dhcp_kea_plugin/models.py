@@ -2380,6 +2380,54 @@ class Subnet(NetBoxModel):
 
         return pools
 
+    def get_out_of_pool_available_ips(self):
+        """Addresses available for a static reservation on this subnet.
+
+        Starts from the prefix's available IPs (already excluding used IPs and
+        network/broadcast). The dynamic pool only *constrains* reservations
+        when out-of-pool placement is enforced, so:
+
+        - ``reservations_only`` → no dynamic pool at all; every available IP is
+          reservable.
+        - ``reservations-out-of-pool=False`` → Kea permits in-pool reservations
+          and resolves pool/reservation overlap at runtime, so every available
+          IP is reservable (including when no IP Range is defined and the pool
+          spans the whole usable range).
+        - ``reservations-out-of-pool=True`` → a reservation must sit outside the
+          dynamic pools, so subtract the pool ranges (mirroring ``get_pools()``).
+          When no IP Range is defined the pool spans the available space, so
+          there is no out-of-pool room.
+
+        Returns a ``netaddr.IPSet``.
+        """
+        import netaddr
+
+        available = self.prefix.get_available_ips()
+
+        # Pool placement is unconstrained → every available address is allocable.
+        if self.reservations_only or not self.effective_reservations_out_of_pool:
+            return available
+
+        # out-of-pool enforced: a reservation must avoid the dynamic pools.
+        child_ranges = self.prefix.get_child_ranges().filter(mark_utilized=False)
+        if not child_ranges.exists():
+            # The pool spans the available space (get_pools() fallback).
+            return netaddr.IPSet()
+
+        pool_set = netaddr.IPSet()
+        for ip_range in child_ranges:
+            start = str(ip_range.start_address).split("/")[0]
+            end = str(ip_range.end_address).split("/")[0]
+            pool_set.add(netaddr.IPRange(start, end))
+
+        return available - pool_set
+
+    @property
+    def available_out_of_pool_count(self):
+        """Count of addresses available for a static reservation, honouring the
+        subnet's effective out-of-pool policy (see get_out_of_pool_available_ips)."""
+        return self.get_out_of_pool_available_ips().size
+
     def get_reservations(self):
         """Get IP addresses that can be used as DHCP reservations with metadata.
 

@@ -905,3 +905,49 @@ class TestSubnetPoolFormIPRangeRestriction:
         form = SubnetPoolForm(initial={"subnet": pool_subnet.pk})
         # add_query_param stores static values keyed by param name.
         assert form.fields["ip_range"].widget.static_params.get("parent") == ["10.0.0.0/24"]
+
+
+@pytest.mark.django_db
+class TestSubnetOutOfPoolAvailable:
+    """Subnet.get_out_of_pool_available_ips() / available_out_of_pool_count."""
+
+    @staticmethod
+    def _fresh(subnet):
+        # Re-load from the DB so prefix.prefix is a real IPNetwork (as in
+        # production), not the raw string the fixture holds in memory.
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        return Subnet.objects.select_related("prefix").get(pk=subnet.pk)
+
+    def test_count_subtracts_pool_range(self, pool_subnet, pool_ip_range):
+        # /24 usable = 254 (.1-.254); pool .10-.50 = 41 addrs; out-of-pool = 213.
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 213
+
+    def test_no_child_ranges_means_no_out_of_pool(self, pool_subnet):
+        # With no explicit IP Range, the pool spans the available space.
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 0
+
+    def test_reservations_only_makes_all_available_reservable(self, pool_subnet, pool_ip_range):
+        pool_subnet.reservations_only = True
+        pool_subnet.save()
+        # No dynamic pool is emitted, so every usable address is reservable.
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 254
+
+    def test_utilized_range_is_not_treated_as_pool(self, pool_subnet, pool_ip_range_utilized):
+        # mark_utilized ranges aren't pools, so they are not subtracted; but
+        # they're the only range, so "no non-utilized child ranges" → 0.
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 0
+
+    def test_out_of_pool_false_no_range_all_available(self, pool_subnet):
+        # out-of-pool=False + no IP Range: the pool spans the usable range but
+        # in-pool reservations are permitted, so all 254 usable IPs are allocable.
+        pool_subnet.reservations_out_of_pool = False
+        pool_subnet.save()
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 254
+
+    def test_out_of_pool_false_with_range_does_not_subtract_pool(self, pool_subnet, pool_ip_range):
+        # out-of-pool=False: in-pool reservations permitted, so the pool range
+        # is not subtracted → all 254 usable IPs are allocable.
+        pool_subnet.reservations_out_of_pool = False
+        pool_subnet.save()
+        assert self._fresh(pool_subnet).available_out_of_pool_count == 254

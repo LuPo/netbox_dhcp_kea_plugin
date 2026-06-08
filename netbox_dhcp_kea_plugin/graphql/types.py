@@ -121,6 +121,15 @@ class SubnetType(NetBoxObjectType):
         ]
     ]
 
+    @strawberry_django.field(
+        description=(
+            "Number of out-of-pool addresses available for a static reservation "
+            "(available IPs minus the dynamic pool ranges)."
+        )
+    )
+    def available_out_of_pool_count(self) -> int:
+        return self.get_out_of_pool_available_ips().size
+
 
 @strawberry_django.type(
     SubnetPool,

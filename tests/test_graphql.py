@@ -78,3 +78,36 @@ def test_subnet_traverses_to_native_prefix_and_server(
     assert target["prefix"]["role"]["name"] == "End Users"
     assert target["server"]["ip_address"]["address"].startswith("192.168.1.77")
     assert target["subnet_pools"] == []
+
+
+def test_subnet_available_out_of_pool_count(
+    gql_client, subnet_factory, dhcp_server_factory, prefix_factory
+):
+    from ipam.models import IPRange
+    from netaddr import IPNetwork
+
+    prefix = prefix_factory(network="10.78.0.0/24")
+    server = dhcp_server_factory(ip_suffix=78)
+    subnet_factory(server=server, prefix=prefix)
+    # Dynamic pool .10-.50 (41 addrs); /24 usable = 254 → out-of-pool = 213.
+    IPRange.objects.create(
+        start_address=IPNetwork("10.78.0.10/24"),
+        end_address=IPNetwork("10.78.0.50/24"),
+    )
+
+    data = _gql(
+        gql_client,
+        """
+        query {
+          netbox_dhcp_kea_subnet_list {
+            prefix { prefix }
+            available_out_of_pool_count
+          }
+        }
+        """,
+    )
+    target = next(
+        s for s in data["netbox_dhcp_kea_subnet_list"]
+        if s["prefix"]["prefix"].startswith("10.78.0.0")
+    )
+    assert target["available_out_of_pool_count"] == 213
