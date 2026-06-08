@@ -75,7 +75,9 @@ query {
     prefix {
       prefix
       role { name }
-      scope_type
+      scope {
+        ... on SiteType { name slug }
+      }
     }
     server {
       name
@@ -87,6 +89,10 @@ query {
   }
 }
 ```
+
+The prefix `scope` is a **union** (Site, Location, Region, or Site Group), so it is queried with
+inline fragments (`... on SiteType { … }`) rather than a scalar field — select the variant(s) you
+care about.
 
 Example call with a token:
 
