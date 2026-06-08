@@ -42,13 +42,23 @@ plugin types and to **native NetBox types**:
 | Type | Native traversals | Plugin traversals |
 |---|---|---|
 | `DHCPServerType` | `ip_address` → IPAM IP address, `service` → IPAM service | `subnet_items` → subnets |
-| `SubnetType` | `prefix` → IPAM prefix (→ `role`, `scope`) | `server`, `client_class`, `subnet_pools` |
+| `SubnetType` | `prefix` → IPAM prefix (→ `role`, `scope`) | `server`, `client_class`, **`pools`** (all emitted pools — see [Computed fields](#computed-fields)), `subnet_pools` (configured pools only) |
 | `SubnetPoolType` | `ip_range` → IPAM IP range | `subnet`, `client_class` |
 | `ClientClassType` | — | `servers` |
 
+!!! warning "Use `pools`, not `subnet_pools`, to list a subnet's pools"
+    These are **two different fields** and the difference matters:
+
+    - **`pools`** *(computed)* — **every** pool the subnet emits, configured or not, each with a
+      `configured` flag. **This is the one you almost always want.**
+    - **`subnet_pools`** *(raw relation)* — only the **`SubnetPool` config objects**, which exist
+      solely when an operator has *configured* a pool (to attach a client class, extra classes, or
+      option data to an IP Range). It is **sparse**: a subnet with a plain dynamic pool and no such
+      config returns `[]` — so it will **not** show that pool.
+
 ### Computed fields
 
-`SubnetType` exposes one computed field beyond the stored columns:
+`SubnetType` exposes two computed fields beyond the stored columns:
 
 - **`available_out_of_pool_count: Int`** — how many addresses can still be allocated for a
   **static reservation** on the subnet. It starts from the prefix's available IPs (NetBox already
@@ -65,6 +75,19 @@ plugin types and to **native NetBox types**:
 
   This lets the caller show, per subnet, how many addresses can still be reserved — without
   fetching the address list.
+
+- **`pools: [SubnetPoolEntry!]`** — every DHCP pool the subnet emits, in one list, whether or not
+  it has a `SubnetPool` config. Each entry has:
+    - `pool_range: String` — the emitted `"start - end"` range;
+    - `configured: Boolean` — `true` when a `SubnetPool` config is attached to the backing IP
+      Range, `false` for a bare IP-Range pool or a computed pool;
+    - `ip_range: IPRange` — the backing IPAM IP Range (`null` for computed pools that have no IP
+      Range);
+    - `config: SubnetPool` — the attached config when `configured` (else `null`).
+
+  Pools come from the subnet's `mark_utilized=False` child IP Ranges; when none are defined, the
+  computed pool(s) from the available/usable space are returned instead (always `configured:
+  false`). A `reservations_only` subnet emits no pools.
 
 ### Filtering
 
@@ -109,8 +132,11 @@ query {
       name
       ip_address { address }
     }
-    subnet_pools {
+    pools {
+      pool_range
+      configured
       ip_range { start_address end_address }
+      config { id }
     }
     available_out_of_pool_count
   }
@@ -135,8 +161,13 @@ drop the `scope_type` filter and query each variant with `__typename`, then disp
           "scope": { "name": "Headquarters", "slug": "hq" }
         },
         "server": { "name": "dhcp-1", "ip_address": { "address": "192.0.2.10/24" } },
-        "subnet_pools": [
-          { "ip_range": { "start_address": "192.0.2.50/24", "end_address": "192.0.2.200/24" } }
+        "pools": [
+          {
+            "pool_range": "192.0.2.50 - 192.0.2.200",
+            "configured": true,
+            "ip_range": { "start_address": "192.0.2.50/24", "end_address": "192.0.2.200/24" },
+            "config": { "id": "42" }
+          }
         ],
         "available_out_of_pool_count": 103
       },
@@ -147,8 +178,13 @@ drop the `scope_type` filter and query each variant with `__typename`, then disp
           "scope": { "name": "Branch Office", "slug": "branch" }
         },
         "server": { "name": "dhcp-2", "ip_address": { "address": "192.0.2.11/24" } },
-        "subnet_pools": [
-          { "ip_range": { "start_address": "198.51.100.200/24", "end_address": "198.51.100.250/24" } }
+        "pools": [
+          {
+            "pool_range": "198.51.100.200 - 198.51.100.250",
+            "configured": false,
+            "ip_range": { "start_address": "198.51.100.200/24", "end_address": "198.51.100.250/24" },
+            "config": null
+          }
         ],
         "available_out_of_pool_count": 203
       }
@@ -156,6 +192,11 @@ drop the `scope_type` filter and query each variant with `__typename`, then disp
   }
 }
 ```
+
+`pools` lists every pool each subnet emits with a `configured` flag: subnet 1's pool has a
+`SubnetPool` config attached (`configured: true`, `config` populated), while subnet 2's is a bare
+IP-Range pool (`configured: false`, `config: null`). Use `subnet_pools` instead if you only want
+the configured ones.
 
 The `available_out_of_pool_count` values above assume the default **`reservations-out-of-pool =
 True`**, under which it reflects only out-of-pool space: subnet 1 has a 151-address pool

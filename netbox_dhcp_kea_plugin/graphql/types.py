@@ -33,7 +33,24 @@ __all__ = (
     "DHCPServerType",
     "SubnetType",
     "SubnetPoolType",
+    "SubnetPoolEntryType",
 )
+
+
+@strawberry.type
+class SubnetPoolEntryType:
+    """One DHCP pool on a subnet — both explicitly-configured pools and bare /
+    computed ones, distinguished by `configured`."""
+
+    pool_range: str
+    configured: bool
+    ip_range: (
+        Annotated["IPRangeType", strawberry.lazy("ipam.graphql.types")] | None
+    ) = None
+    config: (
+        Annotated["SubnetPoolType", strawberry.lazy("netbox_dhcp_kea_plugin.graphql.types")]
+        | None
+    ) = None
 
 
 @strawberry_django.type(
@@ -129,6 +146,24 @@ class SubnetType(NetBoxObjectType):
     )
     def available_out_of_pool_count(self) -> int:
         return self.get_out_of_pool_available_ips().size
+
+    @strawberry_django.field(
+        description=(
+            "All DHCP pools the subnet emits — both explicitly-configured pools "
+            "(with their backing IP Range and config) and bare/computed pools — "
+            "each flagged with `configured`."
+        )
+    )
+    def pools(self) -> list[SubnetPoolEntryType]:
+        return [
+            SubnetPoolEntryType(
+                pool_range=entry.pool_range,
+                configured=entry.configured,
+                ip_range=entry.ip_range,
+                config=entry.subnet_pool,
+            )
+            for entry in self.get_pool_entries()
+        ]
 
 
 @strawberry_django.type(

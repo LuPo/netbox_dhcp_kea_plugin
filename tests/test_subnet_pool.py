@@ -951,3 +951,61 @@ class TestSubnetOutOfPoolAvailable:
         pool_subnet.reservations_out_of_pool = False
         pool_subnet.save()
         assert self._fresh(pool_subnet).available_out_of_pool_count == 254
+
+
+@pytest.mark.django_db
+class TestSubnetPoolEntries:
+    """Subnet.get_pool_entries() — configured and computed pools in one list."""
+
+    @staticmethod
+    def _fresh(subnet):
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        return Subnet.objects.select_related("prefix").get(pk=subnet.pk)
+
+    def test_unconfigured_ip_range(self, pool_subnet, pool_ip_range):
+        entries = self._fresh(pool_subnet).get_pool_entries()
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.pool_range == "10.0.0.10 - 10.0.0.50"
+        assert e.configured is False
+        assert e.ip_range.pk == pool_ip_range.pk
+        assert e.subnet_pool is None
+
+    def test_configured_ip_range(self, pool_subnet, pool_ip_range):
+        from netbox_dhcp_kea_plugin.models import SubnetPool
+
+        sp = SubnetPool.objects.create(subnet=pool_subnet, ip_range=pool_ip_range)
+        entries = self._fresh(pool_subnet).get_pool_entries()
+        assert len(entries) == 1
+        assert entries[0].configured is True
+        assert entries[0].subnet_pool.pk == sp.pk
+
+    def test_computed_pool_when_no_ip_range(self, pool_subnet):
+        entries = self._fresh(pool_subnet).get_pool_entries()
+        assert entries  # at least one computed pool from available space
+        assert all(e.configured is False and e.ip_range is None for e in entries)
+
+    def test_reservations_only_has_no_pools(self, pool_subnet, pool_ip_range):
+        pool_subnet.reservations_only = True
+        pool_subnet.save()
+        assert self._fresh(pool_subnet).get_pool_entries() == []
+
+
+@pytest.mark.django_db
+def test_pool_entries_mark_populated_bare_range(pool_subnet):
+    """Mirror live data: a bare pool range (no SubnetPool) with mark_populated=True
+    must still appear in get_pool_entries()."""
+    from netbox_dhcp_kea_plugin.models import Subnet
+
+    IPRange.objects.create(
+        start_address=IPNetwork("10.0.0.20/24"),
+        end_address=IPNetwork("10.0.0.250/24"),
+        mark_populated=True,
+    )
+    subnet = Subnet.objects.select_related("prefix").get(pk=pool_subnet.pk)
+    entries = subnet.get_pool_entries()
+    assert len(entries) == 1
+    assert entries[0].pool_range == "10.0.0.20 - 10.0.0.250"
+    assert entries[0].configured is False
+    assert entries[0].ip_range is not None

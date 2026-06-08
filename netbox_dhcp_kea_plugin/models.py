@@ -1,3 +1,4 @@
+import dataclasses
 import ipaddress as ipaddress_module
 
 from dcim.choices import DeviceStatusChoices
@@ -2059,6 +2060,22 @@ def get_default_max_lifetime():
     return get_model_default("Subnet", "max_lifetime", 7200)
 
 
+@dataclasses.dataclass
+class PoolEntry:
+    """One DHCP pool on a subnet.
+
+    ``pool_range`` is the emitted "start - end" range. ``configured`` is True
+    when an operator has attached a :class:`SubnetPool` config to the backing
+    IP Range (then ``ip_range`` and ``subnet_pool`` are set); for computed
+    pools (no IP Range defined) it is False and both are ``None``.
+    """
+
+    pool_range: str
+    configured: bool
+    ip_range: object = None
+    subnet_pool: object = None
+
+
 class Subnet(NetBoxModel):
     """KEA subnet configuration linked to NetBox Prefixes"""
 
@@ -2427,6 +2444,52 @@ class Subnet(NetBoxModel):
         """Count of addresses available for a static reservation, honouring the
         subnet's effective out-of-pool policy (see get_out_of_pool_available_ips)."""
         return self.get_out_of_pool_available_ips().size
+
+    def get_pool_entries(self):
+        """Structured view of this subnet's DHCP pools as ``PoolEntry`` objects.
+
+        Mirrors ``get_pools()``'s pool definition but keeps each pool's backing
+        IP Range and (when present) its ``SubnetPool`` config, with a
+        ``configured`` flag — so callers can show both explicitly-configured
+        pools and bare/computed pools in one list:
+
+        - explicit child IP Ranges (``mark_utilized=False``) → one entry each,
+          ``configured`` True when a ``SubnetPool`` row exists for the range;
+        - no IP Range defined → the computed pool(s) from the available/usable
+          space (always ``configured=False``, no backing range);
+        - ``reservations_only`` → no pools.
+        """
+        if self.reservations_only:
+            return []
+
+        ip_ranges = list(self.prefix.get_child_ranges().filter(mark_utilized=False))
+        if ip_ranges:
+            configs = {
+                sp.ip_range_id: sp
+                for sp in SubnetPool.objects.filter(subnet=self, ip_range__in=ip_ranges)
+                .select_related("client_class")
+                .prefetch_related("evaluate_additional_classes", "option_data")
+            }
+            entries = []
+            for ip_range in ip_ranges:
+                start = str(ip_range.start_address).split("/")[0]
+                end = str(ip_range.end_address).split("/")[0]
+                subnet_pool = configs.get(ip_range.pk)
+                entries.append(
+                    PoolEntry(
+                        pool_range=f"{start} - {end}",
+                        configured=subnet_pool is not None,
+                        ip_range=ip_range,
+                        subnet_pool=subnet_pool,
+                    )
+                )
+            return entries
+
+        # No IP Ranges: surface the computed pools (never "configured").
+        return [
+            PoolEntry(pool_range=pool["pool"], configured=False)
+            for pool in self.get_pools()
+        ]
 
     def get_reservations(self):
         """Get IP addresses that can be used as DHCP reservations with metadata.

@@ -111,3 +111,55 @@ def test_subnet_available_out_of_pool_count(
         if s["prefix"]["prefix"].startswith("10.78.0.0")
     )
     assert target["available_out_of_pool_count"] == 213
+
+
+def test_subnet_pools_field_configured_flag(
+    gql_client, subnet_factory, dhcp_server_factory, prefix_factory
+):
+    from ipam.models import IPRange
+    from netaddr import IPNetwork
+
+    from netbox_dhcp_kea_plugin.models import SubnetPool
+
+    prefix = prefix_factory(network="10.79.0.0/24")
+    server = dhcp_server_factory(ip_suffix=79)
+    subnet = subnet_factory(server=server, prefix=prefix)
+    r_cfg = IPRange.objects.create(
+        start_address=IPNetwork("10.79.0.10/24"), end_address=IPNetwork("10.79.0.50/24")
+    )
+    IPRange.objects.create(
+        start_address=IPNetwork("10.79.0.100/24"), end_address=IPNetwork("10.79.0.150/24")
+    )
+    SubnetPool.objects.create(subnet=subnet, ip_range=r_cfg)  # only r_cfg is configured
+
+    data = _gql(
+        gql_client,
+        """
+        query {
+          netbox_dhcp_kea_subnet_list {
+            prefix { prefix }
+            pools {
+              pool_range
+              configured
+              ip_range { start_address end_address }
+              config { id }
+            }
+          }
+        }
+        """,
+    )
+    target = next(
+        s for s in data["netbox_dhcp_kea_subnet_list"]
+        if s["prefix"]["prefix"].startswith("10.79.0.0")
+    )
+    pools = {p["pool_range"]: p for p in target["pools"]}
+
+    configured = pools["10.79.0.10 - 10.79.0.50"]
+    assert configured["configured"] is True
+    assert configured["ip_range"]["start_address"] == "10.79.0.10/24"
+    assert configured["config"]["id"] is not None
+
+    bare = pools["10.79.0.100 - 10.79.0.150"]
+    assert bare["configured"] is False
+    assert bare["config"] is None
+    assert bare["ip_range"]["end_address"] == "10.79.0.150/24"
