@@ -1,7 +1,10 @@
-from ipam.models import Prefix
+from ipam.api.serializers import IPAddressSerializer
+from ipam.filtersets import IPAddressFilterSet
+from ipam.models import IPAddress, Prefix
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.generics import ListAPIView
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -169,6 +172,34 @@ class StaticReservationViewSet(NetBoxModelViewSet):
     queryset = StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     serializer_class = StaticReservationSerializer
     filterset_class = filtersets.StaticReservationFilterSet
+
+
+class SubnetIPChoicesView(ListAPIView):
+    """IP addresses contained in a Kea subnet's prefix, for the static-reservation
+    IP picker. Filter with ``?subnet_id=<id>``; standard search (``q``) and
+    pagination are honoured via the native IPAddress filterset.
+    """
+
+    # NetBox TokenPermissions inspects .queryset to resolve the model.
+    queryset = IPAddress.objects.none()
+    serializer_class = IPAddressSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        kwargs.setdefault("nested", True)  # brief form for the picker
+        return super().get_serializer(*args, **kwargs)
+
+    def get_queryset(self):
+        subnet_id = self.request.query_params.get("subnet_id")
+        if not subnet_id:
+            return IPAddress.objects.none()
+        subnet = Subnet.objects.select_related("prefix").filter(pk=subnet_id).first()
+        if subnet is None:
+            return IPAddress.objects.none()
+        base = IPAddress.objects.filter(
+            address__net_host_contained=str(subnet.prefix.prefix),
+            vrf=subnet.prefix.vrf,
+        )
+        return IPAddressFilterSet(self.request.GET, queryset=base).qs
 
 
 class PrefixRelayConfigView(APIView):

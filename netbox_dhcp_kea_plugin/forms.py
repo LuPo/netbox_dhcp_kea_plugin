@@ -2,6 +2,7 @@ from dcim.choices import DeviceStatusChoices
 from dcim.models import MACAddress, Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils.safestring import mark_safe
 from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.forms import (
@@ -1648,10 +1649,17 @@ class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
 
 # StaticReservation Forms
 class StaticReservationForm(NetBoxModelForm):
-    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all())
+    subnet = DynamicModelChoiceField(
+        queryset=Subnet.objects.all(),
+        help_text="Subnet this reservation belongs to (Kea subnets only)",
+    )
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all(),
-        help_text="Reserved IP address (must fall within the subnet's prefix)",
+        quick_add=True,
+        # Dynamically restricted to the selected subnet's prefix via a plugin
+        # endpoint keyed on the subnet's id (data-url set in __init__).
+        query_params={"subnet_id": "$subnet"},
+        help_text="Reserved IP address (restricted to the selected subnet's prefix)",
     )
     mac_address = DynamicModelChoiceField(
         queryset=MACAddress.objects.all(),
@@ -1680,19 +1688,11 @@ class StaticReservationForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Restrict the IP picker to the chosen subnet's prefix.
-        subnet_obj = None
-        if self.instance and self.instance.subnet_id:
-            subnet_obj = self.instance.subnet
-        elif self.initial.get("subnet"):
-            try:
-                subnet_obj = Subnet.objects.get(pk=self.initial["subnet"])
-            except (Subnet.DoesNotExist, ValueError):
-                pass
-        if subnet_obj:
-            self.fields["ip_address"].widget.add_query_param(
-                "parent", str(subnet_obj.prefix.prefix)
-            )
+        # Point the IP picker at the plugin endpoint that returns only the IPs
+        # contained in the selected subnet's prefix (keyed on ?subnet_id=).
+        self.fields["ip_address"].widget.attrs["data-url"] = reverse(
+            "plugins-api:netbox_dhcp_kea_plugin-api:subnet-ip-choices"
+        )
 
 
 class StaticReservationFilterForm(NetBoxModelFilterSetForm):

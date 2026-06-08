@@ -243,3 +243,50 @@ def test_subnet_reservations_tab_renders_with_explicit(admin_client, sr_subnet):
     resp = admin_client.get(url)
     assert resp.status_code == 200
     assert b"aa:bb:cc:dd:ee:85" in resp.content.lower()  # explicit MAC rendered
+
+
+# ---------------------------------------------------------------------------
+# Form: subnet scope + dynamic IP restriction
+# ---------------------------------------------------------------------------
+
+
+def test_form_subnet_is_plugin_subnets(sr_subnet):
+    from netbox_dhcp_kea_plugin.forms import StaticReservationForm
+    from netbox_dhcp_kea_plugin.models import Subnet
+
+    form = StaticReservationForm()
+    assert form.fields["subnet"].queryset.model is Subnet
+
+
+def test_form_ip_picker_points_at_subnet_endpoint(sr_subnet):
+    from django.urls import reverse
+
+    from netbox_dhcp_kea_plugin.forms import StaticReservationForm
+
+    form = StaticReservationForm()
+    assert form.fields["ip_address"].widget.attrs.get("data-url") == reverse(
+        "plugins-api:netbox_dhcp_kea_plugin-api:subnet-ip-choices"
+    )
+
+
+def test_subnet_ip_choices_endpoint_filters_to_prefix(api_client, sr_subnet):
+    from django.urls import reverse
+
+    _ip("10.20.0.5/24")  # inside 10.20.0.0/24
+    _ip("10.99.0.5/24")  # outside
+    url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:subnet-ip-choices")
+    resp = api_client.get(url, {"subnet_id": sr_subnet.pk})
+    assert resp.status_code == 200
+    addrs = {r["address"] for r in resp.data["results"]}
+    assert "10.20.0.5/24" in addrs
+    assert "10.99.0.5/24" not in addrs
+
+
+def test_subnet_ip_choices_empty_without_subnet_id(api_client, sr_subnet):
+    from django.urls import reverse
+
+    _ip("10.20.0.6/24")
+    url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:subnet-ip-choices")
+    resp = api_client.get(url)
+    assert resp.status_code == 200
+    assert resp.data["count"] == 0

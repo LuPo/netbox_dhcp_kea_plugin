@@ -31,4 +31,7 @@ urlpatterns = router.urls + [
     # Lookup DHCP relay config by prefix
     # GET /api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=10.0.0.0/24
     path("relay-config/", views.PrefixRelayConfigView.as_view(), name="relay-config"),
+    # IP choices within a subnet's prefix (static-reservation IP picker)
+    # GET /api/plugins/netbox_dhcp_kea_plugin/subnet-ip-choices/?subnet_id=<id>
+    path("subnet-ip-choices/", views.SubnetIPChoicesView.as_view(), name="subnet-ip-choices"),
 ]
