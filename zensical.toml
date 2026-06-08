@@ -12,6 +12,7 @@ nav = [
   { "Configuration" = "configuration.md" },
   { "Features" = "features.md" },
   { "Usage" = "usage.md" },
+  { "GraphQL" = "graphql.md" },
   { "Guides" = [
       "guides/index.md",
       { "Class-conditional option delivery" = "guides/class-conditional-option-delivery.md" },

@@ -76,6 +76,45 @@ Every DHCP server has three reservation-mode flags that surface in the `Dhcp4` g
 
 Defaults are configurable through `PLUGINS_CONFIG` — see [Configuration — Model defaults](configuration.md#model-defaults).
 
+### `reservations-in-subnet`
+
+Controls whether Kea looks for **subnet-scoped** host reservations (reservations attached to a
+specific subnet) when servicing a request. Left at its default of `True`, the plugin emits each
+subnet's reservations inside that subnet's config block. Those reservations are discovered
+automatically from NetBox — IP addresses assigned to device/VM interfaces and flagged Primary or
+OOB (see [DHCP reservations](#dhcp-reservations)) — and, where configured, from explicit
+host-reservation records. Set it to `False` only if a subnet should ignore subnet-level
+reservations entirely (e.g. a pure dynamic subnet, or one relying solely on global reservations).
+
+### `reservations-out-of-pool`
+
+This is a **performance** switch, not a placement rule. It tells Kea where reservations live
+relative to the dynamic pools:
+
+- **`True` (plugin default)** — every reservation is guaranteed to be **outside** the dynamic
+  pools, so Kea can skip the per-lease "is this pool address reserved for someone else?" check.
+  On busy subnets this measurably reduces lease-time work.
+- **`False`** — reservations **may sit inside** a pool, so Kea must check each in-pool lease
+  against the reservation list before handing it out.
+
+The plugin's reservations are **out-of-pool by construction**: infrastructure addresses come from
+device/VM Primary/OOB IPs (which live outside the dynamic ranges), and explicit
+host-reservation addresses are taken from the prefix's out-of-pool space. Keeping
+`reservations-out-of-pool=True` therefore matches how the plugin models addressing and is the
+recommended default. Only flip a subnet to `False` if you deliberately intend to reserve an
+address that falls **inside** one of its dynamic pools.
+
+!!! note "Interaction with pool exclusion — Mark pool populated"
+
+    A Subnet Pool can be marked so NetBox excludes its range from "available" addresses and
+    **blocks creating new IPs inside it**. That cleanly *enforces* `reservations-out-of-pool=True`
+    — a reservation can never accidentally land in the dynamic pool — and lets tools query the
+    prefix's native available-IP endpoints to get out-of-pool addresses directly. It is
+    therefore **on by default** for pools, but it is **incompatible with in-pool reservations**:
+    if a subnet uses `reservations-out-of-pool=False` specifically to place a reservation inside a
+    pool, leave that pool's "Mark pool populated" box **unchecked** so the in-pool address can be
+    created.
+
 ### Subnet-level overrides
 
 Each subnet can inherit the server defaults or override them:
