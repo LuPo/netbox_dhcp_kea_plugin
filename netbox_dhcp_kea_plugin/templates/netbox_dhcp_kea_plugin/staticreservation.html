@@ -1,0 +1,63 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Static Reservation</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Subnet</th>
+                        <td><a href="{{ object.subnet.get_absolute_url }}">{{ object.subnet }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>IP Address</th>
+                        <td><a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>MAC Address</th>
+                        <td><a href="{{ object.mac_address.get_absolute_url }}">{{ object.mac_address }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Hostname</th>
+                        <td>{{ object.hostname|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">Source</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Source</th>
+                        <td>{{ object.source|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>External ID</th>
+                        <td>{{ object.external_id|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Synced</th>
+                        <td>{{ object.last_synced|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h5 class="card-header">Kea Reservation</h5>
+            <div class="card-body">
+                <pre class="mb-0">{{ kea_reservation }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

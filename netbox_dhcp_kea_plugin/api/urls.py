@@ -16,6 +16,7 @@ router.register("dhcp-servers", views.DHCPServerViewSet)
 router.register("client-classes", views.ClientClassViewSet)
 router.register("subnets", views.SubnetViewSet)
 router.register("subnet-pools", views.SubnetPoolViewSet)
+router.register("static-reservations", views.StaticReservationViewSet)
 router.register("ha-relationships", views.DHCPHARelationshipViewSet)
 if get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
     router.register("stork-servers", views.StorkServerViewSet)

@@ -956,6 +956,43 @@ class SubnetPoolImportView(generic.BulkImportView):
     model_form = forms.SubnetPoolImportForm
 
 
+# --- Static Reservation Views ---
+
+
+class StaticReservationView(generic.ObjectView):
+    queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
+
+    def get_extra_context(self, request, instance):
+        return {"kea_reservation": json.dumps(instance.to_kea_dict(), indent=2)}
+
+
+class StaticReservationListView(generic.ObjectListView):
+    queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
+    table = tables.StaticReservationTable
+    filterset = filtersets.StaticReservationFilterSet
+    filterset_form = forms.StaticReservationFilterForm
+
+
+class StaticReservationEditView(generic.ObjectEditView):
+    queryset = models.StaticReservation.objects.all()
+    form = forms.StaticReservationForm
+
+
+class StaticReservationDeleteView(generic.ObjectDeleteView):
+    queryset = models.StaticReservation.objects.all()
+
+
+class StaticReservationBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
+    filterset = filtersets.StaticReservationFilterSet
+    table = tables.StaticReservationTable
+
+
+class StaticReservationImportView(generic.BulkImportView):
+    queryset = models.StaticReservation.objects.all()
+    model_form = forms.StaticReservationImportForm
+
+
 # --- Stork Server Views ---
 
 

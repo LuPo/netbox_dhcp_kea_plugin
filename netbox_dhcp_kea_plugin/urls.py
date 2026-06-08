@@ -203,6 +203,36 @@ _urlpatterns = [
         name="subnetpool_changelog",
         kwargs={"model": models.SubnetPool},
     ),
+    # StaticReservation
+    path("static-reservations/", views.StaticReservationListView.as_view(), name="staticreservation_list"),
+    path("static-reservations/add/", views.StaticReservationEditView.as_view(), name="staticreservation_add"),
+    path(
+        "static-reservations/import/",
+        views.StaticReservationImportView.as_view(),
+        name="staticreservation_bulk_import",
+    ),
+    path(
+        "static-reservations/delete/",
+        views.StaticReservationBulkDeleteView.as_view(),
+        name="staticreservation_bulk_delete",
+    ),
+    path("static-reservations/<int:pk>/", views.StaticReservationView.as_view(), name="staticreservation"),
+    path(
+        "static-reservations/<int:pk>/edit/",
+        views.StaticReservationEditView.as_view(),
+        name="staticreservation_edit",
+    ),
+    path(
+        "static-reservations/<int:pk>/delete/",
+        views.StaticReservationDeleteView.as_view(),
+        name="staticreservation_delete",
+    ),
+    path(
+        "static-reservations/<int:pk>/changelog/",
+        ObjectChangeLogView.as_view(),
+        name="staticreservation_changelog",
+        kwargs={"model": models.StaticReservation},
+    ),
     # DHCPHARelationship
     path("ha-relationships/", views.DHCPHARelationshipListView.as_view(), name="dhcpharelationship_list"),
     path("ha-relationships/add/", views.DHCPHARelationshipEditView.as_view(), name="dhcpharelationship_add"),

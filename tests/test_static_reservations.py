@@ -175,3 +175,71 @@ def test_explicit_wins_on_same_ip(sr_subnet):
     entries = [r for r in sr_subnet.get_kea_reservations() if r["ip-address"] == "10.20.0.70"]
     assert len(entries) == 1
     assert entries[0]["hw-address"] == "aa:bb:cc:dd:ee:99"  # explicit wins
+
+
+# ---------------------------------------------------------------------------
+# Views + REST API
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def admin_client(db):
+    from django.contrib.auth import get_user_model
+    from django.test import Client
+
+    u = get_user_model().objects.create_superuser("sr-admin", "sr@example.com", "x")
+    c = Client()
+    c.force_login(u)
+    return c
+
+
+@pytest.fixture
+def api_client(db):
+    from django.contrib.auth import get_user_model
+    from rest_framework.test import APIClient
+
+    u = get_user_model().objects.create_superuser("sr-api", "sr-api@example.com", "x")
+    c = APIClient()
+    c.force_authenticate(u)
+    return c
+
+
+def test_list_view_renders(admin_client, sr_subnet):
+    from django.urls import reverse
+
+    _reservation(sr_subnet, "10.20.0.80/24", "AA:BB:CC:DD:EE:80")
+    resp = admin_client.get(reverse("plugins:netbox_dhcp_kea_plugin:staticreservation_list"))
+    assert resp.status_code == 200
+
+
+def test_detail_view_renders(admin_client, sr_subnet):
+    res = _reservation(sr_subnet, "10.20.0.81/24", "AA:BB:CC:DD:EE:81")
+    resp = admin_client.get(res.get_absolute_url())
+    assert resp.status_code == 200
+
+
+def test_api_create(api_client, sr_subnet):
+    from django.urls import reverse
+
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    ip = _ip("10.20.0.82/24")
+    mac = _mac("AA:BB:CC:DD:EE:82")
+    url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:staticreservation-list")
+    resp = api_client.post(
+        url,
+        {"subnet": sr_subnet.pk, "ip_address": ip.pk, "mac_address": mac.pk, "hostname": "host1"},
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    assert StaticReservation.objects.filter(ip_address=ip, mac_address=mac).exists()
+
+
+def test_subnet_reservations_tab_renders_with_explicit(admin_client, sr_subnet):
+    from django.urls import reverse
+
+    _reservation(sr_subnet, "10.20.0.85/24", "AA:BB:CC:DD:EE:85", hostname="nvr-1")
+    url = reverse("plugins:netbox_dhcp_kea_plugin:subnet_reservations", kwargs={"pk": sr_subnet.pk})
+    resp = admin_client.get(url)
+    assert resp.status_code == 200
+    assert b"aa:bb:cc:dd:ee:85" in resp.content.lower()  # explicit MAC rendered

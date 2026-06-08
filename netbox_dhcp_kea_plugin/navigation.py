@@ -133,6 +133,20 @@ subnet_pools_menu_item = PluginMenuItem(
     ),
 )
 
+staticreservation_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:staticreservation_list",
+    link_text="Static Reservations",
+    permissions=["netbox_dhcp_kea_plugin.view_staticreservation"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:staticreservation_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_staticreservation"],
+        ),
+    ),
+)
+
 dhcpharelationship_menu_item = PluginMenuItem(
     link="plugins:netbox_dhcp_kea_plugin:dhcpharelationship_list",
     link_text="HA Relationships",
@@ -250,6 +264,7 @@ _menu_groups = [
         (
             subnet_menu_item,
             subnet_pools_menu_item,
+            staticreservation_menu_item,
             clientclass_menu_item,
         ),
     ),
@@ -301,6 +316,7 @@ else:
         hookgroup_menu_item,
         subnet_menu_item,
         subnet_pools_menu_item,
+        staticreservation_menu_item,
         clientclass_menu_item,
         optiondefinition_menu_item,
         optiondata_menu_item,

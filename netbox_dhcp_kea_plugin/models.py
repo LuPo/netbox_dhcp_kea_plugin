@@ -2591,9 +2591,11 @@ class Subnet(NetBoxModel):
                 "host_id": host_id,
                 "parent_object": parent_object,
                 "interface": assigned_object,
+                "mac": str(mac_address).lower() if mac_address else "",
                 "is_primary": ip.is_primary_ip,
                 "is_oob": ip.is_oob_ip,
                 "has_hw_address": bool(mac_address),
+                "static_reservation": None,
             }
 
             reservations.append((kea_reservation, metadata))
@@ -2618,6 +2620,7 @@ class Subnet(NetBoxModel):
                 "host_id": kea_reservation.get("hostname", ""),
                 "parent_object": None,
                 "interface": None,
+                "mac": kea_reservation.get("hw-address", ""),
                 "is_primary": False,
                 "is_oob": False,
                 "has_hw_address": "hw-address" in kea_reservation,

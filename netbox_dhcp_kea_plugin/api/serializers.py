@@ -1,6 +1,7 @@
 from dcim.api.serializers_.manufacturers import ManufacturerSerializer
+from dcim.models import MACAddress
 from ipam.api.serializers import IPAddressSerializer, IPRangeSerializer, ServiceSerializer, ServiceTemplateSerializer
-from ipam.models import Prefix
+from ipam.models import IPAddress, Prefix
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from netbox.plugins.utils import get_plugin_config
 from rest_framework import serializers
@@ -17,6 +18,7 @@ from ..models import (
     OptionData,
     OptionDataIPSource,
     OptionDefinition,
+    StaticReservation,
     StorkAgentGroup,
     StorkServer,
     Subnet,
@@ -440,6 +442,46 @@ class SubnetPoolSerializer(NetBoxModelSerializer):
             "client_class",
             "evaluate_additional_classes",
             "option_data",
+            "description",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
+
+
+class NestedIPAddressSerializer(WritableNestedSerializer):
+    class Meta:
+        model = IPAddress
+        fields = ["id", "url", "display", "address"]
+
+
+class NestedMACAddressSerializer(WritableNestedSerializer):
+    class Meta:
+        model = MACAddress
+        fields = ["id", "url", "display", "mac_address"]
+
+
+class StaticReservationSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_dhcp_kea_plugin-api:staticreservation-detail"
+    )
+    subnet = NestedSubnetSerializer()
+    ip_address = NestedIPAddressSerializer()
+    mac_address = NestedMACAddressSerializer()
+
+    class Meta:
+        model = StaticReservation
+        fields = (
+            "id",
+            "url",
+            "display",
+            "subnet",
+            "ip_address",
+            "mac_address",
+            "hostname",
+            "source",
+            "external_id",
             "description",
             "tags",
             "custom_fields",

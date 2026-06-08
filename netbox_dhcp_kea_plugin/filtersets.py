@@ -16,6 +16,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StaticReservation,
     StorkAgentGroup,
     StorkServer,
     Subnet,
@@ -230,6 +231,26 @@ class SubnetPoolFilterSet(NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(description__icontains=value) | Q(subnet__prefix__prefix__icontains=value))
+
+
+class StaticReservationFilterSet(NetBoxModelFilterSet):
+    subnet = django_filters.ModelChoiceFilter(queryset=Subnet.objects.all(), label="Subnet")
+    source = django_filters.CharFilter(label="Source")
+    external_id = django_filters.CharFilter(label="External ID")
+
+    class Meta:
+        model = StaticReservation
+        fields = ["id", "subnet", "ip_address", "mac_address", "source", "external_id"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(hostname__icontains=value)
+            | Q(description__icontains=value)
+            | Q(external_id__icontains=value)
+            | Q(mac_address__mac_address__icontains=value)
+        )
 
 
 class DHCPHARelationshipFilterSet(NetBoxModelFilterSet):

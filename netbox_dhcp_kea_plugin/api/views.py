@@ -29,6 +29,7 @@ from ..models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StaticReservation,
     StorkAgentGroup,
     StorkServer,
     Subnet,
@@ -47,6 +48,7 @@ from .serializers import (
     HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
+    StaticReservationSerializer,
     StorkAgentGroupSerializer,
     StorkServerSerializer,
     SubnetPoolSerializer,
@@ -161,6 +163,12 @@ class SubnetPoolViewSet(NetBoxModelViewSet):
     )
     serializer_class = SubnetPoolSerializer
     filterset_class = filtersets.SubnetPoolFilterSet
+
+
+class StaticReservationViewSet(NetBoxModelViewSet):
+    queryset = StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
+    serializer_class = StaticReservationSerializer
+    filterset_class = filtersets.StaticReservationFilterSet
 
 
 class PrefixRelayConfigView(APIView):

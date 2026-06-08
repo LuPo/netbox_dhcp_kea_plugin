@@ -12,6 +12,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StaticReservation,
     StorkAgentGroup,
     StorkServer,
     Subnet,
@@ -469,6 +470,38 @@ class SubnetPoolTable(NetBoxTable):
             "client_class",
             "additional_classes_count",
             "option_data_count",
+            "actions",
+        )
+
+
+class StaticReservationTable(NetBoxTable):
+    ip_address = tables.Column(verbose_name="IP Address", linkify=True)
+    mac_address = tables.Column(verbose_name="MAC Address", linkify=True)
+    subnet = tables.Column(linkify=True)
+    hostname = tables.Column()
+    source = tables.Column()
+    external_id = tables.Column(verbose_name="External ID")
+    description = tables.Column()
+
+    class Meta(NetBoxTable.Meta):
+        model = StaticReservation
+        fields = (
+            "pk",
+            "ip_address",
+            "mac_address",
+            "subnet",
+            "hostname",
+            "source",
+            "external_id",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "ip_address",
+            "mac_address",
+            "subnet",
+            "hostname",
+            "source",
             "actions",
         )
 

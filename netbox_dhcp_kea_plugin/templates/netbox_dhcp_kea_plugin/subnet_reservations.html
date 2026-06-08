@@ -31,7 +31,7 @@
                             </td>
                             <td>
                                 {% if meta.has_hw_address %}
-                                {{ meta.interface.mac_address|lower }}
+                                {{ meta.mac }}
                                 {% else %}
                                 <span class="text-warning" title="No MAC address on interface — this reservation will be excluded from KEA configuration">
                                     <i class="mdi mdi-alert-outline"></i> Missing
@@ -39,13 +39,23 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% if meta.static_reservation %}
+                                <a href="{{ meta.static_reservation.get_absolute_url }}">{{ meta.host_id|default:"Static Reservation" }}</a>
+                                {% else %}
                                 <a href="{{ meta.parent_object.get_absolute_url }}">{{ meta.parent_object.name }}</a>
+                                {% endif %}
                             </td>
                             <td>
+                                {% if meta.static_reservation %}
+                                <span class="text-muted">&mdash;</span>
+                                {% else %}
                                 <a href="{{ meta.interface.get_absolute_url }}">{{ meta.interface.name }}</a>
+                                {% endif %}
                             </td>
                             <td>
-                                {% if meta.is_primary %}
+                                {% if meta.static_reservation %}
+                                <span class="badge text-bg-info">Static</span>
+                                {% elif meta.is_primary %}
                                 Primary
                                 {% elif meta.is_oob %}
                                 OOB

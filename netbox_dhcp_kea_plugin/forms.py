@@ -1,5 +1,5 @@
 from dcim.choices import DeviceStatusChoices
-from dcim.models import Manufacturer
+from dcim.models import MACAddress, Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
@@ -32,6 +32,7 @@ from .models import (
     HookGroup,
     OptionData,
     OptionDefinition,
+    StaticReservation,
     StorkAgentGroup,
     StorkServer,
     Subnet,
@@ -1268,6 +1269,7 @@ class SubnetForm(NetBoxModelForm):
                 label="Reservation Modes",
             ),
             "reservations_only",
+            "auto_reservations",
             name="Reservations",
         ),
         FieldSet("ddns_policy", name="DDNS"),
@@ -1288,6 +1290,7 @@ class SubnetForm(NetBoxModelForm):
             "reservations_in_subnet",
             "reservations_out_of_pool",
             "reservations_only",
+            "auto_reservations",
             "ddns_policy",
             "tags",
         )
@@ -1641,6 +1644,82 @@ class SubnetPoolFilterForm(NetBoxModelFilterSetForm):
     model = SubnetPool
     subnet = DynamicModelChoiceField(queryset=Subnet.objects.all(), required=False)
     client_class = DynamicModelChoiceField(queryset=ClientClass.objects.all(), required=False)
+
+
+# StaticReservation Forms
+class StaticReservationForm(NetBoxModelForm):
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all())
+    ip_address = DynamicModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        help_text="Reserved IP address (must fall within the subnet's prefix)",
+    )
+    mac_address = DynamicModelChoiceField(
+        queryset=MACAddress.objects.all(),
+        quick_add=True,
+        label="MAC address",
+        help_text="Client hardware (MAC) address",
+    )
+
+    fieldsets = (
+        FieldSet("subnet", "ip_address", "mac_address", "hostname", name="Reservation"),
+        FieldSet("source", "external_id", "description", "tags", name="Metadata"),
+    )
+
+    class Meta:
+        model = StaticReservation
+        fields = (
+            "subnet",
+            "ip_address",
+            "mac_address",
+            "hostname",
+            "source",
+            "external_id",
+            "description",
+            "tags",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Restrict the IP picker to the chosen subnet's prefix.
+        subnet_obj = None
+        if self.instance and self.instance.subnet_id:
+            subnet_obj = self.instance.subnet
+        elif self.initial.get("subnet"):
+            try:
+                subnet_obj = Subnet.objects.get(pk=self.initial["subnet"])
+            except (Subnet.DoesNotExist, ValueError):
+                pass
+        if subnet_obj:
+            self.fields["ip_address"].widget.add_query_param(
+                "parent", str(subnet_obj.prefix.prefix)
+            )
+
+
+class StaticReservationFilterForm(NetBoxModelFilterSetForm):
+    model = StaticReservation
+    subnet = DynamicModelChoiceField(queryset=Subnet.objects.all(), required=False)
+    mac_address = DynamicModelChoiceField(
+        queryset=MACAddress.objects.all(), required=False, label="MAC address"
+    )
+    source = forms.CharField(required=False)
+
+
+class StaticReservationImportForm(NetBoxModelImportForm):
+    subnet = CSVModelChoiceField(queryset=Subnet.objects.all(), to_field_name="pk")
+    ip_address = CSVModelChoiceField(queryset=IPAddress.objects.all(), to_field_name="address")
+    mac_address = CSVModelChoiceField(queryset=MACAddress.objects.all(), to_field_name="mac_address")
+
+    class Meta:
+        model = StaticReservation
+        fields = (
+            "subnet",
+            "ip_address",
+            "mac_address",
+            "hostname",
+            "source",
+            "external_id",
+            "description",
+        )
 
 
 # DHCPHARelationship Forms
