@@ -9,7 +9,7 @@
             <h5 class="card-header d-flex justify-content-between align-items-center">
                 IP Range Pools
                 {% if perms.ipam.add_iprange %}
-                <a href="{% url 'ipam:iprange_add' %}{% if object.prefix.vrf_id %}?vrf={{ object.prefix.vrf_id }}{% endif %}" class="btn btn-sm btn-primary" title="Define a new IP Range in IPAM under this prefix">
+                <a href="{% url 'ipam:iprange_add' %}?return_url={{ request.path }}{% if object.prefix.vrf_id %}&vrf={{ object.prefix.vrf_id }}{% endif %}" class="btn btn-sm btn-primary" title="Define a new IP Range in IPAM under this prefix">
                     <i class="mdi mdi-plus-thick"></i> Add IP Range
                 </a>
                 {% endif %}
@@ -77,18 +77,18 @@
                                         <i class="mdi mdi-eye"></i>
                                     </a>
                                     {% if perms.netbox_dhcp_kea_plugin.change_subnetpool %}
-                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_edit' pk=pool.subnet_pool.pk %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_edit' pk=pool.subnet_pool.pk %}?return_url={{ request.path }}" class="btn btn-sm btn-warning" title="Edit">
                                         <i class="mdi mdi-pencil"></i>
                                     </a>
                                     {% endif %}
                                     {% if perms.netbox_dhcp_kea_plugin.delete_subnetpool %}
-                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_delete' pk=pool.subnet_pool.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_delete' pk=pool.subnet_pool.pk %}?return_url={{ request.path }}" class="btn btn-sm btn-danger" title="Delete">
                                         <i class="mdi mdi-trash-can-outline"></i>
                                     </a>
                                     {% endif %}
                                 {% else %}
                                     {% if perms.netbox_dhcp_kea_plugin.add_subnetpool %}
-                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_add' %}?subnet={{ object.pk }}&ip_range={{ pool.ip_range.pk }}" class="btn btn-sm btn-success" title="Configure Pool">
+                                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnetpool_add' %}?subnet={{ object.pk }}&ip_range={{ pool.ip_range.pk }}&return_url={{ request.path }}" class="btn btn-sm btn-success" title="Configure Pool">
                                         <i class="mdi mdi-plus-thick"></i> Configure
                                     </a>
                                     {% endif %}
@@ -111,7 +111,7 @@
                     <a href="{{ object.prefix.get_absolute_url }}">{{ object.prefix }}</a> prefix first.
                     {% if perms.ipam.add_iprange %}
                     <div class="mt-2">
-                        <a href="{% url 'ipam:iprange_add' %}{% if object.prefix.vrf_id %}?vrf={{ object.prefix.vrf_id }}{% endif %}" class="btn btn-sm btn-primary">
+                        <a href="{% url 'ipam:iprange_add' %}?return_url={{ request.path }}{% if object.prefix.vrf_id %}&vrf={{ object.prefix.vrf_id }}{% endif %}" class="btn btn-sm btn-primary">
                             <i class="mdi mdi-plus-thick"></i> Add IP Range in IPAM
                         </a>
                     </div>
