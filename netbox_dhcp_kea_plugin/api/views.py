@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from ipam.api.serializers import IPAddressSerializer
 from ipam.filtersets import IPAddressFilterSet
 from ipam.models import IPAddress, Prefix
@@ -51,6 +52,7 @@ from .serializers import (
     HookSerializer,
     OptionDataSerializer,
     OptionDefinitionSerializer,
+    StaticReservationProvisionSerializer,
     StaticReservationSerializer,
     StorkAgentGroupSerializer,
     StorkServerSerializer,
@@ -172,6 +174,44 @@ class StaticReservationViewSet(NetBoxModelViewSet):
     queryset = StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     serializer_class = StaticReservationSerializer
     filterset_class = filtersets.StaticReservationFilterSet
+
+    @action(detail=False, methods=["post"], url_path="provision")
+    def provision(self, request):
+        """Allocate the next out-of-pool address in a subnet and reserve it for a
+        MAC, atomically.
+
+        POST body: ``subnet`` (id), ``mac_address`` (string), and optional
+        ``hostname`` / ``dns_name`` / ``source`` / ``external_id`` /
+        ``description``. The address is chosen under a per-prefix lock so
+        concurrent callers never collide. Pass ``external_id`` to make the call
+        idempotent (a retry returns the existing reservation with ``200`` rather
+        than allocating again).
+
+        Returns the created reservation (``201``), or the existing one when
+        ``external_id`` already exists (``200``).
+        """
+        in_serializer = StaticReservationProvisionSerializer(data=request.data)
+        in_serializer.is_valid(raise_exception=True)
+        data = in_serializer.validated_data
+
+        try:
+            reservation, created = data["subnet"].allocate_reservation(
+                data["mac_address"],
+                hostname=data.get("hostname", ""),
+                dns_name=data.get("dns_name", ""),
+                source=data.get("source", ""),
+                external_id=data.get("external_id") or None,
+                description=data.get("description", ""),
+            )
+        except DjangoValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, "error_dict") else exc.messages
+            return Response({"errors": detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        out = StaticReservationSerializer(reservation, context={"request": request})
+        return Response(
+            out.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class SubnetIPChoicesView(ListAPIView):

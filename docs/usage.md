@@ -189,6 +189,65 @@ The config endpoints respond with `text/plain`, so Ansible's `ansible.builtin.ur
     dest: /etc/stork/agent.env
 ```
 
+## Static reservation provisioning
+
+When an automation tool knows a client's **MAC** and the **subnet** it belongs to, but wants NetBox
+to choose the address, post to the provisioning endpoint. NetBox allocates the next available
+out-of-pool address, creates the `IPAddress`, and writes the reservation — atomically, under a
+per-prefix lock (see [Features — Allocate-and-reserve provisioning](features.md#allocate-and-reserve-provisioning)).
+
+```bash
+curl -s https://netbox.example.com/api/plugins/netbox-dhcp-kea-plugin/static-reservations/provision/ \
+  -H "Authorization: Token $NETBOX_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "subnet": 12,
+        "mac_address": "00:53:00:11:22:33",
+        "hostname": "printer-lobby",
+        "source": "nac",
+        "external_id": "nac-rec-4567"
+      }'
+```
+
+Request fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `subnet` | yes | Plugin `Subnet` id to allocate within |
+| `mac_address` | yes | Client MAC, as a string (a standalone MAC record is created) |
+| `hostname` | no | Reservation hostname (defaults to the IP's DNS name) |
+| `dns_name` | no | DNS name to set on the newly created IP address |
+| `source` | no | Origin tag stored on the reservation (e.g. `nac`) |
+| `external_id` | no | Identifier in the originating system — **makes the call idempotent** |
+| `description` | no | Free-form description |
+
+Responses:
+
+- **`201 Created`** — a new reservation; the body is the full reservation, including the allocated
+  `ip_address`.
+- **`200 OK`** — an `external_id` that already exists; the body is the **existing** reservation,
+  unchanged (safe to retry).
+- **`400 Bad Request`** — no out-of-pool capacity, the MAC is already reserved in that subnet, or
+  the payload is invalid. The body is `{"errors": …}`.
+
+```json
+{
+  "id": 87,
+  "url": "https://netbox.example.com/api/plugins/netbox-dhcp-kea-plugin/static-reservations/87/",
+  "display": "192.0.2.2/24 → 00:53:00:11:22:33",
+  "subnet": { "id": 12, "prefix": "192.0.2.0/24" },
+  "ip_address": { "id": 904, "address": "192.0.2.2/24" },
+  "mac_address": { "id": 511, "mac_address": "00:53:00:11:22:33" },
+  "hostname": "printer-lobby",
+  "source": "nac",
+  "external_id": "nac-rec-4567"
+}
+```
+
+!!! tip "Reading back capacity and reservations"
+    Use the [GraphQL API](graphql.md) to read a subnet's `available_out_of_pool_count` *before*
+    provisioning, and its `static_reservations` afterwards — both in one round-trip.
+
 ## REST API endpoints
 
 | Endpoint | Description |
@@ -202,6 +261,8 @@ The config endpoints respond with `text/plain`, so Ansible's `ansible.builtin.ur
 | `/api/plugins/netbox-dhcp-kea-plugin/subnets/` | Subnet configurations |
 | `/api/plugins/netbox-dhcp-kea-plugin/subnets/{id}/relay-config/` | Relay config for a subnet |
 | `/api/plugins/netbox-dhcp-kea-plugin/subnet-pools/` | Subnet-pool configurations |
+| `/api/plugins/netbox-dhcp-kea-plugin/static-reservations/` | Explicit host reservations (CRUD) |
+| `/api/plugins/netbox-dhcp-kea-plugin/static-reservations/provision/` | Allocate the next out-of-pool address and reserve it for a MAC |
 | `/api/plugins/netbox-dhcp-kea-plugin/ha-relationships/` | HA relationships |
 | `/api/plugins/netbox-dhcp-kea-plugin/relay-config/?prefix=…` | Lookup relay config by prefix |
 | `/api/plugins/netbox-dhcp-kea-plugin/stork-servers/` | Stork server management *(if `enable_stork`)* |

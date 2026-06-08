@@ -15,11 +15,13 @@ from netbox.graphql.filters import NetBoxModelFilter
 from netbox_dhcp_kea_plugin.models import (
     ClientClass,
     DHCPServer,
+    StaticReservation,
     Subnet,
     SubnetPool,
 )
 
 if TYPE_CHECKING:
+    from dcim.graphql.filters import MACAddressFilter
     from ipam.graphql.filters import (
         IPAddressFilter,
         IPRangeFilter,
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
 __all__ = (
     "ClientClassFilter",
     "DHCPServerFilter",
+    "StaticReservationFilter",
     "SubnetFilter",
     "SubnetPoolFilter",
 )
@@ -64,6 +67,23 @@ class SubnetFilter(NetBoxModelFilter):
             strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
         ]
         | None
+    ) = strawberry_django.filter_field()
+
+
+@strawberry_django.filter_type(StaticReservation, lookups=True)
+class StaticReservationFilter(NetBoxModelFilter):
+    subnet: (
+        Annotated[
+            "SubnetFilter",
+            strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
+        ]
+        | None
+    ) = strawberry_django.filter_field()
+    ip_address: (
+        Annotated["IPAddressFilter", strawberry.lazy("ipam.graphql.filters")] | None
+    ) = strawberry_django.filter_field()
+    mac_address: (
+        Annotated["MACAddressFilter", strawberry.lazy("dcim.graphql.filters")] | None
     ) = strawberry_django.filter_field()
 
 

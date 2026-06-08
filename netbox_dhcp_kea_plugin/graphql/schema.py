@@ -10,6 +10,7 @@ import strawberry_django
 from .types import (
     ClientClassType,
     DHCPServerType,
+    StaticReservationType,
     SubnetPoolType,
     SubnetType,
 )
@@ -37,3 +38,11 @@ class NetBoxDHCPKeaSubnetPoolQuery:
 class NetBoxDHCPKeaClientClassQuery:
     netbox_dhcp_kea_client_class: ClientClassType = strawberry_django.field()
     netbox_dhcp_kea_client_class_list: list[ClientClassType] = strawberry_django.field()
+
+
+@strawberry.type(name="Query")
+class NetBoxDHCPKeaStaticReservationQuery:
+    netbox_dhcp_kea_static_reservation: StaticReservationType = strawberry_django.field()
+    netbox_dhcp_kea_static_reservation_list: list[StaticReservationType] = (
+        strawberry_django.field()
+    )

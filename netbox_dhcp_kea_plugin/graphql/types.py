@@ -17,6 +17,7 @@ from netbox.graphql.types import NetBoxObjectType
 from netbox_dhcp_kea_plugin.models import (
     ClientClass,
     DHCPServer,
+    StaticReservation,
     Subnet,
     SubnetPool,
 )
@@ -24,6 +25,7 @@ from netbox_dhcp_kea_plugin.models import (
 from .filters import (
     ClientClassFilter,
     DHCPServerFilter,
+    StaticReservationFilter,
     SubnetFilter,
     SubnetPoolFilter,
 )
@@ -31,6 +33,7 @@ from .filters import (
 __all__ = (
     "ClientClassType",
     "DHCPServerType",
+    "StaticReservationType",
     "SubnetType",
     "SubnetPoolType",
     "SubnetPoolEntryType",
@@ -137,6 +140,12 @@ class SubnetType(NetBoxObjectType):
             "SubnetPoolType", strawberry.lazy("netbox_dhcp_kea_plugin.graphql.types")
         ]
     ]
+    static_reservations: list[
+        Annotated[
+            "StaticReservationType",
+            strawberry.lazy("netbox_dhcp_kea_plugin.graphql.types"),
+        ]
+    ]
 
     @strawberry_django.field(
         description=(
@@ -186,3 +195,24 @@ class SubnetPoolType(NetBoxObjectType):
         ]
         | None
     )
+
+
+@strawberry_django.type(
+    StaticReservation,
+    fields=[
+        "id",
+        "hostname",
+        "description",
+        "source",
+        "external_id",
+        "last_synced",
+    ],
+    filters=StaticReservationFilter,
+    pagination=True,
+)
+class StaticReservationType(NetBoxObjectType):
+    subnet: Annotated[
+        "SubnetType", strawberry.lazy("netbox_dhcp_kea_plugin.graphql.types")
+    ]
+    ip_address: Annotated["IPAddressType", strawberry.lazy("ipam.graphql.types")]
+    mac_address: Annotated["MACAddressType", strawberry.lazy("dcim.graphql.types")]

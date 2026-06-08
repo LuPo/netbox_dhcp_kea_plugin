@@ -104,16 +104,20 @@ host-reservation addresses are taken from the prefix's out-of-pool space. Keepin
 recommended default. Only flip a subnet to `False` if you deliberately intend to reserve an
 address that falls **inside** one of its dynamic pools.
 
-!!! note "Interaction with pool exclusion — Mark pool populated"
+!!! note "How the plugin keeps reservations out-of-pool"
 
-    A Subnet Pool can be marked so NetBox excludes its range from "available" addresses and
-    **blocks creating new IPs inside it**. That cleanly *enforces* `reservations-out-of-pool=True`
-    — a reservation can never accidentally land in the dynamic pool — and lets tools query the
-    prefix's native available-IP endpoints to get out-of-pool addresses directly. It is
-    therefore **on by default** for pools, but it is **incompatible with in-pool reservations**:
-    if a subnet uses `reservations-out-of-pool=False` specifically to place a reservation inside a
-    pool, leave that pool's "Mark pool populated" box **unchecked** so the in-pool address can be
-    created.
+    With `reservations-out-of-pool=True` (the default) the plugin actively keeps explicit
+    reservations outside the dynamic pools:
+
+    - the [provisioning endpoint](#allocate-and-reserve-provisioning) only ever allocates from the
+      subnet's out-of-pool space (available addresses minus the dynamic pool ranges); and
+    - a **manually-entered** Static Reservation whose address falls **inside a dynamic pool range
+      is rejected** at validation time.
+
+    Only *fixed* IP-Range pools can clash this way — when a subnet has no explicit IP Range, its
+    computed pool is derived from the prefix's available space and automatically excludes every
+    assigned (reserved) address. If a subnet sets `reservations-out-of-pool=False` to deliberately
+    place an in-pool reservation, that validation steps aside and the in-pool address is accepted.
 
 ### Subnet-level overrides
 
@@ -173,12 +177,38 @@ PLUGINS_CONFIG = {
 
 ## DHCP reservations
 
-The plugin auto-discovers DHCP reservations from NetBox IP address assignments:
+A subnet's Kea host reservations come from two sources that are **merged** at config-emission time: reservations **auto-derived** from NetBox infrastructure, and **explicit Static Reservations** you (or an automation tool) create. The merged set is keyed by IP address — an explicit reservation **wins** over a derived one on the same address — and is emitted **ordered by IP**.
+
+### Auto-derived reservations
+
+The plugin auto-discovers reservations from NetBox IP address assignments:
 
 - **Auto-discovery** — IP addresses assigned to device or VM interfaces and flagged as Primary IP or OOB IP are collected as Kea host reservations.
 - **MAC address validation** — Only reservations carrying a `hw-address` (MAC on the interface) are included in the emitted Kea configuration. Kea requires either `hw-address` or `duid` on every reservation and will refuse to load any reservation where neither is set.
 - **UI warnings** — The reservations tab highlights entries without a MAC in yellow with an explanatory note (they will be excluded from the generated config).
 - **FHRP filtering** — FHRP group addresses are automatically excluded.
+- **Per-subnet toggle** — the subnet's **Auto Reservations** flag (default **on**) controls whether derived reservations are merged in. Turn it off to emit *only* the subnet's explicit Static Reservations.
+
+### Static reservations
+
+`StaticReservation` is an explicit host reservation that pairs a native NetBox **IP address** with a native **MAC address** — no Device or VM modelling required. This suits endpoints known only by their MAC, such as records fed from a network access control (NAC) system.
+
+- **Native objects** — `ip_address` references an `ipam.IPAddress`, `mac_address` a `dcim.MACAddress` (which may be a standalone MAC with no interface assignment). The reserved IP must fall within the subnet's prefix.
+- **One MAC per subnet** — a database constraint plus validation prevent two reservations sharing the same MAC within a subnet (Kea rejects duplicate `hw-address` entries).
+- **Hostname** — an optional per-reservation `hostname`; when blank it falls back to the IP's DNS name. Emitted as the Kea `hostname`.
+- **Sync metadata** — `source` (a free-form origin tag, e.g. `nac`), `external_id` (the record's identifier in the originating system — globally unique), and `last_synced` support keeping reservations in step with an external source of truth.
+- **In the UI** — managed under **DHCP Configuration → Static Reservations**, and surfaced (with a **Static** badge) alongside derived entries in each subnet's **Reservations** tab. The subnet form's IP-address picker is scoped to the selected subnet's prefix.
+
+### Allocate-and-reserve provisioning
+
+When the automation does *not* pick the address itself — it just needs *an* address for a MAC — the plugin exposes an atomic provisioning endpoint. Given a subnet and a MAC, NetBox allocates the next available **out-of-pool** address and creates the reservation in a single transaction:
+
+- **Server-side allocation** — the lowest available out-of-pool address (per the subnet's effective `reservations-out-of-pool` policy — see [Reservation modes](#reservation-modes)) is chosen and created as an `IPAddress`; the **gateway** (`routers_option_offset`) is never handed out.
+- **Concurrency-safe** — the subnet's prefix row is locked for the duration, so two simultaneous callers can never receive the same address.
+- **Idempotent** — pass an `external_id` and a retry returns the *existing* reservation (HTTP `200`) instead of allocating again (`201`), so a sync source can replay safely.
+- **Capacity-aware** — when the subnet has no out-of-pool room (e.g. `reservations-out-of-pool = True` with no dedicated pool range), the call is rejected rather than encroaching on the dynamic pool.
+
+See [Usage — Static reservation provisioning](usage.md#static-reservation-provisioning) for the API call, and the [GraphQL API](graphql.md) to read reservations and each subnet's remaining free-address count in one request.
 
 ## DHCP relay support
 

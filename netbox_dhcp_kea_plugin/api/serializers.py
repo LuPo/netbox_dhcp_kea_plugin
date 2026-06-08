@@ -490,6 +490,37 @@ class StaticReservationSerializer(NetBoxModelSerializer):
         )
 
 
+class StaticReservationProvisionSerializer(serializers.Serializer):
+    """Input for the allocate-and-reserve provisioning endpoint
+    (``POST /static-reservations/provision/``).
+
+    The server allocates the next out-of-pool address in ``subnet`` and reserves
+    it for ``mac_address``. Callers supply a MAC string (not a MACAddress id) —
+    a standalone MAC record is created. Idempotent on ``external_id``.
+    """
+
+    subnet = serializers.PrimaryKeyRelatedField(queryset=Subnet.objects.all())
+    mac_address = serializers.CharField(max_length=32, help_text="Client MAC address")
+    hostname = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+    dns_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default="",
+        help_text="DNS name to set on the allocated IP address",
+    )
+    source = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, default="",
+        help_text="Origin tag for the reservation (e.g. 'nac')",
+    )
+    external_id = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, allow_null=True, default=None,
+        help_text="Identifier in the originating system; makes the call idempotent",
+    )
+    description = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, default=""
+    )
+
+
 class NestedDHCPHARelationshipSerializer(WritableNestedSerializer):
     class Meta:
         model = DHCPHARelationship

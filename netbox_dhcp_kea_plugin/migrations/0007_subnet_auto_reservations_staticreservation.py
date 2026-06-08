@@ -9,10 +9,17 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    # Pin to stable, long-standing core migrations rather than whatever was
+    # latest when this was generated. makemigrations pins the newest core
+    # migration of each referenced app; on a dev checkout that is ahead of the
+    # released NetBox, those pins point at migrations a released install does
+    # not have (NodeNotFoundError). MACAddress was introduced in dcim 0199
+    # (NetBox 4.2); the ipam/extras pins match 0006_ddns. These exist across the
+    # supported NetBox range, so the migration stays portable.
     dependencies = [
-        ("dcim", "0237_module_remove_local_context_data"),
-        ("extras", "0139_alter_customfieldchoiceset_extra_choices"),
-        ("ipam", "0090_vlangroup_recompute_total_vlan_ids"),
+        ("dcim", "0199_macaddress"),
+        ("extras", "0134_owner"),
+        ("ipam", "0086_gfk_indexes"),
         ("netbox_dhcp_kea_plugin", "0006_ddns"),
     ]
 

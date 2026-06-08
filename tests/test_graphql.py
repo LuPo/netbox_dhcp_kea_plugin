@@ -45,6 +45,7 @@ def test_plugin_query_roots_registered(gql_client):
         "netbox_dhcp_kea_subnet_list",
         "netbox_dhcp_kea_subnet_pool_list",
         "netbox_dhcp_kea_client_class_list",
+        "netbox_dhcp_kea_static_reservation_list",
     } <= names
 
 
@@ -163,3 +164,61 @@ def test_subnet_pools_field_configured_flag(
     assert bare["configured"] is False
     assert bare["config"] is None
     assert bare["ip_range"]["end_address"] == "10.79.0.150/24"
+
+
+def test_static_reservation_type_and_subnet_relation(
+    gql_client, subnet_factory, dhcp_server_factory, prefix_factory
+):
+    from dcim.models import MACAddress
+    from ipam.models import IPAddress
+
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    prefix = prefix_factory(network="10.80.0.0/24")
+    server = dhcp_server_factory(ip_suffix=80)
+    subnet = subnet_factory(server=server, prefix=prefix)
+    ip = IPAddress.objects.create(address="10.80.0.25/24")
+    mac = MACAddress.objects.create(mac_address="AA:BB:CC:00:80:25")
+    StaticReservation.objects.create(
+        subnet=subnet, ip_address=ip, mac_address=mac, hostname="cam-1", source="nac"
+    )
+
+    # Query root → native IP/MAC traversal + back to the subnet's prefix.
+    data = _gql(
+        gql_client,
+        """
+        query {
+          netbox_dhcp_kea_static_reservation_list {
+            hostname
+            source
+            ip_address { address }
+            mac_address { mac_address }
+            subnet { prefix { prefix } }
+          }
+        }
+        """,
+    )
+    rows = data["netbox_dhcp_kea_static_reservation_list"]
+    target = next(r for r in rows if r["ip_address"]["address"] == "10.80.0.25/24")
+    assert target["hostname"] == "cam-1"
+    assert target["source"] == "nac"
+    assert target["mac_address"]["mac_address"].upper().replace("-", ":") == "AA:BB:CC:00:80:25"
+    assert target["subnet"]["prefix"]["prefix"].startswith("10.80.0.0")
+
+    # Reverse relation: subnet → static_reservations.
+    data2 = _gql(
+        gql_client,
+        """
+        query {
+          netbox_dhcp_kea_subnet_list {
+            prefix { prefix }
+            static_reservations { hostname ip_address { address } }
+          }
+        }
+        """,
+    )
+    target2 = next(
+        s for s in data2["netbox_dhcp_kea_subnet_list"]
+        if s["prefix"]["prefix"].startswith("10.80.0.0")
+    )
+    assert target2["static_reservations"][0]["hostname"] == "cam-1"

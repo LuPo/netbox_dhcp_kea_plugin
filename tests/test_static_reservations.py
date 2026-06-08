@@ -102,6 +102,57 @@ def test_clean_rejects_ip_outside_prefix(sr_subnet):
     assert "ip_address" in exc.value.message_dict
 
 
+def _ip_range(start, end):
+    from ipam.models import IPRange
+    from netaddr import IPNetwork
+
+    return IPRange.objects.create(start_address=IPNetwork(start), end_address=IPNetwork(end))
+
+
+def test_clean_rejects_in_pool_reservation_when_out_of_pool_enforced(sr_subnet):
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    sr_subnet.reservations_out_of_pool = True
+    sr_subnet.save()
+    _ip_range("10.20.0.100/24", "10.20.0.150/24")  # dynamic pool
+    res = StaticReservation(
+        subnet=sr_subnet,
+        ip_address=_ip("10.20.0.120/24"),  # inside the pool
+        mac_address=_mac("AA:BB:CC:DD:EE:F1"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        res.clean()
+    assert "ip_address" in exc.value.message_dict
+
+
+def test_clean_allows_out_of_pool_reservation_with_explicit_range(sr_subnet):
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    sr_subnet.reservations_out_of_pool = True
+    sr_subnet.save()
+    _ip_range("10.20.0.100/24", "10.20.0.150/24")
+    res = StaticReservation(
+        subnet=sr_subnet,
+        ip_address=_ip("10.20.0.40/24"),  # outside the pool
+        mac_address=_mac("AA:BB:CC:DD:EE:F2"),
+    )
+    res.clean()  # no error raised
+
+
+def test_clean_allows_in_pool_reservation_when_out_of_pool_false(sr_subnet):
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    sr_subnet.reservations_out_of_pool = False  # in-pool reservations permitted
+    sr_subnet.save()
+    _ip_range("10.20.0.100/24", "10.20.0.150/24")
+    res = StaticReservation(
+        subnet=sr_subnet,
+        ip_address=_ip("10.20.0.120/24"),  # inside the pool, but allowed
+        mac_address=_mac("AA:BB:CC:DD:EE:F3"),
+    )
+    res.clean()  # no error raised
+
+
 def test_clean_rejects_duplicate_mac_string(sr_subnet):
     from netbox_dhcp_kea_plugin.models import StaticReservation
 
@@ -175,6 +226,16 @@ def test_explicit_wins_on_same_ip(sr_subnet):
     entries = [r for r in sr_subnet.get_kea_reservations() if r["ip-address"] == "10.20.0.70"]
     assert len(entries) == 1
     assert entries[0]["hw-address"] == "aa:bb:cc:dd:ee:99"  # explicit wins
+
+
+def test_reservations_sorted_by_ip(sr_subnet):
+    # An explicit reservation must interleave with derived ones in numeric IP
+    # order, not get appended after them (regression: it used to sort last).
+    _make_derived("10.20.0.0/24", "10.20.0.50/24", "AA:BB:CC:DD:EE:a0", "sr-vm-lo")
+    _make_derived("10.20.0.0/24", "10.20.0.90/24", "AA:BB:CC:DD:EE:b0", "sr-vm-hi")
+    _reservation(sr_subnet, "10.20.0.70/24", "AA:BB:CC:DD:EE:c0")
+    ips = [r["ip-address"] for r in sr_subnet.get_kea_reservations()]
+    assert ips == ["10.20.0.50", "10.20.0.70", "10.20.0.90"]
 
 
 # ---------------------------------------------------------------------------
@@ -290,3 +351,99 @@ def test_subnet_ip_choices_empty_without_subnet_id(api_client, sr_subnet):
     resp = api_client.get(url)
     assert resp.status_code == 200
     assert resp.data["count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Allocate-and-reserve provisioning endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def provision_subnet(db, dhcp_server_factory):
+    """A subnet where every available address is reservable
+    (``reservations_out_of_pool=False``), so allocation has capacity."""
+    from ipam.models import Prefix
+
+    from netbox_dhcp_kea_plugin.models import Subnet
+
+    return Subnet.objects.create(
+        prefix=Prefix.objects.create(prefix="10.30.0.0/24"),
+        server=dhcp_server_factory(),
+        valid_lifetime=3600,
+        max_lifetime=7200,
+        routers_option_offset=1,  # .1 is the gateway → never allocated
+        reservations_out_of_pool=False,
+    )
+
+
+def _provision_url():
+    from django.urls import reverse
+
+    return reverse("plugins-api:netbox_dhcp_kea_plugin-api:staticreservation-provision")
+
+
+def test_provision_allocates_and_reserves(api_client, provision_subnet):
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    resp = api_client.post(
+        _provision_url(),
+        {"subnet": provision_subnet.pk, "mac_address": "AA:BB:CC:00:00:01", "source": "nac"},
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    # .1 is the gateway and is skipped → lowest allocatable is .2
+    assert resp.data["ip_address"]["address"] == "10.30.0.2/24"
+    sr = StaticReservation.objects.get(pk=resp.data["id"])
+    assert sr.source == "nac"
+    assert sr.last_synced is not None
+
+
+def test_provision_skips_gateway_and_increments(api_client, provision_subnet):
+    a = api_client.post(
+        _provision_url(),
+        {"subnet": provision_subnet.pk, "mac_address": "AA:BB:CC:00:00:0A"},
+        format="json",
+    )
+    b = api_client.post(
+        _provision_url(),
+        {"subnet": provision_subnet.pk, "mac_address": "AA:BB:CC:00:00:0B"},
+        format="json",
+    )
+    assert a.data["ip_address"]["address"] == "10.30.0.2/24"
+    assert b.data["ip_address"]["address"] == "10.30.0.3/24"
+
+
+def test_provision_idempotent_external_id(api_client, provision_subnet):
+    from netbox_dhcp_kea_plugin.models import StaticReservation
+
+    body = {
+        "subnet": provision_subnet.pk,
+        "mac_address": "AA:BB:CC:00:00:02",
+        "external_id": "nac-42",
+    }
+    r1 = api_client.post(_provision_url(), body, format="json")
+    assert r1.status_code == 201
+    r2 = api_client.post(_provision_url(), body, format="json")
+    assert r2.status_code == 200  # idempotent retry, not a new allocation
+    assert r2.data["id"] == r1.data["id"]
+    assert StaticReservation.objects.filter(external_id="nac-42").count() == 1
+
+
+def test_provision_duplicate_mac_conflict(api_client, provision_subnet):
+    body = {"subnet": provision_subnet.pk, "mac_address": "AA:BB:CC:00:00:03"}
+    assert api_client.post(_provision_url(), body, format="json").status_code == 201
+    resp = api_client.post(_provision_url(), body, format="json")
+    assert resp.status_code == 400
+
+
+def test_provision_no_out_of_pool_capacity(api_client, sr_subnet):
+    # Enforce out-of-pool with no IP Range defined → the pool spans the whole
+    # usable space, so there is nothing out-of-pool to allocate.
+    sr_subnet.reservations_out_of_pool = True
+    sr_subnet.save()
+    resp = api_client.post(
+        _provision_url(),
+        {"subnet": sr_subnet.pk, "mac_address": "AA:BB:CC:00:00:04"},
+        format="json",
+    )
+    assert resp.status_code == 400

@@ -47,7 +47,13 @@
                     </tr>
                     <tr>
                         <th>Last Synced</th>
-                        <td>{{ object.last_synced|placeholder }}</td>
+                        <td>
+                            {% if object.last_synced %}
+                                {{ object.last_synced|isodatetime:"minutes" }}
+                            {% else %}
+                                {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
                     </tr>
                 </table>
             </div>

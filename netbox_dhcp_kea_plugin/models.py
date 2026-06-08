@@ -2453,6 +2453,94 @@ class Subnet(NetBoxModel):
         subnet's effective out-of-pool policy (see get_out_of_pool_available_ips)."""
         return self.get_out_of_pool_available_ips().size
 
+    def allocate_reservation(
+        self,
+        mac_address,
+        *,
+        hostname="",
+        dns_name="",
+        source="",
+        external_id=None,
+        description="",
+    ):
+        """Atomically allocate the next available out-of-pool address in this
+        subnet and create a :class:`StaticReservation` for ``mac_address``.
+
+        The prefix row is locked for the duration so two concurrent callers can
+        never be handed the same address. ``mac_address`` is a MAC *string*; a
+        standalone ``dcim.MACAddress`` is created for it.
+
+        When ``external_id`` is supplied and a reservation already carries it,
+        that reservation is returned untouched — the call is idempotent, so a
+        sync source (e.g. a NAC) can retry safely. The subnet gateway
+        (``routers_option_offset``) is never allocated.
+
+        Returns ``(reservation, created)``. Raises ``ValidationError`` when the
+        subnet has no out-of-pool capacity, the MAC is already reserved here, or
+        the supplied data is invalid.
+        """
+        import netaddr
+        from dcim.models import MACAddress
+        from django.utils import timezone
+
+        external_id = external_id or None
+
+        with transaction.atomic():
+            # Serialise allocations on this prefix so two requests can't be
+            # handed the same next address.
+            Prefix.objects.select_for_update().get(pk=self.prefix_id)
+
+            # Idempotency: a reservation with this external id already exists.
+            if external_id:
+                existing = StaticReservation.objects.filter(external_id=external_id).first()
+                if existing is not None:
+                    return existing, False
+
+            available = self.get_out_of_pool_available_ips()
+
+            # Never hand out the gateway address (mirrors get_pools()).
+            prefix_net = self.prefix.prefix
+            if isinstance(prefix_net, str):
+                prefix_net = netaddr.IPNetwork(prefix_net)
+            gateway_int = None
+            if self.routers_option_offset:
+                gateway_int = prefix_net.network.value + self.routers_option_offset
+
+            next_ip = None
+            for candidate in available:  # IPSet iterates addresses ascending
+                if gateway_int is not None and int(candidate) == gateway_int:
+                    continue
+                next_ip = candidate
+                break
+            if next_ip is None:
+                raise ValidationError("No out-of-pool address is available in this subnet.")
+
+            ip_obj = IPAddress(
+                address=f"{next_ip}/{prefix_net.prefixlen}",
+                vrf=self.prefix.vrf,
+                dns_name=dns_name or "",
+            )
+            ip_obj.full_clean()
+            ip_obj.save()
+
+            mac_obj = MACAddress(mac_address=mac_address)
+            mac_obj.full_clean()
+            mac_obj.save()
+
+            reservation = StaticReservation(
+                subnet=self,
+                ip_address=ip_obj,
+                mac_address=mac_obj,
+                hostname=hostname or "",
+                source=source or "",
+                external_id=external_id,
+                description=description or "",
+                last_synced=timezone.now() if source else None,
+            )
+            reservation.full_clean()
+            reservation.save()
+            return reservation, True
+
     def get_pool_entries(self):
         """Structured view of this subnet's DHCP pools as ``PoolEntry`` objects.
 
@@ -2638,6 +2726,8 @@ class Subnet(NetBoxModel):
 
         Returns a list of ``(kea_reservation_dict, metadata_dict)`` tuples.
         """
+        import netaddr
+
         by_ip = {}
         if self.auto_reservations:
             for kea, meta in self._get_derived_reservations():
@@ -2645,7 +2735,12 @@ class Subnet(NetBoxModel):
         # Explicit reservations overwrite any derived entry for the same IP.
         for kea, meta in self._get_explicit_reservations():
             by_ip[kea["ip-address"]] = (kea, meta)
-        return list(by_ip.values())
+        # Sort by numeric IP so explicit and derived entries interleave in
+        # address order (also gives the emitted Kea reservations a stable order).
+        return sorted(
+            by_ip.values(),
+            key=lambda entry: int(netaddr.IPAddress(entry[0]["ip-address"])),
+        )
 
     def get_kea_reservations(self):
         """Get DHCP reservations in KEA format only (without metadata).
@@ -3014,6 +3109,26 @@ class StaticReservation(NetBoxModel):
             prefix = netaddr.IPNetwork(str(self.subnet.prefix.prefix))
             if netaddr.IPAddress(self.reservation_ip) not in prefix:
                 errors["ip_address"] = "The reserved IP must fall within the subnet's prefix."
+            elif self.subnet.effective_reservations_out_of_pool:
+                # When the subnet enforces out-of-pool reservations, the address must
+                # not sit inside a dynamic pool: Kea skips the in-pool reservation
+                # check, so the pool could hand the address to another client.
+                # Computed pools adapt to exclude assigned IPs, so only fixed
+                # IP-Range pools can actually clash — check those.
+                child_ranges = self.subnet.prefix.get_child_ranges().filter(mark_utilized=False)
+                if child_ranges.exists():
+                    pool_set = netaddr.IPSet()
+                    for ip_range in child_ranges:
+                        start = str(ip_range.start_address).split("/")[0]
+                        end = str(ip_range.end_address).split("/")[0]
+                        pool_set.add(netaddr.IPRange(start, end))
+                    if netaddr.IPAddress(self.reservation_ip) in pool_set:
+                        errors["ip_address"] = (
+                            "This address is inside a dynamic pool, but the subnet "
+                            "enforces out-of-pool reservations (reservations-out-of-pool "
+                            "= True). Choose an out-of-pool address, or allow in-pool "
+                            "reservations on the subnet."
+                        )
 
         # A hw-address must be unique within a subnet — Kea rejects duplicates.
         # The DB constraint guards the MACAddress FK; this guards the MAC string

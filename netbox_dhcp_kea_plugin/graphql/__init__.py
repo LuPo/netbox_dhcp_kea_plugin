@@ -1,6 +1,7 @@
 from .schema import (
     NetBoxDHCPKeaClientClassQuery,
     NetBoxDHCPKeaDHCPServerQuery,
+    NetBoxDHCPKeaStaticReservationQuery,
     NetBoxDHCPKeaSubnetPoolQuery,
     NetBoxDHCPKeaSubnetQuery,
 )
@@ -12,4 +13,5 @@ schema = [
     NetBoxDHCPKeaSubnetQuery,
     NetBoxDHCPKeaSubnetPoolQuery,
     NetBoxDHCPKeaClientClassQuery,
+    NetBoxDHCPKeaStaticReservationQuery,
 ]

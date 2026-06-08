@@ -1,5 +1,6 @@
 import django_tables2 as tables
 from netbox.tables import BooleanColumn, ChoiceFieldColumn, NetBoxTable
+from netbox.tables.columns import DateTimeColumn
 
 from .models import (
     ClientClass,
@@ -481,6 +482,7 @@ class StaticReservationTable(NetBoxTable):
     hostname = tables.Column()
     source = tables.Column()
     external_id = tables.Column(verbose_name="External ID")
+    last_synced = DateTimeColumn(verbose_name="Last Synced")
     description = tables.Column()
 
     class Meta(NetBoxTable.Meta):
@@ -493,6 +495,7 @@ class StaticReservationTable(NetBoxTable):
             "hostname",
             "source",
             "external_id",
+            "last_synced",
             "description",
             "actions",
         )
@@ -502,6 +505,7 @@ class StaticReservationTable(NetBoxTable):
             "subnet",
             "hostname",
             "source",
+            "last_synced",
             "actions",
         )
 

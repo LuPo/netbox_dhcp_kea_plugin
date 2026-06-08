@@ -28,11 +28,12 @@ Each exposed model provides a single-object lookup and a `_list` field (the list
 | `netbox_dhcp_kea_subnet` / `_list` | Subnets |
 | `netbox_dhcp_kea_subnet_pool` / `_list` | Subnet pools |
 | `netbox_dhcp_kea_client_class` / `_list` | Client classes |
+| `netbox_dhcp_kea_static_reservation` / `_list` | Static (explicit) host reservations |
 
 !!! note "Scope"
-    This first iteration covers the four core models above — the ones needed to discover and
-    inspect DHCP subnets. Additional types (host reservations, DDNS, Stork, option data) will be
-    added incrementally using the same pattern.
+    The query roots above cover the models needed to discover and inspect DHCP subnets and their
+    explicit host reservations. Remaining types (DDNS, Stork, option data) will be added
+    incrementally using the same pattern.
 
 ## Types and traversals
 
@@ -42,9 +43,14 @@ plugin types and to **native NetBox types**:
 | Type | Native traversals | Plugin traversals |
 |---|---|---|
 | `DHCPServerType` | `ip_address` → IPAM IP address, `service` → IPAM service | `subnet_items` → subnets |
-| `SubnetType` | `prefix` → IPAM prefix (→ `role`, `scope`) | `server`, `client_class`, **`pools`** (all emitted pools — see [Computed fields](#computed-fields)), `subnet_pools` (configured pools only) |
+| `SubnetType` | `prefix` → IPAM prefix (→ `role`, `scope`) | `server`, `client_class`, **`pools`** (all emitted pools — see [Computed fields](#computed-fields)), `subnet_pools` (configured pools only), `static_reservations` |
 | `SubnetPoolType` | `ip_range` → IPAM IP range | `subnet`, `client_class` |
 | `ClientClassType` | — | `servers` |
+| `StaticReservationType` | `ip_address` → IPAM IP address, `mac_address` → DCIM MAC address | `subnet` |
+
+`StaticReservationType` also exposes the reservation's stored fields — `hostname`, `source`,
+`external_id`, `last_synced`, `description`. Filter the list root by `subnet`, `ip_address`, or
+`mac_address` (e.g. find the reservation for a known MAC across the estate).
 
 !!! warning "Use `pools`, not `subnet_pools`, to list a subnet's pools"
     These are **two different fields** and the difference matters:
@@ -211,6 +217,42 @@ curl -s https://netbox.example.com/graphql/ \
   -H "Authorization: Token $NETBOX_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "{ netbox_dhcp_kea_subnet_list { prefix { prefix scope { ... on SiteType { name } } } available_out_of_pool_count } }"}'
+```
+
+### Reading host reservations
+
+Look up the reservation for a known MAC and read its allocated address, owning subnet, and sync
+metadata in one request:
+
+```graphql
+query {
+  netbox_dhcp_kea_static_reservation_list(
+    filters: { mac_address: { mac_address: { exact: "00:53:00:11:22:33" } } }
+  ) {
+    hostname
+    source
+    external_id
+    ip_address { address dns_name }
+    subnet { prefix { prefix } server { name } }
+  }
+}
+```
+
+Or list every reservation on a subnet (explicit only — the merged, derived-plus-explicit set that
+Kea receives is rendered by the server's `kea-config` endpoint, not GraphQL):
+
+```graphql
+query {
+  netbox_dhcp_kea_subnet_list(filters: { prefix: { prefix: { exact: "192.0.2.0/24" } } }) {
+    prefix { prefix }
+    available_out_of_pool_count
+    static_reservations {
+      hostname
+      ip_address { address }
+      mac_address { mac_address }
+    }
+  }
+}
 ```
 
 !!! tip "REST is still available"

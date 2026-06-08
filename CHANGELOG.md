@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.9.0 (2026-06-09)
+
+### Added — GraphQL API
+The plugin now registers types in NetBox's GraphQL schema, so automation can query DHCP objects and traverse to the related native NetBox objects (prefixes, IP/MAC addresses, IP ranges, services) in a single request. NetBox runs strawberry with `auto_camel_case=False`, so all names are snake_case.
+
+- **Query roots** — `netbox_dhcp_kea_dhcp_server`, `…_subnet`, `…_subnet_pool`, `…_client_class`, and `…_static_reservation`, each with a `_list` field accepting `filters` / `pagination` / `ordering`.
+- **Types & traversals** — `DHCPServerType` (`ip_address`, `service`, `subnet_items`), `SubnetType` (`prefix`, `server`, `client_class`, `subnet_pools`, `static_reservations`), `SubnetPoolType` (`ip_range`, `subnet`, `client_class`), `ClientClassType` (`servers`), and `StaticReservationType` (`ip_address`, `mac_address`, `subnet`).
+- **Computed `SubnetType` fields** — `available_out_of_pool_count` (how many addresses can still be reserved, honouring the subnet's effective `reservations-out-of-pool` policy) and `pools` (every emitted pool — configured *and* computed — each with a `configured` flag, unlike the sparse `subnet_pools` relation).
+- **Relation filters** — including `SubnetFilter.prefix`, to filter subnets by their prefix's role and scope/site, and `StaticReservationFilter` by `subnet` / `ip_address` / `mac_address`.
+- New **GraphQL API** documentation page with worked examples.
+
+### Added — Static host reservations + NAC provisioning
+Explicit DHCP host reservations that pair a native IPAM **IP address** with a native DCIM **MAC address** — no Device/VM modelling required — merged with the existing auto-derived reservations. Suited to endpoints known only by their MAC, such as records fed from a network access control (NAC) system.
+
+- **`StaticReservation` model** — native IP + MAC (standalone MACs with no interface are allowed), an optional per-reservation `hostname`, and sync metadata (`source`, globally-unique `external_id`, `last_synced`). One reservation per MAC per subnet (database constraint + validation); the reserved IP must fall within the subnet's prefix and — when the subnet enforces out-of-pool reservations — is rejected if it falls inside a dynamic IP-Range pool.
+- **Merged & ordered emission** — `Subnet.get_reservations()` merges explicit reservations with the device/VM-derived set, explicit winning on collision (same IP), and now emits the result **ordered by IP address** (also stabilising the generated Kea config). A new **Auto Reservations** subnet toggle (default on) controls whether derived reservations are merged in.
+- **UI + REST** — full CRUD under *DHCP Configuration → Static Reservations*, a *Static* badge beside explicit entries in each subnet's Reservations tab, and a writable REST serializer. The create form scopes the IP-address picker to the selected subnet's prefix via a plugin endpoint.
+- **Allocate-and-reserve provisioning endpoint** — `POST /api/plugins/netbox-dhcp-kea-plugin/static-reservations/provision/` allocates the next available **out-of-pool** address in a subnet and reserves it for a MAC, atomically under a per-prefix lock (the subnet gateway is never handed out). Idempotent on `external_id` — a retry returns the existing reservation with `200` instead of allocating again — so a sync source can replay safely.
+
+### Added — Subnet pools & relay
+- **Pools tab** — the IP-range picker is restricted to the subnet, "Add IP Range" links straight to IPAM, and pool add/edit/delete returns to the tab.
+- **Relay config** — the relay-config logic was centralized, and token-authenticated prefix lookups (`/relay-config/?prefix=…`) were fixed.
+
+### Fixed
+- `DHCPServer.service` foreign key was left null when a matching `Service` already existed; the existing service is now linked, within a transaction.
+- The static-reservation migration (`0007`) now depends on stable, long-standing core migrations (the `dcim` migration that introduced `MACAddress`, and the same `ipam`/`extras` pins as the DDNS migration) instead of whatever core migration was newest when it was generated — so it installs on released NetBox 4.6.x rather than raising `NodeNotFoundError` against a dev-only migration.
+
+### Documentation
+- Migrated the documentation site to **Zensical** and split the docs into focused pages (installation, configuration, features, usage, GraphQL, guides), including a guide on class-conditional option delivery and expanded reservation-mode coverage.
+
 ## 0.8.0 (2026-04-26)
 
 ### Added — Dynamic DNS (DDNS) support for Kea 3.0+
