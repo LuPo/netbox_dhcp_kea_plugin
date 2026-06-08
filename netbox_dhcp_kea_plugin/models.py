@@ -2139,6 +2139,14 @@ class Subnet(NetBoxModel):
         verbose_name="Reservations Only",
         help_text="Disable dynamic pool allocation — only reserved hosts will receive an IP from this subnet",
     )
+    auto_reservations = models.BooleanField(
+        default=True,
+        verbose_name="Auto Reservations",
+        help_text=(
+            "Derive host reservations from device/VM primary and OOB IPs in this subnet's prefix. "
+            "Disable to emit only the subnet's explicit Static Reservations."
+        ),
+    )
     ddns_policy = models.ForeignKey(
         "DDNSPolicy",
         on_delete=models.SET_NULL,
@@ -2491,8 +2499,8 @@ class Subnet(NetBoxModel):
             for pool in self.get_pools()
         ]
 
-    def get_reservations(self):
-        """Get IP addresses that can be used as DHCP reservations with metadata.
+    def _get_derived_reservations(self):
+        """Reservations derived from device/VM IPs in this subnet's prefix.
 
         Returns IPs that:
         - Have an assigned object (interface)
@@ -2591,6 +2599,50 @@ class Subnet(NetBoxModel):
             reservations.append((kea_reservation, metadata))
 
         return reservations
+
+    def _get_explicit_reservations(self):
+        """Reservations from this subnet's explicit StaticReservation rows.
+
+        Each pairs a native IP address with a native MAC address (no device/VM
+        modelling required). Returns a list of ``(kea_reservation_dict,
+        metadata_dict)`` tuples, mirroring ``_get_derived_reservations()``.
+        """
+        reservations = []
+        if self.pk is None:
+            return reservations  # unsaved subnet can have no reservations
+        qs = self.static_reservations.select_related("ip_address", "mac_address")
+        for res in qs:
+            kea_reservation = res.to_kea_dict()
+            metadata = {
+                "ip": res.ip_address,
+                "host_id": kea_reservation.get("hostname", ""),
+                "parent_object": None,
+                "interface": None,
+                "is_primary": False,
+                "is_oob": False,
+                "has_hw_address": "hw-address" in kea_reservation,
+                "static_reservation": res,
+            }
+            reservations.append((kea_reservation, metadata))
+        return reservations
+
+    def get_reservations(self):
+        """All reservations for this subnet — explicit StaticReservations merged
+        with the device/VM-derived reservations.
+
+        Explicit reservations win on collision (same ``ip-address``). The
+        derived set is included only when ``auto_reservations`` is enabled.
+
+        Returns a list of ``(kea_reservation_dict, metadata_dict)`` tuples.
+        """
+        by_ip = {}
+        if self.auto_reservations:
+            for kea, meta in self._get_derived_reservations():
+                by_ip[kea["ip-address"]] = (kea, meta)
+        # Explicit reservations overwrite any derived entry for the same IP.
+        for kea, meta in self._get_explicit_reservations():
+            by_ip[kea["ip-address"]] = (kea, meta)
+        return list(by_ip.values())
 
     def get_kea_reservations(self):
         """Get DHCP reservations in KEA format only (without metadata).
@@ -2869,6 +2921,129 @@ class SubnetPool(NetBoxModel):
         pool_dict = {"pool": f"{start_ip} - {end_ip}"}
         self.apply_to_pool_dict(pool_dict)
         return pool_dict
+
+
+class StaticReservation(NetBoxModel):
+    """Explicit DHCP host reservation pairing a native IP address with a native
+    MAC address — no Device/VM modelling required.
+
+    Merged with the auto-derived reservations at config-emission time
+    (see ``Subnet.get_reservations()``); explicit reservations win on collision.
+    Suitable for endpoints known only by MAC (e.g. fed from a NAC).
+    """
+
+    subnet = models.ForeignKey(
+        "Subnet",
+        on_delete=models.CASCADE,
+        related_name="static_reservations",
+        help_text="Subnet this reservation belongs to",
+    )
+    ip_address = models.OneToOneField(
+        IPAddress,
+        on_delete=models.PROTECT,
+        related_name="dhcp_static_reservation",
+        help_text="Reserved IP address (must fall within the subnet's prefix)",
+    )
+    mac_address = models.ForeignKey(
+        "dcim.MACAddress",
+        on_delete=models.PROTECT,
+        related_name="dhcp_static_reservations",
+        help_text="Client hardware (MAC) address",
+    )
+    hostname = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional reservation hostname (defaults to the IP's DNS name)",
+    )
+    description = models.CharField(max_length=200, blank=True)
+    source = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Origin of this reservation (e.g. 'manual', 'nac')",
+    )
+    external_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Identifier in the originating system (e.g. a NAC record ID)",
+    )
+    last_synced = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this reservation was last synced from its source",
+    )
+
+    class Meta:
+        ordering = ("subnet", "ip_address")
+        verbose_name = "Static Reservation"
+        verbose_name_plural = "Static Reservations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subnet", "mac_address"],
+                name="unique_subnet_mac_reservation",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.ip_address} → {self.mac_address}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_dhcp_kea_plugin:staticreservation", args=[self.pk])
+
+    @property
+    def reservation_ip(self):
+        """The reserved address without its mask, as a string."""
+        addr = self.ip_address.address
+        if hasattr(addr, "ip"):
+            return str(addr.ip)
+        return str(addr).split("/")[0]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        # The reserved IP must fall within the subnet's prefix.
+        if self.ip_address_id and self.subnet_id:
+            import netaddr
+
+            prefix = netaddr.IPNetwork(str(self.subnet.prefix.prefix))
+            if netaddr.IPAddress(self.reservation_ip) not in prefix:
+                errors["ip_address"] = "The reserved IP must fall within the subnet's prefix."
+
+        # A hw-address must be unique within a subnet — Kea rejects duplicates.
+        # The DB constraint guards the MACAddress FK; this guards the MAC string
+        # (NetBox allows distinct MACAddress rows sharing the same address).
+        if self.subnet_id and self.mac_address_id:
+            clash = (
+                StaticReservation.objects.filter(
+                    subnet_id=self.subnet_id,
+                    mac_address__mac_address=self.mac_address.mac_address,
+                )
+                .exclude(pk=self.pk)
+                .exists()
+            )
+            if clash:
+                errors["mac_address"] = (
+                    "Another reservation in this subnet already uses this MAC address."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def to_kea_dict(self):
+        """Emit this reservation as a Kea ``reservations`` entry."""
+        entry = {
+            "ip-address": self.reservation_ip,
+            "hw-address": str(self.mac_address.mac_address).lower(),
+        }
+        hostname = self.hostname
+        if not hostname and self.ip_address.dns_name:
+            hostname = self.ip_address.dns_name.partition(".")[0]
+        if hostname:
+            entry["hostname"] = hostname
+        return entry
 
 
 class DHCPHARelationship(NetBoxModel):
