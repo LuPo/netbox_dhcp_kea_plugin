@@ -50,16 +50,18 @@ plugin types and to **native NetBox types**:
 
 `SubnetType` exposes one computed field beyond the stored columns:
 
-- **`available_out_of_pool_count: Int`** — the number of addresses available for a **static
-  reservation** on the subnet, honouring its effective out-of-pool policy. It starts from the
-  prefix's available IPs (NetBox already excludes assigned IPs and the network/broadcast) and
-  then:
-    - `reservations_only`, or `reservations-out-of-pool = False` → returns **all** available
-      addresses (in-pool reservations are permitted; Kea resolves any pool overlap at runtime —
-      this includes the case where no IP Range is defined and the pool spans the usable range);
-    - `reservations-out-of-pool = True` → subtracts the subnet's dynamic pool ranges (so the
-      count reflects only out-of-pool space); when no IP Range is defined the pool spans the
-      available space and the count is `0`.
+- **`available_out_of_pool_count: Int`** — how many addresses can still be allocated for a
+  **static reservation** on the subnet. It starts from the prefix's available IPs (NetBox already
+  excludes assigned IPs and the network/broadcast), then applies the subnet's **effective
+  `reservations-out-of-pool`** policy (which inherits from the DHCP server when not set on the
+  subnet):
+    - the dynamic pool does **not** constrain reservations — `reservations_only` (there is no
+      pool) or `reservations-out-of-pool = False` (in-pool reservations are allowed; Kea resolves
+      any overlap at runtime) → **every** available address counts, including when no IP Range is
+      defined;
+    - `reservations-out-of-pool = True` (reservations must stay out of pool) → the subnet's
+      dynamic pool ranges are subtracted; with no IP Range the pool spans the available space, so
+      the count is `0`.
 
   This lets the caller show, per subnet, how many addresses can still be reserved — without
   fetching the address list.
@@ -73,7 +75,7 @@ prefix's **role** and **scope/site**:
 ```graphql
 query {
   netbox_dhcp_kea_subnet_list(
-    filters: { prefix: { role: { name: { exact: "WiFi End Users" } } } }
+    filters: { prefix: { role: { name: { exact: "Workstations" } } } }
   ) {
     prefix { prefix }
   }
@@ -82,13 +84,19 @@ query {
 
 ## Worked example
 
-Find the Kea subnets whose prefix role is "End Users", and read each one's prefix, owning server
-(with its IP), and dynamic pools — in one request:
+Find the Kea subnets whose prefix role is `Workstations` **and** whose prefix is scoped to a
+**Site**, and read — in one request — each one's prefix and site, owning server, dynamic pools,
+and how many addresses are free for a static reservation:
 
 ```graphql
 query {
   netbox_dhcp_kea_subnet_list(
-    filters: { prefix: { role: { name: { exact: "End Users" } } } }
+    filters: {
+      prefix: {
+        role: { name: { exact: "Workstations" } }
+        scope_type: { app_label: { exact: "dcim" }, model: { exact: "site" } }
+      }
+    }
   ) {
     prefix {
       prefix
@@ -109,17 +117,59 @@ query {
 }
 ```
 
-The prefix `scope` is a **union** (Site, Location, Region, or Site Group), so it is queried with
-inline fragments (`... on SiteType { … }`) rather than a scalar field — select the variant(s) you
-care about.
+`prefix.scope_type` is a **content-type** filter, so `{ model: { exact: "site" } }` restricts the
+result to Site-scoped prefixes — which is why each `scope` below resolves to a `SiteType` and is
+read with the `... on SiteType` fragment alone. In general `scope` is a **union**: a prefix may
+instead be scoped to a Location, Region, or Site Group, or be unscoped (`null`). To handle those,
+drop the `scope_type` filter and query each variant with `__typename`, then dispatch in the client
+(e.g. `scope.name` for a `SiteType`, `scope.site.name` for a `LocationType`). Response:
 
-Example call with a token:
+```json
+{
+  "data": {
+    "netbox_dhcp_kea_subnet_list": [
+      {
+        "prefix": {
+          "prefix": "192.0.2.0/24",
+          "role": { "name": "Workstations" },
+          "scope": { "name": "Headquarters", "slug": "hq" }
+        },
+        "server": { "name": "dhcp-1", "ip_address": { "address": "192.0.2.10/24" } },
+        "subnet_pools": [
+          { "ip_range": { "start_address": "192.0.2.50/24", "end_address": "192.0.2.200/24" } }
+        ],
+        "available_out_of_pool_count": 103
+      },
+      {
+        "prefix": {
+          "prefix": "198.51.100.0/24",
+          "role": { "name": "Workstations" },
+          "scope": { "name": "Branch Office", "slug": "branch" }
+        },
+        "server": { "name": "dhcp-2", "ip_address": { "address": "192.0.2.11/24" } },
+        "subnet_pools": [
+          { "ip_range": { "start_address": "198.51.100.200/24", "end_address": "198.51.100.250/24" } }
+        ],
+        "available_out_of_pool_count": 203
+      }
+    ]
+  }
+}
+```
+
+The `available_out_of_pool_count` values above assume the default **`reservations-out-of-pool =
+True`**, under which it reflects only out-of-pool space: subnet 1 has a 151-address pool
+(`254 − 151 = 103`) and subnet 2 a 51-address pool (`254 − 51 = 203`). With
+`reservations-out-of-pool = False` (in-pool reservations allowed) each would instead report every
+available address. See [Computed fields](#computed-fields).
+
+Example call with a token (one inline fragment on the scope union):
 
 ```bash
 curl -s https://netbox.example.com/graphql/ \
   -H "Authorization: Token $NETBOX_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ netbox_dhcp_kea_subnet_list { prefix { prefix role { name } } server { name } } }"}'
+  -d '{"query": "{ netbox_dhcp_kea_subnet_list { prefix { prefix scope { ... on SiteType { name } } } available_out_of_pool_count } }"}'
 ```
 
 !!! tip "REST is still available"
