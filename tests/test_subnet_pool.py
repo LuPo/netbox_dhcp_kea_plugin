@@ -874,3 +874,34 @@ class TestDHCPServerCollectsPoolConfig:
             assert "pools" in subnet
             pool = subnet["pools"][0]
             assert "option-data" in pool
+
+
+@pytest.mark.django_db
+class TestSubnetPoolFormIPRangeRestriction:
+    """The ip_range picker must be restricted to the editing subnet's prefix."""
+
+    def test_queryset_limited_to_subnet_child_ranges(
+        self, pool_subnet, pool_ip_range, pool_ip_range_2
+    ):
+        from netbox_dhcp_kea_plugin.forms import SubnetPoolForm
+
+        # A range that belongs to a different prefix entirely.
+        other_prefix = Prefix.objects.create(prefix="10.99.0.0/24")
+        outside = IPRange.objects.create(
+            start_address=IPNetwork("10.99.0.10/24"),
+            end_address=IPNetwork("10.99.0.20/24"),
+        )
+
+        form = SubnetPoolForm(initial={"subnet": pool_subnet.pk})
+        allowed = set(form.fields["ip_range"].queryset.values_list("pk", flat=True))
+
+        assert pool_ip_range.pk in allowed
+        assert pool_ip_range_2.pk in allowed
+        assert outside.pk not in allowed
+
+    def test_dropdown_filtered_by_parent_prefix(self, pool_subnet):
+        from netbox_dhcp_kea_plugin.forms import SubnetPoolForm
+
+        form = SubnetPoolForm(initial={"subnet": pool_subnet.pk})
+        # add_query_param stores static values keyed by param name.
+        assert form.fields["ip_range"].widget.static_params.get("parent") == ["10.0.0.0/24"]

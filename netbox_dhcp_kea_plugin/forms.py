@@ -1576,11 +1576,15 @@ class SubnetPoolForm(NetBoxModelForm):
             except (Subnet.DoesNotExist, ValueError):
                 pass
 
-        # Filter ip_range to only show child ranges of the subnet's prefix
+        # Filter ip_range to only the child ranges of the subnet's prefix —
+        # both the validating queryset and the API-backed dropdown (via the
+        # IPRange `parent` filter), so the picker never lists ranges from
+        # other subnets/prefixes.
         if subnet_obj:
             self.fields["ip_range"].queryset = IPRange.objects.filter(  # type: ignore[attr-defined]
                 pk__in=subnet_obj.prefix.get_child_ranges().values_list("pk", flat=True)
             )
+            self.fields["ip_range"].widget.add_query_param("parent", str(subnet_obj.prefix.prefix))
 
     def clean_option_data(self):
         """Validate that no two option data entries have the same space and code."""
