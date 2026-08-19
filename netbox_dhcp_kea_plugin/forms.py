@@ -914,6 +914,7 @@ class DHCPServerForm(NetBoxModelForm):
             ctrl_socket_items.append(
                 InlineFields("ctrl_socket_http_address", "ctrl_socket_http_port", label="HTTP Socket")
             )
+            ctrl_socket_items.append("ctrl_socket_proxy_enabled")
         if "ctrl_socket_unix_path" in self.fields:
             ctrl_socket_items.append("ctrl_socket_unix_path")
 
@@ -955,6 +956,7 @@ class DHCPServerForm(NetBoxModelForm):
                 "ha_role",
                 InlineFields("ha_address", "ha_port", label="HA Peer"),
                 InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
+                InlineFields("ha_proxy_enabled", "ha_egress_base_port", label="Reverse Proxy"),
                 name="High Availability",
             ),
             FieldSet(
@@ -993,6 +995,9 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "ha_proxy_enabled",
+            "ha_egress_base_port",
+            "ctrl_socket_proxy_enabled",
             "tags",
         )
         widgets = {

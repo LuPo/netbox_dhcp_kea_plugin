@@ -237,6 +237,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
     option_data = OptionDataSerializer(many=True, read_only=True)
     ha_relationship = serializers.SerializerMethodField()
     ha_url = serializers.SerializerMethodField()
+    ha_proxy = serializers.SerializerMethodField()
     stork_agent_group = NestedStorkAgentGroupSerializer(read_only=True)
     d2_daemon = serializers.SerializerMethodField()
     effective_d2_daemon = serializers.SerializerMethodField()
@@ -267,6 +268,9 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ha_auto_failover",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "ha_proxy_enabled",
+            "ha_egress_base_port",
+            "ha_proxy",
             "stork_agent_group",
             "d2_daemon",
             "effective_d2_daemon",
@@ -278,6 +282,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ctrl_socket_http_address",
             "ctrl_socket_http_port",
             "ctrl_socket_unix_path",
+            "ctrl_socket_proxy_enabled",
             "tags",
             "custom_fields",
             "created",
@@ -324,6 +329,13 @@ class DHCPServerSerializer(NetBoxModelSerializer):
 
     def get_ha_url(self, obj):
         return obj.ha_url
+
+    def get_ha_proxy(self, obj):
+        """Reverse-proxy plan: public/loopback endpoints and one egress port per peer.
+
+        Consumed by the Ansible dynamic inventory to build the Envoy listeners.
+        """
+        return obj.ha_proxy
 
     def get_ha_relationship(self, obj):
         if obj.ha_relationship:

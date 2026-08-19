@@ -309,6 +309,33 @@ class DHCPServer(NetBoxModel):
         blank=True,
         help_text="Password for HTTP basic authentication in HA (optional)",
     )
+    ha_proxy_enabled = models.BooleanField(
+        default=False,
+        verbose_name="HA reverse proxy",
+        help_text=(
+            "Route HA traffic through a local reverse proxy (Envoy). KEA binds the loopback "
+            "address and dials local egress ports; the proxy terminates inbound TLS and "
+            "originates outbound TLS, so KEA itself never holds a certificate."
+        ),
+    )
+    ha_egress_base_port = models.PositiveIntegerField(
+        default=18080,
+        null=True,
+        blank=True,
+        verbose_name="HA egress base port",
+        help_text=(
+            "First loopback port used for outbound HA connections when the reverse proxy is "
+            "enabled; one consecutive port per peer, ordered by peer name."
+        ),
+    )
+    ctrl_socket_proxy_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Control socket reverse proxy",
+        help_text=(
+            "Expose the HTTP control socket through the local reverse proxy. The socket itself "
+            "must be bound to 127.0.0.1."
+        ),
+    )
     stork_agent_group = models.ForeignKey(
         "StorkAgentGroup",
         on_delete=models.SET_NULL,
@@ -504,6 +531,61 @@ class DHCPServer(NetBoxModel):
         port = self.ha_port or 8080
         return f"{scheme}://{self.ha_address}:{port}/"
 
+    def ha_peers(self):
+        """Return the other servers in this HA relationship, ordered by name.
+
+        The order defines the egress port assignment, so it must be stable and
+        identical wherever it is computed.
+        """
+        if not self.ha_relationship_id:
+            return []
+        return sorted(
+            (server for server in self.ha_relationship.servers.all() if server.pk != self.pk),
+            key=lambda server: server.name,
+        )
+
+    def ha_egress_port(self, peer):
+        """Return the loopback port KEA dials to reach *peer* through the proxy."""
+        base = self.ha_egress_base_port or 18080
+        for index, other in enumerate(self.ha_peers()):
+            if other.pk == peer.pk:
+                return base + index
+        return None
+
+    @property
+    def ha_proxy(self):
+        """Return the reverse-proxy plan for this server.
+
+        Consumed by Ansible (through the dynamic inventory) to build the Envoy
+        listeners. Both the KEA configuration and the proxy configuration are
+        derived from this one place so the two cannot disagree.
+        """
+        if not self.ha_proxy_enabled:
+            return {"enabled": False}
+
+        ctrl_port = None
+        if self.ctrl_socket_proxy_enabled and self.ctrl_socket_http_enabled:
+            ctrl_port = self.ctrl_socket_http_port
+
+        return {
+            "enabled": True,
+            "public_address": self.ha_address,
+            "public_port": self.ha_port or 8080,
+            "internal_address": "127.0.0.1",
+            "internal_port": self.ha_port or 8080,
+            "ctrl_port": ctrl_port,
+            "peers": [
+                {
+                    "name": peer.name,
+                    "egress_port": self.ha_egress_port(peer),
+                    "upstream_address": peer.ha_address,
+                    "upstream_port": peer.ha_port or 8080,
+                    "sni": peer.ha_address,
+                }
+                for peer in self.ha_peers()
+            ],
+        }
+
     @property
     def relay_targets(self):
         """DHCP relay target IPs (ip helper-address values) for this server.
@@ -582,6 +664,37 @@ class DHCPServer(NetBoxModel):
                     {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
                 )
 
+        # Validate the reverse-proxy setup
+        if self.ha_proxy_enabled:
+            errors = {}
+            if not self.ha_relationship_id:
+                errors["ha_proxy_enabled"] = "The HA reverse proxy only applies to servers in an HA relationship."
+            if not self.ha_address:
+                errors["ha_address"] = "HA address is required when the HA reverse proxy is enabled."
+            if not self.ha_egress_base_port:
+                errors["ha_egress_base_port"] = "An egress base port is required when the HA reverse proxy is enabled."
+            if self.ha_tls:
+                errors["ha_tls"] = (
+                    "Leave HA TLS disabled when the reverse proxy is enabled: KEA speaks plain HTTP to the "
+                    "proxy over loopback, and the proxy owns the TLS connection to the peer."
+                )
+            if errors:
+                raise ValidationError(errors)
+
+        if self.ctrl_socket_proxy_enabled:
+            errors = {}
+            if not self.ctrl_socket_http_enabled:
+                errors["ctrl_socket_proxy_enabled"] = (
+                    "The control socket reverse proxy requires the HTTP control socket to be enabled."
+                )
+            elif self.ctrl_socket_http_address not in ("127.0.0.1", "::1"):
+                errors["ctrl_socket_http_address"] = (
+                    "The HTTP control socket must be bound to 127.0.0.1 when the reverse proxy is enabled — "
+                    "the proxy binds the public address on the same port."
+                )
+            if errors:
+                raise ValidationError(errors)
+
         # Validate no port conflicts between KEA daemon ports and Stork agent group ports
         if self.stork_agent_group:
             self._validate_stork_port_conflicts()
@@ -631,6 +744,18 @@ class DHCPServer(NetBoxModel):
                 conflicting = stork_ports[self.ha_port]
                 errors["ha_port"] = (
                     f"HA port ({self.ha_port}) conflicts with {conflicting} in Stork agent group '{group.name}'."
+                )
+
+        # Check HA egress port conflicts — one loopback port per peer, so the
+        # whole range has to stay clear of the Stork agent ports.
+        if self.ha_proxy_enabled and self.ha_egress_base_port:
+            peer_count = max(len(self.ha_peers()), 1)
+            egress_ports = range(self.ha_egress_base_port, self.ha_egress_base_port + peer_count)
+            clashes = [port for port in egress_ports if port in stork_ports]
+            if clashes:
+                errors["ha_egress_base_port"] = (
+                    f"HA egress ports {list(egress_ports)} conflict with "
+                    f"{stork_ports[clashes[0]]} in Stork agent group '{group.name}'."
                 )
 
         if errors:
@@ -3333,11 +3458,26 @@ class DHCPHARelationship(NetBoxModel):
             }
 
         # Add peers configuration (all servers in this relationship)
+        #
+        # With a local reverse proxy in front of KEA, every URL in this list is a
+        # loopback URL: this server's own entry is where its HA listener binds, and
+        # each other entry is the local egress port the proxy forwards from. TLS is
+        # then entirely the proxy's business — never emit trust-anchor/cert-file/
+        # key-file here, because KEA speaks plain HTTP in both directions.
+        proxied = bool(this_server and this_server.ha_proxy_enabled)
+
         peers_config = []
         for server in self.servers.select_related("ip_address"):
+            if proxied and server.pk == this_server.pk:
+                url = f"http://127.0.0.1:{this_server.ha_port or 8080}/"
+            elif proxied:
+                url = f"http://127.0.0.1:{this_server.ha_egress_port(server)}/"
+            else:
+                url = server.ha_url
+
             peer_dict = {
                 "name": server.name,
-                "url": server.ha_url,
+                "url": url,
                 "role": server.ha_role,
                 "auto-failover": server.ha_auto_failover,
             }
