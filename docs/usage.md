@@ -8,7 +8,7 @@ description: Task-oriented walkthroughs — quick start, relay configuration, Ke
 ## Quick start
 
 1. **Create DHCP servers** — Navigate to *DHCP KEA → DHCP Servers* and add your Kea server instances.
-2. **Configure HA** *(optional)* — Set up HA relationships, assign server roles, and configure HA peer address / port / TLS.
+2. **Configure HA** *(optional)* — Set up HA relationships, assign server roles, configure HA peer address / port / TLS, and optionally set the relationship's shared basic-auth credentials.
 3. **Configure control sockets** *(optional)* — Enable HTTP and/or Unix control sockets on DHCP servers.
 4. **Configure Stork** *(optional)* — Set up Stork servers and agent groups for monitoring.
 5. **Define options** — Create option definitions for vendor-specific options, or use standard DHCP options.
@@ -134,6 +134,30 @@ When creating or updating DHCP servers via the API, HA peer connection details a
 
 - `ha_address` and `ctrl_socket_http_address` must be valid IP addresses when provided.
 - `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled.
+
+### HA basic-auth fields on DHCPHARelationship
+
+The HA channel's HTTP basic-auth credentials belong to the **relationship**, not to its members — Kea treats them as one shared secret for the cluster.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `ha_basic_auth_user` | string | `""` | Username every member requires on its HA listener and presents to its peers. |
+| `ha_basic_auth_password` | string | `""` | The paired password. |
+
+Both values are written onto **every** peer entry in the emitted `high-availability` hook configuration, including the entry whose `name` matches `this-server-name`. That is deliberate, and it reflects how Kea reads the peer list:
+
+- The entry matching `this-server-name` configures the member's **own listener** — the credentials there are what it *requires* from incoming connections.
+- Every other entry configures a connection it *makes* — the credentials there are what it *presents* to that peer.
+
+Writing the same pair everywhere therefore makes the channel authenticated symmetrically. Leaving both blank is valid and yields an unauthenticated HA channel; setting only one of the two is rejected.
+
+!!! warning "Changing these changes every member at once"
+
+    Because each member's listener requirement comes from the same field, editing the pair alters both sides of the channel. Fetch and deploy every member of the relationship **together** — a half-applied rollout leaves one server requiring credentials its partner is not yet sending, which surfaces as HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`.
+
+!!! danger "The credentials appear in the rendered configuration"
+
+    The password is part of the JSON returned by the `kea-config/` endpoint and written to the deployed config file. Suppress diff output when deploying it, and treat archived config copies as holding the secret.
 
 ## D2 daemon configuration generation
 

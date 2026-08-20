@@ -61,6 +61,31 @@
                 </table>
             </div>
         </div>
+        <div class="card mt-3">
+            <h5 class="card-header">HA Authentication</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Basic Auth User</th>
+                        <td>{{ object.ha_basic_auth_user|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Basic Auth Password</th>
+                        <td>
+                            {% if object.ha_basic_auth_password %}
+                            <span class="badge bg-success text-white">Set</span>
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                <p class="text-muted mt-2">
+                    <small>Shared by every member: each one&#39;s HA listener requires these credentials and
+                    presents them to its peers.</small>
+                </p>
+            </div>
+        </div>
         {% if enable_ddns %}
         <div class="card">
             <h5 class="card-header">DDNS</h5>

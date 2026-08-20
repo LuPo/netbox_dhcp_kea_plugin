@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 (2026-08-20)
+
+### Changed — HA basic-auth credentials moved to the relationship (breaking)
+The HA channel's HTTP basic-auth credentials were per-server (`DHCPServer.ha_basic_auth_user` / `ha_basic_auth_password`), but Kea uses them as a shared secret for the whole cluster. Nothing kept the members in sync, so a member left blank produced a config authenticated in one direction only — its own listener required nothing, while its partner still sent credentials. Nothing failed and nothing warned.
+
+- **`DHCPHARelationship.ha_basic_auth_user` / `ha_basic_auth_password`** — one pair for the relationship, rendered onto **every** peer entry including the one matching `this-server-name`. That entry configures the member's own listener; the others configure what it presents when dialling. Both blank remains valid (unauthenticated HA); half a pair is now rejected by `clean()`.
+- **Removed from `DHCPServer`** — the fields, their form fieldset and `DHCPServerSerializer` entries are gone. This is a **breaking API change** for any consumer reading them off a server; they now live on `DHCPHARelationshipSerializer`.
+- **Migration `0009`** copies each relationship's credentials from its primary member, falling back to any member that has them, then drops the server fields. It is reversible, writing the shared pair back onto every member.
+- The relationship detail view shows the user and *whether* a password is set — never the password.
+
+**Before deploying:** every rendered HA config changes, and not one-sidedly — a member that previously had no credentials now requires them on its listener. Both members of a relationship must be fetched and deployed **together**; a half-applied rollout gives HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`. Note also that the credentials appear in the rendered config file, so deployment diffs will print them on the first run after the migration.
+
 ## 0.9.0 (2026-06-09)
 
 ### Added — GraphQL API

@@ -124,8 +124,6 @@ class TestDHCPServerHAFields:
         assert server.ha_role == "primary"
         assert server.ha_url == "http://192.168.1.1:8000/"
         assert server.ha_auto_failover is True  # default
-        assert server.ha_basic_auth_user == ""
-        assert server.ha_basic_auth_password == ""
 
     def test_server_with_standby_role(self, dhcp_server_factory):
         """Test creating a standby server for hot-standby mode."""
@@ -183,26 +181,26 @@ class TestDHCPServerHAFields:
         assert server.ha_role == "backup"
         assert server.ha_auto_failover is False
 
-    def test_server_with_basic_auth(self, dhcp_server_factory):
-        """Test creating a server with HA basic authentication."""
+    def test_relationship_with_basic_auth(self, dhcp_server_factory):
+        """Test creating an HA relationship with basic authentication."""
         from netbox_dhcp_kea_plugin.models import DHCPHARelationship
 
         relationship = DHCPHARelationship.objects.create(
             name="auth-test",
             mode="hot-standby",
-        )
-
-        server = dhcp_server_factory(
-            ha_relationship=relationship,
-            ha_role="primary",
-            ha_address="192.168.1.1",
-            ha_port=8000,
             ha_basic_auth_user="kea-admin",
             ha_basic_auth_password="secret123",
         )
 
-        assert server.ha_basic_auth_user == "kea-admin"
-        assert server.ha_basic_auth_password == "secret123"
+        dhcp_server_factory(
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="192.168.1.1",
+            ha_port=8000,
+        )
+
+        assert relationship.ha_basic_auth_user == "kea-admin"
+        assert relationship.ha_basic_auth_password == "secret123"
 
     def test_server_without_ha(self, dhcp_server_factory):
         """Test that a server without HA has None/empty HA fields."""
@@ -212,8 +210,6 @@ class TestDHCPServerHAFields:
         assert server.ha_role == ""
         assert server.ha_url == ""
         assert server.ha_auto_failover is True
-        assert server.ha_basic_auth_user == ""
-        assert server.ha_basic_auth_password == ""
 
 
 @pytest.mark.django_db
@@ -434,6 +430,8 @@ class TestDHCPServerHAConfiguration:
         relationship = DHCPHARelationship.objects.create(
             name="auth-config-test",
             mode="hot-standby",
+            ha_basic_auth_user="admin",
+            ha_basic_auth_password="secret",
         )
 
         server = dhcp_server_factory(
@@ -441,8 +439,6 @@ class TestDHCPServerHAConfiguration:
             ha_role="primary",
             ha_address="192.168.1.1",
             ha_port=8000,
-            ha_basic_auth_user="admin",
-            ha_basic_auth_password="secret",
         )
 
         ha_config = server.get_ha_config()
@@ -472,6 +468,113 @@ class TestDHCPServerHAConfiguration:
         peer = ha_config["peers"][0]
         assert "basic-auth-user" not in peer
         assert "basic-auth-password" not in peer
+
+    def test_basic_auth_is_written_onto_every_peer_including_this_server(self, dhcp_server_factory):
+        """The shared secret must reach every entry, self included.
+
+        The entry matching this-server-name configures the server's own listener;
+        the others configure what it presents when dialing. Omitting either half
+        leaves the channel authenticated in one direction only.
+        """
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="symmetric-auth-test",
+            mode="hot-standby",
+            ha_basic_auth_user="kea_ha",
+            ha_basic_auth_password="secret",
+        )
+        primary = dhcp_server_factory(
+            name="kea-primary",
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="192.168.1.1",
+            ha_port=8000,
+        )
+        dhcp_server_factory(
+            name="kea-standby",
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_address="192.168.1.2",
+            ha_port=8000,
+        )
+
+        ha_config = relationship.to_kea_dict(this_server=primary)
+
+        assert ha_config["this-server-name"] == "kea-primary"
+        assert {peer["name"] for peer in ha_config["peers"]} == {"kea-primary", "kea-standby"}
+        for peer in ha_config["peers"]:
+            assert peer["basic-auth-user"] == "kea_ha"
+            assert peer["basic-auth-password"] == "secret"
+
+    def test_relationship_without_credentials_emits_no_basic_auth_keys(self, dhcp_server_factory):
+        """An unauthenticated relationship must not emit the keys at all."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="unauthenticated-test",
+            mode="hot-standby",
+        )
+        primary = dhcp_server_factory(
+            name="anon-primary",
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="192.168.1.1",
+            ha_port=8000,
+        )
+        dhcp_server_factory(
+            name="anon-standby",
+            ha_relationship=relationship,
+            ha_role="standby",
+            ha_address="192.168.1.2",
+            ha_port=8000,
+        )
+
+        peers = relationship.to_kea_dict(this_server=primary)["peers"]
+
+        assert len(peers) == 2
+        for peer in peers:
+            assert "basic-auth-user" not in peer
+            assert "basic-auth-password" not in peer
+
+
+@pytest.mark.django_db
+class TestHABasicAuthValidation:
+    """A half-set credential pair is never valid."""
+
+    def test_user_without_password_is_rejected(self):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship(
+            name="half-credentials-user",
+            mode="hot-standby",
+            ha_basic_auth_user="kea_ha",
+        )
+
+        with pytest.raises(ValidationError) as exc:
+            relationship.clean()
+
+        assert "ha_basic_auth_password" in exc.value.message_dict
+
+    def test_password_without_user_is_rejected(self):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship(
+            name="half-credentials-password",
+            mode="hot-standby",
+            ha_basic_auth_password="secret",
+        )
+
+        with pytest.raises(ValidationError) as exc:
+            relationship.clean()
+
+        assert "ha_basic_auth_user" in exc.value.message_dict
+
+    def test_both_blank_is_valid(self):
+        """Unauthenticated HA is a legitimate configuration."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        DHCPHARelationship(name="no-credentials", mode="hot-standby").clean()
 
 
 @pytest.mark.django_db
@@ -1297,3 +1400,147 @@ class TestToKeaDictHAHooksLibraryPaths:
         lease_hooks = [h for h in hooks if "libdhcp_lease_cmds.so" in h["library"]]
         assert len(lease_hooks) == 1
         assert lease_hooks[0]["library"] == "/opt/kea/hooks/libdhcp_lease_cmds.so"
+
+
+# ---------------------------------------------------------------------------
+# Migration 0009 — credentials move from the members to the relationship
+# ---------------------------------------------------------------------------
+#
+# Driven against a stand-in for the historical model registry rather than a real
+# database. django-test-migrations was tried and rejected: its
+# apply_initial_migration() drops every table and replays the whole migration
+# graph from zero, which on a NetBox schema takes minutes per test and, because
+# --reuse-db is in addopts, leaves the shared test database unusable if it fails
+# partway. The old DHCPServer fields no longer exist on the real model, so a stub
+# is in any case the only way to exercise the forward direction.
+
+
+class _FakeServerQuerySet:
+    """The slice of the queryset API the migration helpers actually use."""
+
+    def __init__(self, servers):
+        self._servers = list(servers)
+
+    def order_by(self, *fields):
+        return _FakeServerQuerySet(sorted(self._servers, key=lambda s: tuple(getattr(s, f) for f in fields)))
+
+    def filter(self, **kwargs):
+        return _FakeServerQuerySet([s for s in self._servers if all(getattr(s, k) == v for k, v in kwargs.items())])
+
+    def exclude(self, **kwargs):
+        return _FakeServerQuerySet(
+            [s for s in self._servers if not all(getattr(s, k) == v for k, v in kwargs.items())]
+        )
+
+    def first(self):
+        return self._servers[0] if self._servers else None
+
+    def update(self, **kwargs):
+        for server in self._servers:
+            for key, value in kwargs.items():
+                setattr(server, key, value)
+        return len(self._servers)
+
+
+class _FakeServer:
+    def __init__(self, name, ha_role, ha_basic_auth_user="", ha_basic_auth_password=""):
+        self.name = name
+        self.ha_role = ha_role
+        self.ha_basic_auth_user = ha_basic_auth_user
+        self.ha_basic_auth_password = ha_basic_auth_password
+
+
+class _FakeRelationship:
+    def __init__(self, servers, ha_basic_auth_user="", ha_basic_auth_password=""):
+        self.servers = _FakeServerQuerySet(servers)
+        self.ha_basic_auth_user = ha_basic_auth_user
+        self.ha_basic_auth_password = ha_basic_auth_password
+
+    def save(self, update_fields=None):
+        pass
+
+
+def _fake_apps(relationships):
+    """Stand in for the historical registry the migration receives."""
+
+    class _Model:
+        class objects:
+            @staticmethod
+            def all():
+                return relationships
+
+    class _Apps:
+        @staticmethod
+        def get_model(app_label, model_name):
+            return _Model
+
+    return _Apps
+
+
+def _migration():
+    import importlib
+
+    return importlib.import_module("netbox_dhcp_kea_plugin.migrations.0009_ha_basic_auth_on_relationship")
+
+
+class TestHABasicAuthDataMigration:
+    """Forward and reverse behaviour of migration 0009's data step."""
+
+    def test_primary_credentials_land_on_the_relationship(self):
+        relationship = _FakeRelationship(
+            [
+                _FakeServer("kea-b", "standby"),
+                _FakeServer("kea-a", "primary", "kea_ha_user", "secret"),
+            ]
+        )
+
+        _migration().move_credentials_to_relationship(_fake_apps([relationship]), None)
+
+        assert relationship.ha_basic_auth_user == "kea_ha_user"
+        assert relationship.ha_basic_auth_password == "secret"
+
+    def test_primary_wins_over_a_member_that_also_has_credentials(self):
+        """Two members disagree — the primary is the authority."""
+        relationship = _FakeRelationship(
+            [
+                _FakeServer("kea-a", "primary", "from_primary", "primary_secret"),
+                _FakeServer("kea-b", "standby", "from_standby", "standby_secret"),
+            ]
+        )
+
+        _migration().move_credentials_to_relationship(_fake_apps([relationship]), None)
+
+        assert relationship.ha_basic_auth_user == "from_primary"
+        assert relationship.ha_basic_auth_password == "primary_secret"
+
+    def test_falls_back_to_a_member_when_the_primary_has_none(self):
+        """The production shape, inverted: only the non-primary was configured."""
+        relationship = _FakeRelationship(
+            [
+                _FakeServer("kea-a", "primary"),
+                _FakeServer("kea-b", "standby", "kea_ha_user", "secret"),
+            ]
+        )
+
+        _migration().move_credentials_to_relationship(_fake_apps([relationship]), None)
+
+        assert relationship.ha_basic_auth_user == "kea_ha_user"
+        assert relationship.ha_basic_auth_password == "secret"
+
+    def test_unauthenticated_relationship_stays_blank(self):
+        relationship = _FakeRelationship([_FakeServer("kea-a", "primary"), _FakeServer("kea-b", "standby")])
+
+        _migration().move_credentials_to_relationship(_fake_apps([relationship]), None)
+
+        assert relationship.ha_basic_auth_user == ""
+        assert relationship.ha_basic_auth_password == ""
+
+    def test_reverse_writes_the_pair_onto_every_member(self):
+        members = [_FakeServer("kea-a", "primary"), _FakeServer("kea-b", "standby")]
+        relationship = _FakeRelationship(members, "kea_ha_user", "secret")
+
+        _migration().push_credentials_back_to_servers(_fake_apps([relationship]), None)
+
+        for server in members:
+            assert server.ha_basic_auth_user == "kea_ha_user"
+            assert server.ha_basic_auth_password == "secret"

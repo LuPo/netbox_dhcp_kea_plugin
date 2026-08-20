@@ -190,8 +190,6 @@ def dhcp_server_factory(db, service_template):
         ha_port=8080,
         ha_tls=False,
         ha_auto_failover=True,
-        ha_basic_auth_user="",
-        ha_basic_auth_password="",
     ):
         counter[0] += 1
         suffix = ip_suffix or counter[0]
@@ -213,8 +211,6 @@ def dhcp_server_factory(db, service_template):
             ha_port=ha_port,
             ha_tls=ha_tls,
             ha_auto_failover=ha_auto_failover,
-            ha_basic_auth_user=ha_basic_auth_user,
-            ha_basic_auth_password=ha_basic_auth_password,
         )
 
     return create_dhcp_server

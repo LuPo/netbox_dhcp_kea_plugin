@@ -299,16 +299,6 @@ class DHCPServer(NetBoxModel):
         help_text="Use TLS (HTTPS) for HA communication",
     )
     ha_auto_failover = models.BooleanField(default=True, help_text="Enable automatic failover for this server in HA")
-    ha_basic_auth_user = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Username for HTTP basic authentication in HA (optional)",
-    )
-    ha_basic_auth_password = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Password for HTTP basic authentication in HA (optional)",
-    )
     ha_proxy_enabled = models.BooleanField(
         default=False,
         verbose_name="HA reverse proxy",
@@ -3348,6 +3338,29 @@ class DHCPHARelationship(NetBoxModel):
     )
     http_client_threads = models.PositiveIntegerField(default=4, help_text="Number of HTTP client threads (0 = auto)")
 
+    # HTTP basic authentication on the HA channel. One shared secret for the whole
+    # relationship: it is written onto every peer entry, including each member's own,
+    # so every member requires it on its listener and presents it when dialing peers.
+    ha_basic_auth_user = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="HA basic-auth user",
+        help_text=(
+            "Username shared by every member of this relationship: what each member's HA "
+            "listener requires from incoming connections, and what it sends to its peers. "
+            "Leave blank for an unauthenticated HA channel."
+        ),
+    )
+    ha_basic_auth_password = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="HA basic-auth password",
+        help_text=(
+            "Password shared by every member of this relationship, paired with the "
+            "basic-auth user. Leave blank for an unauthenticated HA channel."
+        ),
+    )
+
     description = models.CharField(max_length=200, blank=True)
     d2_daemon = models.ForeignKey(
         "D2Daemon",
@@ -3386,6 +3399,21 @@ class DHCPHARelationship(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:dhcpharelationship", args=[self.pk])
+
+    def clean(self):
+        """Validate the HA basic-auth pair.
+
+        Both blank is valid — an unauthenticated HA channel is a legitimate
+        configuration — but half a credential pair never is.
+        """
+        super().clean()
+
+        if self.ha_basic_auth_user and not self.ha_basic_auth_password:
+            raise ValidationError(
+                {"ha_basic_auth_password": "A password is required when an HA basic-auth user is set."}
+            )
+        if self.ha_basic_auth_password and not self.ha_basic_auth_user:
+            raise ValidationError({"ha_basic_auth_user": "A user is required when an HA basic-auth password is set."})
 
     def is_valid_configuration(self):
         """Validate the HA relationship configuration.
@@ -3481,11 +3509,13 @@ class DHCPHARelationship(NetBoxModel):
                 "role": server.ha_role,
                 "auto-failover": server.ha_auto_failover,
             }
-            # Add basic auth if configured
-            if server.ha_basic_auth_user:
-                peer_dict["basic-auth-user"] = server.ha_basic_auth_user
-            if server.ha_basic_auth_password:
-                peer_dict["basic-auth-password"] = server.ha_basic_auth_password
+            # The relationship's shared credentials go on every entry, this server's
+            # own included: that entry configures its listener, the others what it
+            # presents when dialing. Anything less is authentication in one direction.
+            if self.ha_basic_auth_user:
+                peer_dict["basic-auth-user"] = self.ha_basic_auth_user
+            if self.ha_basic_auth_password:
+                peer_dict["basic-auth-password"] = self.ha_basic_auth_password
             peers_config.append(peer_dict)
 
         ha_config["peers"] = peers_config

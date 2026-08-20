@@ -340,8 +340,6 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "ha_port",
             "ha_tls",
             "ha_auto_failover",
-            "ha_basic_auth_user",
-            "ha_basic_auth_password",
             "stork_agent_group",
             "ctrl_socket_type",
             "ctrl_socket_http_address",
@@ -959,10 +957,6 @@ class DHCPServerForm(NetBoxModelForm):
                 InlineFields("ha_proxy_enabled", "ha_egress_base_port", label="Reverse Proxy"),
                 name="High Availability",
             ),
-            FieldSet(
-                InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
-                name="HA Authentication",
-            ),
         )
 
     class Meta:
@@ -993,15 +987,12 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_port",
             "ha_tls",
             "ha_auto_failover",
-            "ha_basic_auth_user",
-            "ha_basic_auth_password",
             "ha_proxy_enabled",
             "ha_egress_base_port",
             "ctrl_socket_proxy_enabled",
             "tags",
         )
         widgets = {
-            "ha_basic_auth_password": forms.PasswordInput(render_value=True),
             "ctrl_socket_type": HTMXSelect(),
         }
 
@@ -1761,6 +1752,10 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             name="Multi-Threading",
         ),
         FieldSet(
+            InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
+            name="HA Authentication",
+        ),
+        FieldSet(
             "ddns_enable_updates",
             "d2_daemon",
             "ddns_policy",
@@ -1782,12 +1777,17 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_basic_auth_user",
+            "ha_basic_auth_password",
             "description",
             "d2_daemon",
             "ddns_enable_updates",
             "ddns_policy",
             "tags",
         )
+        widgets = {
+            "ha_basic_auth_password": forms.PasswordInput(render_value=True),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1836,6 +1836,8 @@ class DHCPHARelationshipImportForm(NetBoxModelImportForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_basic_auth_user",
+            "ha_basic_auth_password",
             "description",
             "tags",
         )

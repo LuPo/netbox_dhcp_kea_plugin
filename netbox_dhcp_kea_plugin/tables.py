@@ -524,6 +524,17 @@ class DHCPHARelationshipTable(NetBoxTable):
     http_client_threads = tables.Column(verbose_name="http_client_threads")
     description = tables.Column(verbose_name="description")
     servers_count = tables.Column(verbose_name="servers", accessor="servers__count", orderable=False)
+    ha_basic_auth_user = tables.Column(verbose_name="basic_auth_user")
+    # Whether the channel is authenticated, never the secret itself.
+    ha_basic_auth = BooleanColumn(
+        verbose_name="basic_auth",
+        accessor="ha_basic_auth_user",
+        orderable=False,
+        # Without this, a blank user is an "empty value" and django-tables2 shows a
+        # placeholder instead of calling render() — an unauthenticated relationship
+        # would read as unknown rather than as off.
+        empty_values=(),
+    )
 
     class Meta(NetBoxTable.Meta):
         model = DHCPHARelationship
@@ -540,6 +551,8 @@ class DHCPHARelationshipTable(NetBoxTable):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_basic_auth",
+            "ha_basic_auth_user",
             "description",
             "servers_count",
             "actions",

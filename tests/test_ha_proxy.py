@@ -85,17 +85,26 @@ class TestHAProxyPeerURLs:
         assert [peer["name"] for peer in primary.ha_proxy["peers"]] == ["kea-b", "kea-c"]
 
     def test_basic_auth_survives_proxying(self, ha_pair, dhcp_server_factory):
-        relationship, primary, standby = ha_pair
-        standby.ha_basic_auth_user = "kea_ha"
-        standby.ha_basic_auth_password = "secret"
-        standby.save()
+        """Rewriting URLs to loopback must not disturb the shared credentials.
+
+        Both concerns land on the same peer entries, so they are asserted
+        together: every entry keeps the relationship's secret, and every entry
+        still points at the proxy.
+        """
+        relationship, primary, _ = ha_pair
+        relationship.ha_basic_auth_user = "kea_ha"
+        relationship.ha_basic_auth_password = "secret"
+        relationship.save()
         primary.ha_proxy_enabled = True
         primary.save()
 
         peers = {peer["name"]: peer for peer in relationship.to_kea_dict(this_server=primary)["peers"]}
 
-        assert peers["kea-b"]["basic-auth-user"] == "kea_ha"
-        assert peers["kea-b"]["basic-auth-password"] == "secret"
+        assert peers["kea-a"]["url"] == "http://127.0.0.1:8080/"
+        assert peers["kea-b"]["url"] == "http://127.0.0.1:18080/"
+        for peer in peers.values():
+            assert peer["basic-auth-user"] == "kea_ha"
+            assert peer["basic-auth-password"] == "secret"
 
     def test_no_tls_parameters_are_emitted(self, ha_pair):
         """TLS belongs to the proxy — KEA must stay plain HTTP."""
