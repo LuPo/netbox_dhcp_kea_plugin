@@ -299,15 +299,6 @@ class DHCPServer(NetBoxModel):
         help_text="Use TLS (HTTPS) for HA communication",
     )
     ha_auto_failover = models.BooleanField(default=True, help_text="Enable automatic failover for this server in HA")
-    ha_proxy_enabled = models.BooleanField(
-        default=False,
-        verbose_name="HA reverse proxy",
-        help_text=(
-            "Route HA traffic through a local reverse proxy (Envoy). KEA binds the loopback "
-            "address and dials local egress ports; the proxy terminates inbound TLS and "
-            "originates outbound TLS, so KEA itself never holds a certificate."
-        ),
-    )
     ha_egress_base_port = models.PositiveIntegerField(
         default=18080,
         null=True,
@@ -543,6 +534,18 @@ class DHCPServer(NetBoxModel):
         return None
 
     @property
+    def ha_proxy_enabled(self):
+        """Whether this server's HA traffic goes through a local reverse proxy.
+
+        Owned by the relationship, not the member: a cluster with the proxy on
+        some members and off others cannot work in either direction, so the flag
+        is read here rather than stored per server.
+        """
+        if not self.ha_relationship_id:
+            return False
+        return self.ha_relationship.ha_proxy_enabled
+
+    @property
     def ha_proxy(self):
         """Return the reverse-proxy plan for this server.
 
@@ -654,19 +657,17 @@ class DHCPServer(NetBoxModel):
                     {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
                 )
 
-        # Validate the reverse-proxy setup
+        # Validate this server against the relationship's reverse-proxy setting
         if self.ha_proxy_enabled:
             errors = {}
-            if not self.ha_relationship_id:
-                errors["ha_proxy_enabled"] = "The HA reverse proxy only applies to servers in an HA relationship."
             if not self.ha_address:
                 errors["ha_address"] = "HA address is required when the HA reverse proxy is enabled."
             if not self.ha_egress_base_port:
                 errors["ha_egress_base_port"] = "An egress base port is required when the HA reverse proxy is enabled."
             if self.ha_tls:
                 errors["ha_tls"] = (
-                    "Leave HA TLS disabled when the reverse proxy is enabled: KEA speaks plain HTTP to the "
-                    "proxy over loopback, and the proxy owns the TLS connection to the peer."
+                    "Leave HA TLS disabled: this server's HA relationship enables the reverse proxy, so KEA "
+                    "speaks plain HTTP to the proxy over loopback and the proxy owns the TLS connection."
                 )
             if errors:
                 raise ValidationError(errors)
@@ -3341,6 +3342,18 @@ class DHCPHARelationship(NetBoxModel):
     # HTTP basic authentication on the HA channel. One shared secret for the whole
     # relationship: it is written onto every peer entry, including each member's own,
     # so every member requires it on its listener and presents it when dialing peers.
+    ha_proxy_enabled = models.BooleanField(
+        default=False,
+        verbose_name="HA reverse proxy",
+        help_text=(
+            "Route HA traffic through a local reverse proxy (Envoy) on every member. KEA binds "
+            "the loopback address and dials local egress ports; the proxy terminates inbound TLS "
+            "and originates outbound TLS, so KEA itself never holds a certificate. This is all or "
+            "nothing for the relationship — a cluster with it on some members and off others "
+            "fails in both directions."
+        ),
+    )
+
     ha_basic_auth_user = models.CharField(
         max_length=100,
         blank=True,
@@ -3492,7 +3505,7 @@ class DHCPHARelationship(NetBoxModel):
         # each other entry is the local egress port the proxy forwards from. TLS is
         # then entirely the proxy's business — never emit trust-anchor/cert-file/
         # key-file here, because KEA speaks plain HTTP in both directions.
-        proxied = bool(this_server and this_server.ha_proxy_enabled)
+        proxied = bool(this_server and self.ha_proxy_enabled)
 
         peers_config = []
         for server in self.servers.select_related("ip_address"):

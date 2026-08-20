@@ -524,6 +524,7 @@ class DHCPHARelationshipTable(NetBoxTable):
     http_client_threads = tables.Column(verbose_name="http_client_threads")
     description = tables.Column(verbose_name="description")
     servers_count = tables.Column(verbose_name="servers", accessor="servers__count", orderable=False)
+    ha_proxy_enabled = BooleanColumn(verbose_name="ha_proxy")
     ha_basic_auth_user = tables.Column(verbose_name="basic_auth_user")
     # Whether the channel is authenticated, never the secret itself.
     ha_basic_auth = BooleanColumn(
@@ -551,6 +552,7 @@ class DHCPHARelationshipTable(NetBoxTable):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
             "ha_basic_auth",
             "ha_basic_auth_user",
             "description",

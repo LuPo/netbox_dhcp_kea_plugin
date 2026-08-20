@@ -135,6 +135,16 @@ When creating or updating DHCP servers via the API, HA peer connection details a
 - `ha_address` and `ctrl_socket_http_address` must be valid IP addresses when provided.
 - `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled.
 
+### HA reverse proxy
+
+`ha_proxy_enabled` is a field on **`DHCPHARelationship`**, not on the individual servers. When it is on, every member's rendered peer list is all-loopback: its own entry binds `127.0.0.1:<ha_port>`, and each peer entry points at a local egress port the proxy forwards from. No `trust-anchor` / `cert-file` / `key-file` is ever emitted, because KEA speaks plain HTTP in both directions and the proxy owns TLS.
+
+This is all-or-nothing by design. A relationship proxied on one member only fails in both directions: the unproxied peer dials plain HTTP at the other's proxy listener, while that proxy originates TLS to a KEA that speaks none. Making it a relationship field removes the possibility.
+
+Each server keeps its own `ha_egress_base_port` (default `18080`) — one consecutive loopback port per peer, ordered by peer name — because which local ports are free is a per-host question. `ha_tls` must be off on a member whose relationship enables the proxy.
+
+`DHCPServer.ha_proxy_enabled` is still readable in the API as a read-only field inherited from the relationship, alongside the computed `ha_proxy` plan that Ansible consumes.
+
 ### HA basic-auth fields on DHCPHARelationship
 
 The HA channel's HTTP basic-auth credentials belong to the **relationship**, not to its members — Kea treats them as one shared secret for the cluster.

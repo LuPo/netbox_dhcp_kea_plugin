@@ -954,7 +954,7 @@ class DHCPServerForm(NetBoxModelForm):
                 "ha_role",
                 InlineFields("ha_address", "ha_port", label="HA Peer"),
                 InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
-                InlineFields("ha_proxy_enabled", "ha_egress_base_port", label="Reverse Proxy"),
+                "ha_egress_base_port",
                 name="High Availability",
             ),
         )
@@ -987,7 +987,6 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_port",
             "ha_tls",
             "ha_auto_failover",
-            "ha_proxy_enabled",
             "ha_egress_base_port",
             "ctrl_socket_proxy_enabled",
             "tags",
@@ -1752,6 +1751,10 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             name="Multi-Threading",
         ),
         FieldSet(
+            "ha_proxy_enabled",
+            name="Reverse Proxy",
+        ),
+        FieldSet(
             InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
             name="HA Authentication",
         ),
@@ -1777,6 +1780,7 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "description",
@@ -1836,6 +1840,7 @@ class DHCPHARelationshipImportForm(NetBoxModelImportForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
             "description",

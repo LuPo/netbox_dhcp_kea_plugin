@@ -10,6 +10,14 @@ The HA channel's HTTP basic-auth credentials were per-server (`DHCPServer.ha_bas
 - **Migration `0009`** copies each relationship's credentials from its primary member, falling back to any member that has them, then drops the server fields. It is reversible, writing the shared pair back onto every member.
 - The relationship detail view shows the user and *whether* a password is set — never the password.
 
+### Changed — HA reverse proxy moved to the relationship (breaking)
+`DHCPServer.ha_proxy_enabled` was the only HA setting read solely from the server whose config is being rendered, so nothing stopped a relationship with the proxy on some members and off others — a state that cannot work in either direction. The unproxied peer dials plain HTTP at the other's Envoy listener (its `ha_url` is necessarily `http://`, since TLS and the proxy are mutually exclusive), while that Envoy originates TLS to a KEA that speaks none.
+
+- **`DHCPHARelationship.ha_proxy_enabled`** — the flag now belongs to the cluster, making the mixed state unrepresentable. `DHCPServer.ha_proxy_enabled` remains as a read-only property inheriting from the relationship, so `ha_proxy` plans and the Ansible inventory are unaffected.
+- **`ha_egress_base_port` stays on the server** — loopback port availability is a per-host concern.
+- **Migration `0010`** enables the flag on any relationship that had it set on at least one member, and is reversible.
+- Removed from `DHCPServerForm` and writable API input; the relationship form and serializer gain it.
+
 **Before deploying:** every rendered HA config changes, and not one-sidedly — a member that previously had no credentials now requires them on its listener. Both members of a relationship must be fetched and deployed **together**; a half-applied rollout gives HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`. Note also that the credentials appear in the rendered config file, so deployment diffs will print them on the first run after the migration.
 
 ## 0.9.0 (2026-06-09)

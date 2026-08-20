@@ -1,7 +1,7 @@
 """
 Tests for the HA reverse-proxy plan (Envoy in front of KEA).
 
-When ha_proxy_enabled is set, KEA must speak plain HTTP over loopback in both
+When the relationship's ha_proxy_enabled is set, KEA must speak plain HTTP over loopback in both
 directions: its own peer entry points at the loopback listener, and every other
 peer points at a local egress port that the proxy forwards from. The proxy plan
 published to Ansible has to agree with those URLs, since the two configurations
@@ -51,8 +51,8 @@ class TestHAProxyPeerURLs:
 
     def test_own_entry_moves_to_loopback(self, ha_pair):
         relationship, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         peers = {peer["name"]: peer for peer in relationship.to_kea_dict(this_server=primary)["peers"]}
 
@@ -60,8 +60,8 @@ class TestHAProxyPeerURLs:
 
     def test_partner_is_reached_through_a_local_egress_port(self, ha_pair):
         relationship, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         peers = {peer["name"]: peer for peer in relationship.to_kea_dict(this_server=primary)["peers"]}
 
@@ -76,8 +76,8 @@ class TestHAProxyPeerURLs:
             ha_address="10.0.0.3",
             ha_port=8080,
         )
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         # Ordered by peer name, so the assignment does not move when a server
         # is added or the query order changes.
@@ -95,8 +95,8 @@ class TestHAProxyPeerURLs:
         relationship.ha_basic_auth_user = "kea_ha"
         relationship.ha_basic_auth_password = "secret"
         relationship.save()
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         peers = {peer["name"]: peer for peer in relationship.to_kea_dict(this_server=primary)["peers"]}
 
@@ -106,11 +106,36 @@ class TestHAProxyPeerURLs:
             assert peer["basic-auth-user"] == "kea_ha"
             assert peer["basic-auth-password"] == "secret"
 
+    def test_the_flag_reaches_every_member(self, ha_pair):
+        """The whole point of moving it: no member can disagree.
+
+        A cluster proxied on one side only fails in both directions — the
+        unproxied peer dials plain HTTP at the other's Envoy listener, while
+        that Envoy originates TLS to a KEA that speaks none.
+        """
+        relationship, primary, standby = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
+
+        assert primary.ha_proxy_enabled is True
+        assert standby.ha_proxy_enabled is True
+
+        # Both members render an all-loopback peer list, not just the one edited.
+        for member in (primary, standby):
+            peers = relationship.to_kea_dict(this_server=member)["peers"]
+            assert all(peer["url"].startswith("http://127.0.0.1:") for peer in peers)
+
+    def test_a_server_outside_a_relationship_is_never_proxied(self, dhcp_server_factory):
+        standalone = dhcp_server_factory(name="kea-solo")
+
+        assert standalone.ha_proxy_enabled is False
+        assert standalone.ha_proxy == {"enabled": False}
+
     def test_no_tls_parameters_are_emitted(self, ha_pair):
         """TLS belongs to the proxy — KEA must stay plain HTTP."""
         relationship, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         peers = relationship.to_kea_dict(this_server=primary)["peers"]
 
@@ -131,9 +156,9 @@ class TestHAProxyPlan:
         assert primary.ha_proxy == {"enabled": False}
 
     def test_plan_describes_both_directions(self, ha_pair):
-        _, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
-        primary.save()
+        relationship, primary, _ = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
 
         plan = primary.ha_proxy
 
@@ -154,8 +179,9 @@ class TestHAProxyPlan:
         ]
 
     def test_control_socket_port_is_published_when_proxied(self, ha_pair):
-        _, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
+        relationship, primary, _ = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
         primary.ctrl_socket_type = "http"
         primary.ctrl_socket_http_address = "127.0.0.1"
         primary.ctrl_socket_http_port = 8000
@@ -165,8 +191,9 @@ class TestHAProxyPlan:
         assert primary.ha_proxy["ctrl_port"] == 8000
 
     def test_control_socket_port_is_absent_when_not_proxied(self, ha_pair):
-        _, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
+        relationship, primary, _ = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
         primary.ctrl_socket_type = "http"
         primary.ctrl_socket_http_port = 8000
         primary.save()
@@ -179,8 +206,9 @@ class TestHAProxyValidation:
     """clean() guards the combinations that cannot work."""
 
     def test_ha_tls_and_proxy_are_mutually_exclusive(self, ha_pair):
-        _, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
+        relationship, primary, _ = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
         primary.ha_tls = True
 
         with pytest.raises(ValidationError) as exc:
@@ -189,8 +217,9 @@ class TestHAProxyValidation:
         assert "ha_tls" in exc.value.message_dict
 
     def test_proxy_requires_an_ha_address(self, ha_pair):
-        _, primary, _ = ha_pair
-        primary.ha_proxy_enabled = True
+        relationship, primary, _ = ha_pair
+        relationship.ha_proxy_enabled = True
+        relationship.save()
         primary.ha_address = ""
 
         with pytest.raises(ValidationError) as exc:
