@@ -11,6 +11,17 @@
 {% endblock %}
 
 {% block content %}
+{% if pki_identity_advisories %}
+<div class="row">
+    <div class="col">
+        {% for advisory in pki_identity_advisories %}
+        <div class="alert alert-warning" role="alert">
+            <i class="mdi mdi-alert"></i> {{ advisory }}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <div class="col col-md-6">
         <div class="card">
@@ -92,6 +103,21 @@
                         </td>
                     </tr>
                     {% endif %}
+                    <tr>
+                        <th>PKI FQDN</th>
+                        <td>
+                            {% if pki_record %}
+                            <a href="{{ pki_record.get_absolute_url }}">{{ object.pki_fqdn }}</a>
+                            {% elif object.pki_fqdn %}
+                            {{ object.pki_fqdn }}
+                            {% if pki_dns_integration %}
+                            <span class="badge bg-warning float-end" style="color: #000000;">unbound</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                     <tr>
                         <th>Hook Groups</th>
                         <td>

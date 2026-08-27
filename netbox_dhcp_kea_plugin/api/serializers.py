@@ -238,6 +238,8 @@ class DHCPServerSerializer(NetBoxModelSerializer):
     ha_relationship = serializers.SerializerMethodField()
     ha_url = serializers.SerializerMethodField()
     ha_proxy = serializers.SerializerMethodField()
+    # Inherited from the HA relationship, so read-only here.
+    ha_proxy_enabled = serializers.BooleanField(read_only=True)
     stork_agent_group = NestedStorkAgentGroupSerializer(read_only=True)
     d2_daemon = serializers.SerializerMethodField()
     effective_d2_daemon = serializers.SerializerMethodField()
@@ -266,11 +268,11 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ha_tls",
             "ha_url",
             "ha_auto_failover",
-            "ha_basic_auth_user",
-            "ha_basic_auth_password",
             "ha_proxy_enabled",
             "ha_egress_base_port",
             "ha_proxy",
+            "pki_record_id",
+            "pki_fqdn",
             "stork_agent_group",
             "d2_daemon",
             "effective_d2_daemon",
@@ -283,6 +285,7 @@ class DHCPServerSerializer(NetBoxModelSerializer):
             "ctrl_socket_http_port",
             "ctrl_socket_unix_path",
             "ctrl_socket_proxy_enabled",
+            "stork_proxy_enabled",
             "tags",
             "custom_fields",
             "created",
@@ -563,6 +566,9 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
+            "ha_basic_auth_user",
+            "ha_basic_auth_password",
             "description",
             "servers",
             "d2_daemon",

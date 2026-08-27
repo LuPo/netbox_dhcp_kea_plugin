@@ -8,7 +8,7 @@ description: Task-oriented walkthroughs — quick start, relay configuration, Ke
 ## Quick start
 
 1. **Create DHCP servers** — Navigate to *DHCP KEA → DHCP Servers* and add your Kea server instances.
-2. **Configure HA** *(optional)* — Set up HA relationships, assign server roles, and configure HA peer address / port / TLS.
+2. **Configure HA** *(optional)* — Set up HA relationships, assign server roles, configure HA peer address / port / TLS, and optionally set the relationship's shared basic-auth credentials.
 3. **Configure control sockets** *(optional)* — Enable HTTP and/or Unix control sockets on DHCP servers.
 4. **Configure Stork** *(optional)* — Set up Stork servers and agent groups for monitoring.
 5. **Define options** — Create option definitions for vendor-specific options, or use standard DHCP options.
@@ -134,6 +134,119 @@ When creating or updating DHCP servers via the API, HA peer connection details a
 
 - `ha_address` and `ctrl_socket_http_address` must be valid IP addresses when provided.
 - `ha_port` must differ from `ctrl_socket_http_port` when the HTTP control socket is enabled.
+
+### HA reverse proxy
+
+`ha_proxy_enabled` is a field on **`DHCPHARelationship`**, not on the individual servers. When it is on, every member's rendered peer list is all-loopback: its own entry binds `127.0.0.1:<ha_port>`, and each peer entry points at a local egress port the proxy forwards from. No `trust-anchor` / `cert-file` / `key-file` is ever emitted, because KEA speaks plain HTTP in both directions and the proxy owns TLS.
+
+This is all-or-nothing by design. A relationship proxied on one member only fails in both directions: the unproxied peer dials plain HTTP at the other's proxy listener, while that proxy originates TLS to a KEA that speaks none. Making it a relationship field removes the possibility.
+
+Each server keeps its own `ha_egress_base_port` (default `18080`) — one consecutive loopback port per peer, ordered by peer name — because which local ports are free is a per-host question. `ha_tls` must be off on a member whose relationship enables the proxy.
+
+`DHCPServer.ha_proxy_enabled` is still readable in the API as a read-only field inherited from the relationship, alongside the computed `ha_proxy` plan that Ansible consumes.
+
+#### The `ha_proxy` plan
+
+`ha_proxy` is a read-only field on the `DHCPServer` serializer. It is the contract the deployment builds Envoy's configuration from — both the Kea configuration and the proxy configuration derive from it, so the two cannot disagree. When the relationship does not enable the proxy it is exactly `{"enabled": false}`.
+
+```json
+{
+  "enabled": true,
+  "public_address": "10.0.0.1",
+  "public_port": 8080,
+  "internal_address": "127.0.0.1",
+  "internal_port": 8080,
+  "ctrl_port": 8000,
+  "peers": [
+    {
+      "name": "kea-b",
+      "egress_port": 18080,
+      "upstream_address": "10.0.0.2",
+      "upstream_port": 8080,
+      "fqdn": "kea-b.pki.example.net",
+      "sni": "kea-b.pki.example.net"
+    }
+  ]
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `enabled` | Whether this host runs the proxy. Inherited from the relationship; the whole dict is `{"enabled": false}` when off. |
+| `public_address` / `public_port` | Where Envoy binds for inbound HA traffic — the member's own `ha_address` / `ha_port`. |
+| `internal_address` / `internal_port` | Where Kea's own HA listener binds. Always loopback, on the same port. |
+| `ctrl_port` | The HTTP control-socket port to publish, or `null` when the control-socket proxy is off. |
+| `exporter_port` | The Stork agent's Prometheus exporter port to publish, or `null` when `stork_proxy_enabled` is off. The exporter itself moves to `127.0.0.1` so the proxy can bind the public address on that port. |
+| `peers[].name` | The peer `DHCPServer`'s name. |
+| `peers[].egress_port` | Loopback port Kea dials to reach that peer; base port plus an index over peers **ordered by name**, so it does not move when a server is added. |
+| `peers[].upstream_address` / `upstream_port` | The peer's public endpoint, for reference. Envoy dials `fqdn`. |
+| `peers[].fqdn` | The peer's PKI identity — the egress cluster address, and the exact SAN to accept. |
+| `peers[].sni` | The TLS SNI to send. Identical to `fqdn`; it is **never** an address. |
+
+`peers` lists only the *other* members of this server's relationship, which is what scopes a cluster: an Envoy built from this plan accepts exactly those names and no others.
+
+### PKI identity (`pki_fqdn`)
+
+When the reverse proxy is enabled, each Envoy verifies its peers by pinning the **exact** subject alternative name it will accept. `pki_fqdn` on `DHCPServer` is that name, and the same string is used three ways: the egress cluster address Envoy dials, the TLS SNI it sends, and the SAN matcher it accepts. It must therefore match the certificate byte for byte.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `pki_fqdn` | string | `""` | The host's DNS name in the internal PKI — certificate CN, pinned SAN, and TLS SNI. |
+
+It is published per peer in the `ha_proxy` plan as `peers[].fqdn` (and as `peers[].sni`), which is what the deployment builds Envoy's configuration from.
+
+**It must be a DNS name, never an address.** TLS SNI cannot carry an IP address at all ([RFC 6066](https://www.rfc-editor.org/rfc/rfc6066)), so a certificate can never match one; `clean()` rejects a `pki_fqdn` that parses as IPv4 or IPv6. A server in a relationship with the proxy enabled must have one, and saving without it fails rather than rendering a configuration that cannot complete a handshake.
+
+**Normalisation.** The value is stored lower-case with any trailing dot stripped, on every path in — the form, the API, an import. A DNS record's absolute `kea-a01.example.net.` and a typed `Kea-A01.Example.NET` therefore produce one pin, not two that differ by a dot or by case.
+
+**Bound to a DNS record, when the DNS plugin is present.** With [netbox-plugin-dns](https://github.com/peteeckel/netbox-plugin-dns) installed and `enable_netbox_dns` on, the server form shows a **PKI DNS record** picker (unmanaged `A` / `AAAA` / `CNAME` records) *instead of* the text field, and the chosen record is recorded in `pki_record_id`. That binding is enforced:
+
+| Action | Result |
+|---|---|
+| Delete a bound DNS record | **Refused** — the error names the servers using it. A certificate pinned to a name nothing serves would fail, and PKI onboarding refuses names that do not resolve. |
+| Delete the DHCP server | The bound record is deleted with it, unless another server is bound to the same one. |
+| Rename the bound record | `pki_fqdn` is re-derived, so the published pin cannot drift from the certificate. |
+
+The binding is a soft reference rather than a database foreign key, because a real FK would make netbox-plugin-dns mandatory for every installation. The integrity above is supplied by signals that are only connected when the DNS plugin is importable.
+
+!!! tip "Without netbox-plugin-dns"
+
+    The plugin stays fully usable: the form shows `pki_fqdn` as a plain text field and the stored string is authoritative. Nothing is bound, so nothing is protected or cascaded — a typed name is just a name.
+
+!!! note "Restricting to your issuable zones"
+
+    The optional `pki_allowed_zone_suffixes` plugin setting lists the zones your CA will issue certificates for. It is **empty by default**, which turns the restriction off entirely. Once you set it:
+
+    - The **record picker only offers records in those zones**, so you cannot pick a name that would then be refused. If no zone matches, the picker is empty rather than full of unusable choices.
+    - A `pki_fqdn` outside them is **rejected at save time**, with an error naming the zones and pointing at the setting. That covers the API, imports and scripts, which have no picker.
+
+    Adding a zone to your CA means adding it here too.
+
+The server detail page shows the **PKI FQDN**, linked to its DNS record when one is bound. With the DNS integration on, a name that is *not* bound is shown as plain text with an **unbound** marker — the form binds every name it sets, so an unbound one arrived by another route (the API, an import, or before the integration was enabled). Without the integration every name is unbound, so no marker is shown. It also shows a **warning banner** when the identity has no matching unmanaged DNS record in NetBox, or when that record is not active. That one is advisory and never blocks a save: netbox-plugin-dns is optional, and the record may legitimately live in DNS that NetBox does not manage.
+
+### HA basic-auth fields on DHCPHARelationship
+
+The HA channel's HTTP basic-auth credentials belong to the **relationship**, not to its members — Kea treats them as one shared secret for the cluster.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `ha_basic_auth_user` | string | `""` | Username every member requires on its HA listener and presents to its peers. |
+| `ha_basic_auth_password` | string | `""` | The paired password. |
+
+Both values are written onto **every** peer entry in the emitted `high-availability` hook configuration, including the entry whose `name` matches `this-server-name`. That is deliberate, and it reflects how Kea reads the peer list:
+
+- The entry matching `this-server-name` configures the member's **own listener** — the credentials there are what it *requires* from incoming connections.
+- Every other entry configures a connection it *makes* — the credentials there are what it *presents* to that peer.
+
+Writing the same pair everywhere therefore makes the channel authenticated symmetrically. Leaving both blank is valid and yields an unauthenticated HA channel; setting only one of the two is rejected.
+
+!!! warning "Changing these changes every member at once"
+
+    Because each member's listener requirement comes from the same field, editing the pair alters both sides of the channel. Fetch and deploy every member of the relationship **together** — a half-applied rollout leaves one server requiring credentials its partner is not yet sending, which surfaces as HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`.
+
+!!! danger "The credentials appear in the rendered configuration"
+
+    The password is part of the JSON returned by the `kea-config/` endpoint and written to the deployed config file. Suppress diff output when deploying it, and treat archived config copies as holding the secret.
 
 ## D2 daemon configuration generation
 

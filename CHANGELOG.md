@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.10.0 (2026-08-20)
+
+!!! note
+
+    This release ships as a single migration, `0009_ha_relationship_settings_and_pki`, which carries a 0.9.0 database forward. It moves the HA credentials and reverse-proxy flag onto the relationship before dropping the per-server columns, so upgrade rather than recreate if those values matter.
+
+### Changed — HA basic-auth credentials moved to the relationship (breaking)
+The HA channel's HTTP basic-auth credentials were per-server (`DHCPServer.ha_basic_auth_user` / `ha_basic_auth_password`), but Kea uses them as a shared secret for the whole cluster. Nothing kept the members in sync, so a member left blank produced a config authenticated in one direction only — its own listener required nothing, while its partner still sent credentials. Nothing failed and nothing warned.
+
+- **`DHCPHARelationship.ha_basic_auth_user` / `ha_basic_auth_password`** — one pair for the relationship, rendered onto **every** peer entry including the one matching `this-server-name`. That entry configures the member's own listener; the others configure what it presents when dialling. Both blank remains valid (unauthenticated HA); half a pair is now rejected by `clean()`.
+- **Removed from `DHCPServer`** — the fields, their form fieldset and `DHCPServerSerializer` entries are gone. This is a **breaking API change** for any consumer reading them off a server; they now live on `DHCPHARelationshipSerializer`.
+- **The 0.10.0 migration** copies each relationship's credentials from its primary member, falling back to any member that has them, then drops the server fields. It is reversible, writing the shared pair back onto every member.
+- The relationship detail view shows the user and *whether* a password is set — never the password.
+
+### Fixed — the Stork exporter fought the reverse proxy for the public address
+The Stork agent's Prometheus exporter is configured from its agent group, which binds `0.0.0.0`. On a host fronted by a local reverse proxy that is the same address and port the proxy wants, so the two clash.
+
+- **`DHCPServer.stork_proxy_enabled`** — when set, the generated agent env binds the exporter to `127.0.0.1` instead of the group's address, leaving the public address free for the proxy. The port is unchanged; only the bind address moves.
+- The `ha_proxy` plan gains **`exporter_port`**, so the proxy knows which port to bind publicly and forward — the same contract `ctrl_port` already uses.
+- Validation rejects the flag on a server with no Stork agent group, or one whose operating mode runs no exporter.
+
+### Changed — the Stork server URL prefers its DNS name
+`StorkServer.url` was built from the IP address, so `STORK_AGENT_SERVER_URL` always pointed at a bare address. It now uses the `dns_name` recorded on the IPAM address when there is one, falling back to the address, and strips a trailing dot. With `use_tls` this matters: a certificate is issued for a name, and a client dialling the address has nothing to match it against.
+
+### Fixed — the reverse-proxy plan published an unusable SNI
+`DHCPServer.ha_proxy` set each peer's `sni` to `ha_address`, an IP address. TLS SNI cannot carry an address at all ([RFC 6066](https://www.rfc-editor.org/rfc/rfc6066)), so nothing built from that field could complete a handshake.
+
+- **`DHCPServer.pki_fqdn`** — the host's DNS name in the internal PKI. One string serves as the certificate CN, the SAN each peer pins, and the TLS SNI; `ha_proxy` now publishes it per peer as `peers[].fqdn` and `peers[].sni`. Pinning exact SANs per relationship is what keeps one HA cluster from accepting another's members, so the accept lists are plugin output rather than deployment configuration.
+- **Validation** — a `pki_fqdn` that parses as an IPv4/IPv6 address is rejected, and a member of a proxied relationship must have one; without it the proxy cannot be configured at all.
+- **Normalisation** — stored lower-case with any trailing dot stripped, so a DNS record's absolute `host.example.net.` and a typed `Host.Example.NET` cannot become two different pins.
+- **Bound to the DNS record when the DNS plugin is present.** Picking a record records it in `pki_record_id` and derives `pki_fqdn` from it. The binding is then enforced by signals: the record **cannot be deleted while bound** (the error names the servers), deleting a server deletes its bound record unless another server shares it, and renaming the record re-derives `pki_fqdn` so the pin cannot drift from the certificate. It is a soft reference rather than a foreign key — a real FK to `netbox_dns.Record` is a `fields.E300` system-check error wherever that app is absent, which would abort `migrate` and make the DNS plugin mandatory for everyone.
+- **netbox-plugin-dns stays optional.** When it is installed and `enable_netbox_dns` is on, the server form shows the record picker *instead of* the text field; without it the plain text field remains and nothing is bound, protected or cascaded. The 0.10.0 migration seeds it, where it can, from an unmanaged active `A`/`AAAA` record whose address is the server's own IP, and no-ops when the DNS plugin is absent. It deliberately will not adopt a **managed** record — those are regenerated from IPAM and carry the host's IPAM name rather than the service name a certificate is issued for, so adopting one would produce a confidently wrong pin that fails at the TLS handshake, which is worse than a blank field that fails loudly at save time. `CNAME`s cannot be matched by address at all, so hosts following the service-CNAME convention are expected to stay blank and have the name set by an operator.
+- New optional `pki_allowed_zone_suffixes` setting names the zones your CA issues for. Empty by default (restriction disabled); once set, the **record picker only offers records in those zones** — empty rather than full of unusable choices when nothing matches — and a name outside them is **rejected at save time** with an error naming the zones and the setting, rather than failing later at certificate request. The server detail page separately shows a non-blocking warning when the identity has no matching active DNS record in NetBox — advisory, since the DNS plugin is optional and records may be managed elsewhere.
+
+`StorkServer` is deliberately untouched: Stork reaches Kea through the per-host agent over its own mutually-authenticated gRPC channel, which does not pass through Envoy, so it belongs in no accept list. Putting it in one would make every new Kea cluster a Stork change.
+
+### Changed — HA reverse proxy moved to the relationship (breaking)
+`DHCPServer.ha_proxy_enabled` was the only HA setting read solely from the server whose config is being rendered, so nothing stopped a relationship with the proxy on some members and off others — a state that cannot work in either direction. The unproxied peer dials plain HTTP at the other's Envoy listener (its `ha_url` is necessarily `http://`, since TLS and the proxy are mutually exclusive), while that Envoy originates TLS to a KEA that speaks none.
+
+- **`DHCPHARelationship.ha_proxy_enabled`** — the flag now belongs to the cluster, making the mixed state unrepresentable. `DHCPServer.ha_proxy_enabled` remains as a read-only property inheriting from the relationship, so `ha_proxy` plans and the Ansible inventory are unaffected.
+- **`ha_egress_base_port` stays on the server** — loopback port availability is a per-host concern.
+- **The 0.10.0 migration** enables the flag on any relationship that had it set on at least one member, and is reversible.
+- Removed from `DHCPServerForm` and writable API input; the relationship form and serializer gain it.
+
+**Before deploying:** every rendered HA config changes, and not one-sidedly — a member that previously had no credentials now requires them on its listener. Both members of a relationship must be fetched and deployed **together**; a half-applied rollout gives HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`. Note also that the credentials appear in the rendered config file, so deployment diffs will print them on the first run after the migration.
+
 ## 0.9.0 (2026-06-09)
 
 ### Added — GraphQL API

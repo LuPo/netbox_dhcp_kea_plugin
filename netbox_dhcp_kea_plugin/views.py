@@ -336,6 +336,19 @@ class OptionDataClientClassesView(generic.ObjectView):
 
 
 # DHCPServer Views
+def _pki_dns_integration_active():
+    """True when PKI identities are expected to be bound to netbox_dns records."""
+    from netbox.plugins.utils import get_plugin_config
+
+    if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_netbox_dns"):
+        return False
+    try:
+        import netbox_dns  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 class DHCPServerView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
 
@@ -373,6 +386,18 @@ class DHCPServerView(generic.ObjectView):
             "unreachable_pools": unreachable_pools,
             "enable_stork": get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"),
             "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
+            # Advisory only — a valid PKI name may be absent from NetBox's DNS
+            # records, so this is shown rather than enforced at save time.
+            "pki_identity_advisories": instance.pki_identity_advisories(),
+            # Resolved once here rather than called from the template, which
+            # would re-query for every reference.
+            "pki_record": instance.pki_record(),
+            # Whether the DNS integration is active. Only then is an unbound
+            # name worth flagging — the form binds every name it sets, so an
+            # unbound one arrived some other way (API, import, or before the
+            # integration was switched on). Without the integration every name
+            # is unbound and the marker would be noise on every server.
+            "pki_dns_integration": _pki_dns_integration_active(),
         }
 
 
@@ -440,6 +465,13 @@ class DHCPServerEditView(generic.ObjectEditView):
 
 class DHCPServerDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPServer.objects.all()
+
+
+class DHCPServerBulkEditView(generic.BulkEditView):
+    queryset = models.DHCPServer.objects.all()
+    filterset = filtersets.DHCPServerFilterSet
+    table = tables.DHCPServerTable
+    form = forms.DHCPServerBulkEditForm
 
 
 class DHCPServerBulkDeleteView(generic.BulkDeleteView):
@@ -785,6 +817,8 @@ class DHCPHARelationshipView(generic.ObjectView):
 
         return {
             "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
+            # Why the badge says Invalid. Empty when the configuration is fine.
+            "configuration_errors": instance.configuration_errors(),
         }
 
 

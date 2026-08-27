@@ -15,6 +15,7 @@ PLUGINS_CONFIG = {
         "enable_stork": True,
         "enable_netbox_dns": False,
         "enable_ddns": False,
+        "pki_allowed_zone_suffixes": [],
     },
 }
 ```
@@ -28,9 +29,10 @@ Every setting is optional; omitted keys fall back to their default.
 | `top_level_menu` | `True` | Display the plugin as a top-level menu in NetBox's navigation rather than nested under "Plugins". |
 | `menu_name` | `"DHCP KEA"` | Label used for the plugin menu. |
 | `enable_stork` | `True` | Toggle ISC Stork monitoring integration. When `False`, all Stork-related menu entries, form fields, filters, API endpoints, and UI affordances are hidden. |
-| `enable_netbox_dns` | `False` | Toggle linking of DNS A / AAAA / CNAME records (from [`netbox-plugin-dns`](https://github.com/peteeckel/netbox-plugin-dns)) as IP sources on `OptionData`. Required for `enable_ddns`. |
+| `enable_netbox_dns` | `False` | Toggle the [`netbox-plugin-dns`](https://github.com/peteeckel/netbox-plugin-dns) integration: DNS A / AAAA / CNAME records as IP sources on `OptionData`, and the DNS record picker for a server's `pki_fqdn`. Required for `enable_ddns`. The DNS plugin stays optional — without it those fields fall back to plain values. |
 | `enable_ddns` | `False` | Toggle the optional Kea 3.0+ Dynamic DNS subsystem (D2 daemons, TSIG keys, DDNS domains, DDNS policies). Requires `enable_netbox_dns: True`. |
 | `ddns_secret_backend` | `"plaintext"` | Backend identifier consulted by `TSIGKey.get_secret()`. Only `"plaintext"` is shipped today; `"vault"` is reserved. |
+| `pki_allowed_zone_suffixes` | `[]` | DNS zone suffixes your internal CA will issue certificates for, e.g. `[".pki.example.net"]`. A leading dot is optional. **Empty disables the check.** When set, a `DHCPServer.pki_fqdn` outside these zones is rejected on save — see [PKI identity](usage.md#pki-identity-pki_fqdn). |
 | `d2_default_control_socket_path` | `"/tmp/kea-dhcp-ddns-ctrl.sock"` | Pre-fills the control socket field on new `D2Daemon` rows. |
 | `model_defaults` | *(see below)* | Per-model default values, including reservation modes and lease lifetimes. |
 

@@ -121,6 +121,7 @@ _urlpatterns = [
     path("dhcp-servers/", views.DHCPServerListView.as_view(), name="dhcpserver_list"),
     path("dhcp-servers/add/", views.DHCPServerEditView.as_view(), name="dhcpserver_add"),
     path("dhcp-servers/import/", views.DHCPServerImportView.as_view(), name="dhcpserver_bulk_import"),
+    path("dhcp-servers/edit/", views.DHCPServerBulkEditView.as_view(), name="dhcpserver_bulk_edit"),
     path("dhcp-servers/delete/", views.DHCPServerBulkDeleteView.as_view(), name="dhcpserver_bulk_delete"),
     path("dhcp-servers/<int:pk>/", views.DHCPServerView.as_view(), name="dhcpserver"),
     path("dhcp-servers/<int:pk>/edit/", views.DHCPServerEditView.as_view(), name="dhcpserver_edit"),

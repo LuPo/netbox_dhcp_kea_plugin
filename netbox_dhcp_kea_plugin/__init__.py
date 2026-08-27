@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 
 from netbox.plugins import PluginConfig
@@ -22,6 +22,11 @@ class DHCPKEAConfig(PluginConfig):
         "menu_name": "DHCP KEA",
         "enable_stork": True,
         "enable_netbox_dns": False,
+        # Zone suffixes the internal PKI will issue certificates for. Purely
+        # advisory: a pki_fqdn outside these logs a warning, never blocks a save,
+        # because the issuable list lives with the CA and changes independently.
+        # Empty (the default) disables the check.
+        "pki_allowed_zone_suffixes": [],
         "enable_ddns": False,
         "ddns_secret_backend": "plaintext",
         "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
@@ -50,6 +55,11 @@ class DHCPKEAConfig(PluginConfig):
     def ready(self):
         """Extend Prefix API serializer with DHCP config and relay targets."""
         super().ready()
+
+        # Integrity for the PKI identity binding. No-op without netbox_dns.
+        from .signals import connect_dns_signals
+
+        connect_dns_signals()
 
         from ipam.api.serializers import PrefixSerializer
 

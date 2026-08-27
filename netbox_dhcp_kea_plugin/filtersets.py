@@ -64,6 +64,7 @@ class DHCPServerFilterSet(NetBoxModelFilterSet):
             "ha_relationship",
             "ha_role",
             "ha_auto_failover",
+            "pki_fqdn",
             "stork_agent_group",
             "ctrl_socket_type",
             "d2_daemon",

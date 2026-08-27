@@ -14,6 +14,18 @@ from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
 
+def pki_allowed_zone_suffixes():
+    """Zone suffixes the internal PKI issues certificates for.
+
+    Normalised to compare against a DNS name: no leading dot, lower-case. Empty
+    (the default) means the restriction is switched off entirely.
+    """
+    from netbox.plugins.utils import get_plugin_config
+
+    configured = get_plugin_config("netbox_dhcp_kea_plugin", "pki_allowed_zone_suffixes") or []
+    return [suffix.lstrip(".").lower() for suffix in configured]
+
+
 class Hook(NetBoxModel):
     """KEA Hook Library configuration.
 
@@ -299,23 +311,32 @@ class DHCPServer(NetBoxModel):
         help_text="Use TLS (HTTPS) for HA communication",
     )
     ha_auto_failover = models.BooleanField(default=True, help_text="Enable automatic failover for this server in HA")
-    ha_basic_auth_user = models.CharField(
-        max_length=100,
+    # PKI identity.
+    #
+    # pki_record_id is a *soft* reference to a netbox_dns.Record — deliberately
+    # not a ForeignKey. A string FK to an app that is not in INSTALLED_APPS is a
+    # fields.E300/E307 system-check error, which aborts migrate and runserver, so
+    # a real FK would make netbox-plugin-dns mandatory for everyone. Holding the
+    # pk instead keeps the DNS plugin optional, and signals.py supplies the
+    # integrity a FK would have given: the record cannot be deleted while bound,
+    # deleting the server deletes the record, and renaming the record re-derives
+    # pki_fqdn. Those signals are only connected when netbox_dns is importable.
+    #
+    # Named to read like Django's FK attname on purpose — it holds exactly that —
+    # but do not add a `pki_record` ForeignKey beside it without renaming this.
+    pki_record_id = models.PositiveIntegerField(
+        null=True,
         blank=True,
-        help_text="Username for HTTP basic authentication in HA (optional)",
+        verbose_name="PKI DNS record",
+        help_text="The netbox-plugin-dns record this identity is bound to, when that plugin is installed.",
     )
-    ha_basic_auth_password = models.CharField(
-        max_length=100,
+    pki_fqdn = models.CharField(
+        max_length=253,
         blank=True,
-        help_text="Password for HTTP basic authentication in HA (optional)",
-    )
-    ha_proxy_enabled = models.BooleanField(
-        default=False,
-        verbose_name="HA reverse proxy",
+        verbose_name="PKI FQDN",
         help_text=(
-            "Route HA traffic through a local reverse proxy (Envoy). KEA binds the loopback "
-            "address and dials local egress ports; the proxy terminates inbound TLS and "
-            "originates outbound TLS, so KEA itself never holds a certificate."
+            "Resolved from the PKI DNS record when one is set. This is the certificate CN, "
+            "the SAN peers pin, and the TLS SNI — one string, all three places."
         ),
     )
     ha_egress_base_port = models.PositiveIntegerField(
@@ -334,6 +355,15 @@ class DHCPServer(NetBoxModel):
         help_text=(
             "Expose the HTTP control socket through the local reverse proxy. The socket itself "
             "must be bound to 127.0.0.1."
+        ),
+    )
+    stork_proxy_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Stork exporter reverse proxy",
+        help_text=(
+            "Expose the Stork agent's Prometheus exporter through the local reverse proxy. "
+            "The exporter then binds 127.0.0.1 instead of 0.0.0.0, leaving the public address "
+            "on that port free for the proxy to bind."
         ),
     )
     stork_agent_group = models.ForeignKey(
@@ -448,7 +478,41 @@ class DHCPServer(NetBoxModel):
         """Return the color associated with the current status for badge display."""
         return DeviceStatusChoices.colors.get(self.status, "secondary")
 
+    def pki_record(self):
+        """Resolve the bound netbox_dns record, or None.
+
+        Returns None when nothing is bound, when netbox_dns is not installed, or
+        when the row has gone missing — callers treat all three the same way.
+        """
+        if not self.pki_record_id:
+            return None
+        try:
+            from netbox_dns.models import Record as DNSRecord
+        except ImportError:
+            return None
+        return DNSRecord.objects.filter(pk=self.pki_record_id).first()
+
+    @staticmethod
+    def normalize_pki_fqdn(value):
+        """Normalise a DNS name into the exact string a certificate carries.
+
+        ``Record.fqdn`` is stored absolute (``kea-a01.example.net.``) but a SAN
+        matcher and TLS SNI must be relative and lower-case. Divergence by a
+        trailing dot or by case fails the handshake with unhelpful errors, so
+        every path that sets ``pki_fqdn`` goes through here.
+        """
+        if not value:
+            return ""
+        return value.strip().rstrip(".").lower()
+
     def save(self, *args, **kwargs):
+        # A bound record is the authority; otherwise normalise whatever was typed.
+        bound = self.pki_record()
+        if bound is not None:
+            self.pki_fqdn = self.normalize_pki_fqdn(bound.fqdn)
+        else:
+            self.pki_fqdn = self.normalize_pki_fqdn(self.pki_fqdn)
+
         # Check if this is a new instance or service_template changed
         creating = self.pk is None
         old_template = None
@@ -553,6 +617,18 @@ class DHCPServer(NetBoxModel):
         return None
 
     @property
+    def ha_proxy_enabled(self):
+        """Whether this server's HA traffic goes through a local reverse proxy.
+
+        Owned by the relationship, not the member: a cluster with the proxy on
+        some members and off others cannot work in either direction, so the flag
+        is read here rather than stored per server.
+        """
+        if not self.ha_relationship_id:
+            return False
+        return self.ha_relationship.ha_proxy_enabled
+
+    @property
     def ha_proxy(self):
         """Return the reverse-proxy plan for this server.
 
@@ -567,6 +643,12 @@ class DHCPServer(NetBoxModel):
         if self.ctrl_socket_proxy_enabled and self.ctrl_socket_http_enabled:
             ctrl_port = self.ctrl_socket_http_port
 
+        # The exporter moves to loopback when proxied, so the proxy has to know
+        # which port to bind publicly and forward — same contract as ctrl_port.
+        exporter_port = None
+        if self.stork_proxy_enabled and self.stork_agent_group_id:
+            exporter_port = self.stork_agent_group.prometheus_exporter_port
+
         return {
             "enabled": True,
             "public_address": self.ha_address,
@@ -574,13 +656,19 @@ class DHCPServer(NetBoxModel):
             "internal_address": "127.0.0.1",
             "internal_port": self.ha_port or 8080,
             "ctrl_port": ctrl_port,
+            "exporter_port": exporter_port,
             "peers": [
                 {
                     "name": peer.name,
                     "egress_port": self.ha_egress_port(peer),
                     "upstream_address": peer.ha_address,
                     "upstream_port": peer.ha_port or 8080,
-                    "sni": peer.ha_address,
+                    # The peer's PKI identity: the egress cluster address, the
+                    # TLS SNI, and the exact SAN matcher are all this one string.
+                    # An address cannot serve here — SNI cannot carry one at all
+                    # (RFC 6066) — which is why sni is no longer ha_address.
+                    "fqdn": peer.pki_fqdn,
+                    "sni": peer.pki_fqdn,
                 }
                 for peer in self.ha_peers()
             ],
@@ -664,22 +752,44 @@ class DHCPServer(NetBoxModel):
                     {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
                 )
 
-        # Validate the reverse-proxy setup
+        # Validate the PKI identity
+        self._validate_pki_identity()
+
+        # Validate this server against the relationship's reverse-proxy setting
         if self.ha_proxy_enabled:
             errors = {}
-            if not self.ha_relationship_id:
-                errors["ha_proxy_enabled"] = "The HA reverse proxy only applies to servers in an HA relationship."
             if not self.ha_address:
                 errors["ha_address"] = "HA address is required when the HA reverse proxy is enabled."
             if not self.ha_egress_base_port:
                 errors["ha_egress_base_port"] = "An egress base port is required when the HA reverse proxy is enabled."
             if self.ha_tls:
                 errors["ha_tls"] = (
-                    "Leave HA TLS disabled when the reverse proxy is enabled: KEA speaks plain HTTP to the "
-                    "proxy over loopback, and the proxy owns the TLS connection to the peer."
+                    "Leave HA TLS disabled: this server's HA relationship enables the reverse proxy, so KEA "
+                    "speaks plain HTTP to the proxy over loopback and the proxy owns the TLS connection."
                 )
             if errors:
                 raise ValidationError(errors)
+
+        if self.stork_proxy_enabled:
+            group = self.stork_agent_group
+            if group is None:
+                raise ValidationError(
+                    {
+                        "stork_proxy_enabled": (
+                            "The Stork exporter reverse proxy needs a Stork agent group — there is no "
+                            "exporter to move to loopback without one."
+                        )
+                    }
+                )
+            if group.operating_mode not in ("both", "prometheus-only"):
+                raise ValidationError(
+                    {
+                        "stork_proxy_enabled": (
+                            f"Stork agent group '{group.name}' does not run the Prometheus exporter "
+                            f"(operating mode is {group.operating_mode}), so there is nothing to proxy."
+                        )
+                    }
+                )
 
         if self.ctrl_socket_proxy_enabled:
             errors = {}
@@ -760,6 +870,93 @@ class DHCPServer(NetBoxModel):
 
         if errors:
             raise ValidationError(errors)
+
+    def _validate_pki_identity(self):
+        """Validate the PKI identity used to pin this host by SAN."""
+        errors = {}
+        fqdn = self.normalize_pki_fqdn(self.pki_fqdn)
+
+        # An address can never be an identity: TLS SNI cannot carry one at all
+        # (RFC 6066), and a SAN matcher built from it will never match.
+        if fqdn:
+            try:
+                ipaddress_module.ip_address(fqdn)
+            except ValueError:
+                pass
+            else:
+                errors["pki_fqdn"] = (
+                    f"'{fqdn}' is an IP address. The PKI identity must be a DNS name — TLS SNI "
+                    "cannot carry an address (RFC 6066), so a certificate can never match one."
+                )
+
+        # Without an identity the proxy cannot be configured at all, so fail here
+        # rather than let the deployment render something that cannot handshake.
+        if self.ha_proxy_enabled and not fqdn:
+            errors["pki_fqdn"] = (
+                "A PKI identity is required when the HA relationship enables the reverse proxy: "
+                "peers pin each other by this exact name, and Envoy dials it as the SNI."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+        if fqdn:
+            self._check_pki_fqdn_against_dns(fqdn)
+
+    def _check_pki_fqdn_against_dns(self, fqdn):
+        """Enforce the configured issuable zones.
+
+        Opt-in: ``pki_allowed_zone_suffixes`` is empty by default, which turns
+        the check off. An operator who sets it is declaring which zones their CA
+        will sign, so a name outside them is a save-time error rather than a log
+        line nobody reads — the certificate request would fail later anyway, at
+        a point much further from the person who typed the name.
+        """
+        suffixes = pki_allowed_zone_suffixes()
+        if not suffixes:
+            return
+
+        if not any(fqdn.endswith(suffix) for suffix in suffixes):
+            listed = ", ".join(sorted(suffixes))
+            raise ValidationError(
+                {
+                    "pki_fqdn": (
+                        f"'{fqdn}' is outside the zones this PKI issues certificates for ({listed}). "
+                        "Use a name in one of those zones, or add the new zone to the "
+                        "pki_allowed_zone_suffixes plugin setting once the CA can sign it."
+                    )
+                }
+            )
+
+    def pki_identity_advisories(self):
+        """Non-blocking observations about this host's PKI identity.
+
+        Surfaced on the detail page rather than raised: a name can be perfectly
+        valid while absent from NetBox's DNS records, because netbox_dns is
+        optional and a deployment may manage those records elsewhere. Blocking
+        on them would make the DNS plugin a de-facto requirement.
+        """
+        advisories = []
+        fqdn = self.normalize_pki_fqdn(self.pki_fqdn)
+        if not fqdn:
+            return advisories
+
+        try:
+            from netbox_dns.models import Record as DNSRecord
+        except ImportError:
+            return advisories
+
+        record = DNSRecord.objects.filter(fqdn__iexact=f"{fqdn}.", managed=False).first()
+        if record is None:
+            advisories.append(
+                f"No unmanaged DNS record in NetBox matches the PKI FQDN '{fqdn}'. PKI onboarding "
+                "resolves the name before minting a certificate and refuses one that does not resolve."
+            )
+        elif record.status != "active":
+            advisories.append(
+                f"The DNS record for PKI FQDN '{fqdn}' is {record.status}, not active."
+            )
+        return advisories
 
     def get_ha_config(self):
         """Generate HA configuration if this server is part of an HA relationship.
@@ -3348,6 +3545,41 @@ class DHCPHARelationship(NetBoxModel):
     )
     http_client_threads = models.PositiveIntegerField(default=4, help_text="Number of HTTP client threads (0 = auto)")
 
+    # HTTP basic authentication on the HA channel. One shared secret for the whole
+    # relationship: it is written onto every peer entry, including each member's own,
+    # so every member requires it on its listener and presents it when dialing peers.
+    ha_proxy_enabled = models.BooleanField(
+        default=False,
+        verbose_name="HA reverse proxy",
+        help_text=(
+            "Route HA traffic through a local reverse proxy (Envoy) on every member. KEA binds "
+            "the loopback address and dials local egress ports; the proxy terminates inbound TLS "
+            "and originates outbound TLS, so KEA itself never holds a certificate. This is all or "
+            "nothing for the relationship — a cluster with it on some members and off others "
+            "fails in both directions."
+        ),
+    )
+
+    ha_basic_auth_user = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="HA basic-auth user",
+        help_text=(
+            "Username shared by every member of this relationship: what each member's HA "
+            "listener requires from incoming connections, and what it sends to its peers. "
+            "Leave blank for an unauthenticated HA channel."
+        ),
+    )
+    ha_basic_auth_password = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="HA basic-auth password",
+        help_text=(
+            "Password shared by every member of this relationship, paired with the "
+            "basic-auth user. Leave blank for an unauthenticated HA channel."
+        ),
+    )
+
     description = models.CharField(max_length=200, blank=True)
     d2_daemon = models.ForeignKey(
         "D2Daemon",
@@ -3387,6 +3619,66 @@ class DHCPHARelationship(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:dhcpharelationship", args=[self.pk])
 
+    def clean(self):
+        """Validate the HA basic-auth pair.
+
+        Both blank is valid — an unauthenticated HA channel is a legitimate
+        configuration — but half a credential pair never is.
+        """
+        super().clean()
+
+        if self.ha_basic_auth_user and not self.ha_basic_auth_password:
+            raise ValidationError(
+                {"ha_basic_auth_password": "A password is required when an HA basic-auth user is set."}
+            )
+        if self.ha_basic_auth_password and not self.ha_basic_auth_user:
+            raise ValidationError({"ha_basic_auth_user": "A user is required when an HA basic-auth password is set."})
+
+    def configuration_errors(self):
+        """Why this relationship's membership does not satisfy its mode.
+
+        Returns a list of human-readable reasons, empty when the configuration
+        is valid. The roles are mode-specific in KEA itself — a hot-standby pair
+        is primary/standby, while secondary belongs to load-balancing — so the
+        messages name the count found and, where the mistake is a role from the
+        other mode, say so.
+        """
+        roles = [server.ha_role for server in self.servers.all()]
+        primary = roles.count("primary")
+        secondary = roles.count("secondary")
+        standby = roles.count("standby")
+
+        errors = []
+
+        if self.mode == "hot-standby":
+            if primary != 1:
+                errors.append(f"Hot standby needs exactly one primary server; found {primary}.")
+            if standby != 1:
+                reason = f"Hot standby needs exactly one standby server; found {standby}."
+                if secondary:
+                    reason += (
+                        f" {secondary} member(s) are set to secondary, which is the load-balancing "
+                        "role — use standby here, or switch the mode to load-balancing."
+                    )
+                errors.append(reason)
+
+        elif self.mode == "load-balancing":
+            if primary != 1:
+                errors.append(f"Load balancing needs exactly one primary server; found {primary}.")
+            if secondary != 1:
+                reason = f"Load balancing needs exactly one secondary server; found {secondary}."
+                if standby:
+                    reason += (
+                        f" {standby} member(s) are set to standby, which is the hot-standby role — "
+                        "use secondary here, or switch the mode to hot standby."
+                    )
+                errors.append(reason)
+
+        elif self.mode == "passive-backup" and primary < 1:
+            errors.append("Passive backup needs at least one primary server; found none.")
+
+        return errors
+
     def is_valid_configuration(self):
         """Validate the HA relationship configuration.
 
@@ -3398,30 +3690,7 @@ class DHCPHARelationship(NetBoxModel):
         Returns:
             bool: True if configuration is valid, False otherwise
         """
-        servers = self.servers.all()
-
-        roles = [server.ha_role for server in servers]
-        primary_count = roles.count("primary")
-        secondary_count = roles.count("secondary")
-        standby_count = roles.count("standby")
-
-        if self.mode == "hot-standby":
-            if primary_count != 1:
-                return False
-            if standby_count != 1:
-                return False
-
-        elif self.mode == "load-balancing":
-            if primary_count != 1:
-                return False
-            if secondary_count != 1:
-                return False
-
-        elif self.mode == "passive-backup":
-            if primary_count < 1:
-                return False
-
-        return True
+        return not self.configuration_errors()
 
     def to_kea_dict(self, this_server=None):
         """Generate KEA high-availability configuration.
@@ -3464,7 +3733,7 @@ class DHCPHARelationship(NetBoxModel):
         # each other entry is the local egress port the proxy forwards from. TLS is
         # then entirely the proxy's business — never emit trust-anchor/cert-file/
         # key-file here, because KEA speaks plain HTTP in both directions.
-        proxied = bool(this_server and this_server.ha_proxy_enabled)
+        proxied = bool(this_server and self.ha_proxy_enabled)
 
         peers_config = []
         for server in self.servers.select_related("ip_address"):
@@ -3481,11 +3750,13 @@ class DHCPHARelationship(NetBoxModel):
                 "role": server.ha_role,
                 "auto-failover": server.ha_auto_failover,
             }
-            # Add basic auth if configured
-            if server.ha_basic_auth_user:
-                peer_dict["basic-auth-user"] = server.ha_basic_auth_user
-            if server.ha_basic_auth_password:
-                peer_dict["basic-auth-password"] = server.ha_basic_auth_password
+            # The relationship's shared credentials go on every entry, this server's
+            # own included: that entry configures its listener, the others what it
+            # presents when dialing. Anything less is authentication in one direction.
+            if self.ha_basic_auth_user:
+                peer_dict["basic-auth-user"] = self.ha_basic_auth_user
+            if self.ha_basic_auth_password:
+                peer_dict["basic-auth-password"] = self.ha_basic_auth_password
             peers_config.append(peer_dict)
 
         ha_config["peers"] = peers_config
@@ -3771,11 +4042,19 @@ class StorkServer(NetBoxModel):
 
     @property
     def url(self):
-        """Construct the full Stork server URL."""
+        """Construct the full Stork server URL.
+
+        Prefers the DNS name IPAM records for the address, falling back to the
+        address itself. With TLS that is not cosmetic: a certificate is issued
+        for a name, and a client dialling the bare IP has nothing to match it
+        against — TLS SNI cannot carry an address at all (RFC 6066).
+        """
         scheme = "https" if self.use_tls else "http"
-        ip = str(self.ip_address).split("/")[0]  # strip CIDR notation
+        host = (self.ip_address.dns_name or "").strip().rstrip(".")
+        if not host:
+            host = str(self.ip_address.address.ip)
         base = self.rest_base_url.rstrip("/")
-        return f"{scheme}://{ip}:{self.rest_port}{base}"
+        return f"{scheme}://{host}:{self.rest_port}{base}"
 
 
 class StorkAgentGroup(NetBoxModel):
@@ -3940,7 +4219,13 @@ class StorkAgentGroup(NetBoxModel):
         if self.operating_mode in ("both", "prometheus-only"):
             lines.append("### settings for exporting stats to Prometheus")
             lines.append("### the IP or hostname on which the agent exports Kea statistics to Prometheus")
-            lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS={self.prometheus_exporter_address}")
+            # Behind the reverse proxy the exporter has to give up the public
+            # address, which the proxy binds on the same port; it would
+            # otherwise clash with Envoy over 0.0.0.0.
+            exporter_address = self.prometheus_exporter_address
+            if server is not None and server.stork_proxy_enabled:
+                exporter_address = "127.0.0.1"
+            lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS={exporter_address}")
             lines.append("### the port on which the agent exports Kea statistics to Prometheus")
             lines.append(f"STORK_AGENT_PROMETHEUS_KEA_EXPORTER_PORT={self.prometheus_exporter_port}")
             lines.append("## enable or disable collecting per-subnet stats from Kea")

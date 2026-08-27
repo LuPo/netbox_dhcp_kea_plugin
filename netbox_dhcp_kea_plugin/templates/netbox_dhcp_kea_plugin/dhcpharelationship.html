@@ -24,10 +24,13 @@
                     <tr>
                         <th>Valid Configuration</th>
                         <td>
-                            {% if object.is_valid_configuration %}
-                            <span class="badge bg-success text-white">Valid</span>
-                            {% else %}
+                            {% if configuration_errors %}
                             <span class="badge bg-danger text-white">Invalid</span>
+                            <i class="mdi mdi-information-outline text-primary ms-1"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="{{ configuration_errors|join:' ' }}"></i>
+                            {% else %}
+                            <span class="badge bg-success text-white">Valid</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -57,6 +60,54 @@
                     <tr>
                         <th>Max Rejected Lease Updates</th>
                         <td>{{ object.max_rejected_lease_updates }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">Reverse Proxy</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>
+                            HA Reverse Proxy
+                            <i class="mdi mdi-information-outline text-primary ms-1"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="All or nothing for the relationship: every member routes HA traffic through its own local proxy, and KEA speaks plain HTTP over loopback in both directions."></i>
+                        </th>
+                        <td>
+                            {% if object.ha_proxy_enabled %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <h5 class="card-header">
+                HA Authentication
+                <i class="mdi mdi-information-outline text-primary ms-1"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="Shared by every member: each one&#39;s HA listener requires these credentials and presents them to its peers."></i>
+            </h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>Basic Auth User</th>
+                        <td>{{ object.ha_basic_auth_user|placeholder }}</td>
+                    </tr>
+                    <tr>
+                        <th>Basic Auth Password</th>
+                        <td>
+                            {% if object.ha_basic_auth_password %}
+                            <span class="badge bg-success text-white">Set</span>
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
                     </tr>
                 </table>
             </div>
@@ -128,7 +179,19 @@
             </div>
         </div>
         <div class="card mt-3">
-            <h5 class="card-header">HA Servers</h5>
+            <h5 class="card-header d-flex justify-content-between align-items-center">
+                <span>
+                    HA Servers
+                    <i class="mdi mdi-information-outline text-primary ms-1"
+                       data-bs-toggle="tooltip" data-bs-placement="top"
+                       title="To add an existing server to this HA relationship, edit the server and set its HA Relationship field."></i>
+                </span>
+                {% if perms.netbox_dhcp_kea_plugin.add_dhcpserver %}
+                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:dhcpserver_add' %}?ha_relationship={{ object.pk }}&amp;return_url={{ request.path }}" class="btn btn-sm btn-primary" title="Add a DHCP server to this HA relationship">
+                    <i class="mdi mdi-plus-thick"></i>
+                </a>
+                {% endif %}
+            </h5>
             <div class="card-body">
                 {% if object.servers.exists %}
                 <table class="table table-hover">
@@ -154,9 +217,6 @@
                 {% else %}
                 <p class="text-muted">No servers configured for this HA relationship</p>
                 {% endif %}
-                <p class="text-muted mt-2">
-                    <small>To add a server to this HA relationship, edit the server and set its HA Relationship field.</small>
-                </p>
             </div>
         </div>
     </div>

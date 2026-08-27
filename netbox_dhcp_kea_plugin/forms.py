@@ -2,6 +2,7 @@ from dcim.choices import DeviceStatusChoices
 from dcim.models import MACAddress, Manufacturer
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
@@ -20,7 +21,7 @@ from utilities.forms.fields import (
 )
 from utilities.forms.rendering import FieldSet, InlineFields
 from utilities.forms.utils import get_field_value
-from utilities.forms.widgets import HTMXSelect
+from utilities.forms.widgets import BulkEditNullBooleanSelect, HTMXSelect
 
 from .models import (
     ClientClass,
@@ -40,6 +41,7 @@ from .models import (
     SubnetPool,
     TSIGKey,
     VendorOptionSpace,
+    pki_allowed_zone_suffixes,
 )
 
 
@@ -340,8 +342,6 @@ class DHCPServerImportForm(NetBoxModelImportForm):
             "ha_port",
             "ha_tls",
             "ha_auto_failover",
-            "ha_basic_auth_user",
-            "ha_basic_auth_password",
             "stork_agent_group",
             "ctrl_socket_type",
             "ctrl_socket_http_address",
@@ -857,6 +857,9 @@ class DHCPServerForm(NetBoxModelForm):
     ip_address = DynamicModelChoiceField(
         queryset=IPAddress.objects.all(),
         help_text="IP address of the DHCP server (from NetBox IPAM)",
+        # NetBox's quick-add: a "+" beside the selector that creates the IP
+        # inline, so defining a server does not mean leaving for IPAM first.
+        quick_add=True,
     )
 
     service_template = DynamicModelChoiceField(
@@ -943,7 +946,7 @@ class DHCPServerForm(NetBoxModelForm):
                 *ctrl_socket_items,
                 name="Control Sockets",
             ),
-            FieldSet("stork_agent_group", name="Stork Monitoring"),
+            FieldSet("stork_agent_group", "stork_proxy_enabled", name="Stork Monitoring"),
             FieldSet(
                 "ddns_enable_updates",
                 "d2_daemon",
@@ -956,12 +959,15 @@ class DHCPServerForm(NetBoxModelForm):
                 "ha_role",
                 InlineFields("ha_address", "ha_port", label="HA Peer"),
                 InlineFields("ha_tls", "ha_auto_failover", label="HA Options"),
-                InlineFields("ha_proxy_enabled", "ha_egress_base_port", label="Reverse Proxy"),
+                "ha_egress_base_port",
                 name="High Availability",
             ),
+            # Exactly one of these exists at a time: the picker when
+            # netbox-plugin-dns is installed, the text field otherwise.
             FieldSet(
-                InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
-                name="HA Authentication",
+                "pki_record",
+                "pki_fqdn",
+                name="PKI Identity",
             ),
         )
 
@@ -993,15 +999,13 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_port",
             "ha_tls",
             "ha_auto_failover",
-            "ha_basic_auth_user",
-            "ha_basic_auth_password",
-            "ha_proxy_enabled",
             "ha_egress_base_port",
+            "pki_fqdn",
             "ctrl_socket_proxy_enabled",
+            "stork_proxy_enabled",
             "tags",
         )
         widgets = {
-            "ha_basic_auth_password": forms.PasswordInput(render_value=True),
             "ctrl_socket_type": HTMXSelect(),
         }
 
@@ -1025,6 +1029,11 @@ class DHCPServerForm(NetBoxModelForm):
                 if fname in self.fields:
                     del self.fields[fname]
 
+        # PKI identity. netbox_dns is optional, so pki_fqdn is always a plain
+        # text field; when the DNS plugin is present we add a record picker in
+        # front of it so the name is chosen from DNS rather than retyped.
+        self._add_pki_record_picker()
+
         # Determine the selected control socket type
         ctrl_socket_type = get_field_value(self, "ctrl_socket_type")
 
@@ -1047,6 +1056,91 @@ class DHCPServerForm(NetBoxModelForm):
                 del self.fields["option_data"]
             if "client_classes" in self.fields:
                 del self.fields["client_classes"]
+
+    def _add_pki_record_picker(self):
+        """Swap the PKI identity text field for a netbox_dns record picker.
+
+        With the DNS plugin installed the identity is *bound* to a record rather
+        than typed: the record cannot then be deleted out from under the
+        certificate, and renaming it re-derives the name. Without the plugin the
+        plain ``pki_fqdn`` text field stays, which is the supported way to run
+        this without netbox-plugin-dns.
+        """
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_netbox_dns"):
+            return
+        try:
+            from netbox_dns.models import Record as DNSRecord
+            from netbox_dns.models import Zone as DNSZone
+        except ImportError:
+            return
+
+        # Managed records are regenerated from IPAM, so they are the wrong thing
+        # to name a certificate after; the PKI name is a deliberate service record.
+        # Inactive records are excluded too: PKI onboarding resolves the name
+        # before minting a certificate and refuses one that does not resolve.
+        queryset = DNSRecord.objects.filter(
+            type__in=("A", "AAAA", "CNAME"), managed=False, status="active"
+        )
+        query_params = {"type": ["A", "AAAA", "CNAME"], "managed": False, "status": "active"}
+        help_text = (
+            "The DNS record naming this host in the PKI. The PKI FQDN is derived from it, "
+            "the record cannot be deleted while bound, and deleting this server deletes it."
+        )
+
+        suffixes = pki_allowed_zone_suffixes()
+        if suffixes:
+            # Restrict to what the CA will actually sign, so the picker cannot
+            # offer a name that clean() then rejects.
+            #
+            # The queryset filters on the record's own FQDN, which is what is
+            # validated. The dropdown is populated over the REST API, which has
+            # no suffix lookup, so it filters by zone instead — every record in a
+            # matching zone also matches by FQDN, making the offered set a subset
+            # of the valid one.
+            fqdn_filter = Q()
+            for suffix in suffixes:
+                fqdn_filter |= Q(fqdn__iendswith=f".{suffix}.") | Q(fqdn__iexact=f"{suffix}.")
+            queryset = queryset.filter(fqdn_filter)
+
+            zone_filter = Q()
+            for suffix in suffixes:
+                zone_filter |= Q(name__iendswith=f".{suffix}") | Q(name__iexact=suffix)
+            query_params["zone_id"] = list(
+                DNSZone.objects.filter(zone_filter).values_list("pk", flat=True)
+            ) or [0]  # no matching zone: offer nothing rather than everything
+
+            help_text += " Restricted to the zones in pki_allowed_zone_suffixes."
+
+        self.fields["pki_record"] = DynamicModelChoiceField(
+            queryset=queryset,
+            query_params=query_params,
+            required=False,
+            label="PKI DNS record",
+            help_text=help_text,
+            initial=self.instance.pki_record_id if self.instance.pk else None,
+        )
+        # The name is derived from the record now, so drop the free-text field.
+        self.fields.pop("pki_fqdn", None)
+
+    def clean(self):
+        # NetBoxModelForm.clean() ends in CheckLastUpdatedMixin.clean(), which
+        # returns None on every path, so the return value of super().clean() is
+        # not usable here. Django's contract is that clean() may return None and
+        # the form falls back to self.cleaned_data — read that instead.
+        super().clean()
+        cleaned_data = self.cleaned_data
+
+        if "pki_record" in self.fields:
+            # Picker present: the record is the identity, bound and derived.
+            record = cleaned_data.get("pki_record")
+            self.instance.pki_record_id = record.pk if record is not None else None
+            cleaned_data["pki_fqdn"] = (
+                DHCPServer.normalize_pki_fqdn(record.fqdn) if record is not None else ""
+            )
+            self.instance.pki_fqdn = cleaned_data["pki_fqdn"]
+        elif cleaned_data.get("pki_fqdn"):
+            cleaned_data["pki_fqdn"] = DHCPServer.normalize_pki_fqdn(cleaned_data["pki_fqdn"])
+        return cleaned_data
 
     def save(self, *args, **kwargs):
         instance = super().save(*args, **kwargs)
@@ -1761,6 +1855,14 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             name="Multi-Threading",
         ),
         FieldSet(
+            "ha_proxy_enabled",
+            name="Reverse Proxy",
+        ),
+        FieldSet(
+            InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
+            name="HA Authentication",
+        ),
+        FieldSet(
             "ddns_enable_updates",
             "d2_daemon",
             "ddns_policy",
@@ -1782,12 +1884,18 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
+            "ha_basic_auth_user",
+            "ha_basic_auth_password",
             "description",
             "d2_daemon",
             "ddns_enable_updates",
             "ddns_policy",
             "tags",
         )
+        widgets = {
+            "ha_basic_auth_password": forms.PasswordInput(render_value=True),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1836,6 +1944,9 @@ class DHCPHARelationshipImportForm(NetBoxModelImportForm):
             "http_dedicated_listener",
             "http_listener_threads",
             "http_client_threads",
+            "ha_proxy_enabled",
+            "ha_basic_auth_user",
+            "ha_basic_auth_password",
             "description",
             "tags",
         )
@@ -2477,6 +2588,73 @@ class DDNSDomainImportForm(NetBoxModelImportForm):
     class Meta:
         model = DDNSDomain
         fields = ("d2_daemon", "zone", "tsig_key")
+
+
+class DHCPServerBulkEditForm(NetBoxModelBulkEditForm):
+    """Bulk edit for DHCP servers.
+
+    Only fields that can sensibly hold the same value across several servers
+    appear here. Name, IP address, HA address and PKI FQDN are each unique to
+    one host, so setting them in bulk could only ever produce a collision.
+    """
+
+    description = forms.CharField(max_length=200, required=False)
+    status = forms.ChoiceField(choices=[("", "---------")] + list(DeviceStatusChoices), required=False)
+    service_template = DynamicModelChoiceField(
+        queryset=ServiceTemplate.objects.all(), required=False, query_params={"tag": "dhcp"}
+    )
+    ha_relationship = DynamicModelChoiceField(queryset=DHCPHARelationship.objects.all(), required=False)
+    ha_role = forms.ChoiceField(
+        choices=[("", "---------")] + list(DHCPServer.HA_ROLE_CHOICES), required=False
+    )
+    ha_port = forms.IntegerField(required=False)
+    ha_tls = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    ha_auto_failover = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    ha_egress_base_port = forms.IntegerField(required=False)
+    stork_agent_group = DynamicModelChoiceField(queryset=StorkAgentGroup.objects.all(), required=False)
+    stork_proxy_enabled = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    ctrl_socket_type = forms.ChoiceField(
+        choices=[("", "---------")] + list(DHCPServer.CTRL_SOCKET_TYPE_CHOICES), required=False
+    )
+    ctrl_socket_http_port = forms.IntegerField(required=False)
+    ctrl_socket_proxy_enabled = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    reservations_global = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    reservations_in_subnet = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    reservations_out_of_pool = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+
+    model = DHCPServer
+    fieldsets = (
+        FieldSet("status", "description", "service_template", name="General"),
+        FieldSet(
+            "ha_relationship",
+            "ha_role",
+            "ha_port",
+            "ha_tls",
+            "ha_auto_failover",
+            "ha_egress_base_port",
+            name="High Availability",
+        ),
+        FieldSet("stork_agent_group", "stork_proxy_enabled", name="Stork Monitoring"),
+        FieldSet(
+            "ctrl_socket_type",
+            "ctrl_socket_http_port",
+            "ctrl_socket_proxy_enabled",
+            name="Control Sockets",
+        ),
+        FieldSet(
+            "reservations_global",
+            "reservations_in_subnet",
+            "reservations_out_of_pool",
+            name="Reservations",
+        ),
+    )
+    nullable_fields = ("description", "service_template", "ha_relationship", "stork_agent_group")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_stork"):
+            for fname in ("stork_agent_group", "stork_proxy_enabled"):
+                self.fields.pop(fname, None)
 
 
 class DDNSDomainBulkEditForm(NetBoxModelBulkEditForm):

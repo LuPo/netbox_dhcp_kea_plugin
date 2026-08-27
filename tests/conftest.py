@@ -172,6 +172,22 @@ def dhcp_server(db, ip_address, service_template):
     )
 
 
+@pytest.fixture(autouse=True)
+def _neutral_pki_zone_config(monkeypatch):
+    """Keep the suite independent of the deployment's configured PKI zones.
+
+    pki_allowed_zone_suffixes is read from the live PLUGINS_CONFIG, so a NetBox
+    that has it set would otherwise make tests using example names fail — the
+    suite would pass or fail depending on the machine it runs on. Default it to
+    empty (the restriction off); tests that exercise it set their own value.
+    """
+    from django.conf import settings
+
+    cfg = settings.PLUGINS_CONFIG.get("netbox_dhcp_kea_plugin")
+    if cfg is not None:
+        monkeypatch.setitem(cfg, "pki_allowed_zone_suffixes", [])
+
+
 @pytest.fixture
 def dhcp_server_factory(db, service_template):
     """Factory fixture to create multiple DHCP servers with unique IPs."""
@@ -190,8 +206,9 @@ def dhcp_server_factory(db, service_template):
         ha_port=8080,
         ha_tls=False,
         ha_auto_failover=True,
-        ha_basic_auth_user="",
-        ha_basic_auth_password="",
+        pki_fqdn="",
+        stork_agent_group=None,
+        stork_proxy_enabled=False,
     ):
         counter[0] += 1
         suffix = ip_suffix or counter[0]
@@ -213,8 +230,9 @@ def dhcp_server_factory(db, service_template):
             ha_port=ha_port,
             ha_tls=ha_tls,
             ha_auto_failover=ha_auto_failover,
-            ha_basic_auth_user=ha_basic_auth_user,
-            ha_basic_auth_password=ha_basic_auth_password,
+            pki_fqdn=pki_fqdn,
+            stork_agent_group=stork_agent_group,
+            stork_proxy_enabled=stork_proxy_enabled,
         )
 
     return create_dhcp_server

@@ -528,3 +528,197 @@ def client():
     from django.test import Client
 
     return Client()
+
+
+@pytest.mark.django_db
+class TestHARelationshipEmptyState:
+    """A freshly created relationship has no members and no obvious next step."""
+
+    def _get(self, client, admin_user, relationship):
+        client.force_login(admin_user)
+        url = reverse(
+            "plugins:netbox_dhcp_kea_plugin:dhcpharelationship", kwargs={"pk": relationship.pk}
+        )
+        return client.get(url)
+
+    @pytest.fixture
+    def relationship(self, db):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        return DHCPHARelationship.objects.create(name="empty-cluster", mode="hot-standby")
+
+    def test_an_empty_relationship_offers_the_add_action(self, client, admin_user, relationship):
+        response = self._get(client, admin_user, relationship)
+
+        assert response.status_code == 200
+        add_url = reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_add")
+        assert f"{add_url}?ha_relationship={relationship.pk}".encode() in response.content
+
+    def test_the_action_stays_once_a_member_exists(
+        self, client, admin_user, relationship, dhcp_server_factory
+    ):
+        """A hot-standby pair needs two members, so adding the second must work."""
+
+        dhcp_server_factory(
+            name="kea-member",
+            ip_suffix=96,
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="10.0.0.96",
+        )
+
+        response = self._get(client, admin_user, relationship)
+
+        add_url = reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_add")
+        assert f"{add_url}?ha_relationship={relationship.pk}".encode() in response.content
+        assert b"kea-member" in response.content
+
+    def test_the_prefilled_form_preselects_the_relationship(
+        self, client, admin_user, relationship
+    ):
+        """The button is only useful if the target form honours the parameter."""
+        from django.urls import reverse
+
+        client.force_login(admin_user)
+        response = client.get(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_add"),
+            {"ha_relationship": relationship.pk},
+        )
+
+        assert response.status_code == 200
+        assert response.context["form"]["ha_relationship"].value() == str(relationship.pk)
+
+
+@pytest.mark.django_db
+class TestHARelationshipValidityExplained:
+    """The badge says Invalid; the page has to say why."""
+
+    def _get(self, client, admin_user, relationship):
+        client.force_login(admin_user)
+        return client.get(
+            reverse(
+                "plugins:netbox_dhcp_kea_plugin:dhcpharelationship", kwargs={"pk": relationship.pk}
+            )
+        )
+
+    def _pair(self, dhcp_server_factory, relationship, standby_role):
+        for index, (suffix, role) in enumerate(
+            ((201, "primary"), (202, standby_role)), start=1
+        ):
+            dhcp_server_factory(
+                name=f"{relationship.name}-{index}",
+                ip_suffix=suffix,
+                ha_relationship=relationship,
+                ha_role=role,
+                ha_address=f"10.20.0.{suffix}",
+            )
+
+    @pytest.fixture
+    def relationship(self, db):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        return DHCPHARelationship.objects.create(name="explain-me", mode="hot-standby")
+
+    def test_a_secondary_in_hot_standby_is_explained(
+        self, client, admin_user, relationship, dhcp_server_factory
+    ):
+        """The exact mix-up the roles invite: secondary is load-balancing's."""
+        self._pair(dhcp_server_factory, relationship, "secondary")
+
+        response = self._get(client, admin_user, relationship)
+
+        assert response.status_code == 200
+        reasons = response.context["configuration_errors"]
+        assert len(reasons) == 1
+        assert "exactly one standby" in reasons[0]
+        assert "load-balancing role" in reasons[0]
+        assert b"Invalid" in response.content
+        # Carried in the badge's tooltip rather than as body text.
+        assert b"exactly one standby" in response.content
+        assert b'data-bs-toggle="tooltip"' in response.content
+
+    def test_a_valid_pair_lists_no_reasons(
+        self, client, admin_user, relationship, dhcp_server_factory
+    ):
+        self._pair(dhcp_server_factory, relationship, "standby")
+
+        response = self._get(client, admin_user, relationship)
+
+        assert response.context["configuration_errors"] == []
+        assert b"Valid" in response.content
+
+    def test_an_empty_relationship_explains_both_gaps(self, client, admin_user, relationship):
+        response = self._get(client, admin_user, relationship)
+
+        reasons = response.context["configuration_errors"]
+        assert len(reasons) == 2
+        assert any("exactly one primary" in r for r in reasons)
+        assert any("exactly one standby" in r for r in reasons)
+
+    def test_the_help_tooltips_are_rendered(self, client, admin_user, relationship):
+        response = self._get(client, admin_user, relationship)
+
+        # NetBox's own chrome uses tooltips too, so scope the count to ours.
+        # Four here: the three help labels plus the invalid-reason badge, since
+        # this fixture's relationship has no members yet.
+        assert response.content.count(b"mdi mdi-information-outline text-primary") == 4
+        assert b"edit the server and set its HA Relationship field" in response.content
+        assert b"<small>To add an existing server" not in response.content
+        assert b"All or nothing for the relationship" in response.content
+        assert b"Shared by every member" in response.content
+        # The prose moved into the tooltips, so it is no longer body text.
+        assert b"<small>All or nothing" not in response.content
+
+
+@pytest.mark.django_db
+class TestDHCPServerBulkEdit:
+    """Bulk edit posted to a route that did not exist, giving a 404."""
+
+    def test_the_route_resolves(self):
+        assert reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_bulk_edit").endswith(
+            "/dhcp-servers/edit/"
+        )
+
+    def test_the_form_renders_for_a_selection(self, client, admin_user, dhcp_server_factory):
+        first = dhcp_server_factory(name="kea-bulk-a", ip_suffix=131)
+        second = dhcp_server_factory(name="kea-bulk-b", ip_suffix=132)
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_bulk_edit"),
+            {"pk": [first.pk, second.pk], "_edit": ""},
+        )
+
+        assert response.status_code == 200
+
+    def test_applying_a_change_updates_every_selected_server(
+        self, client, admin_user, dhcp_server_factory
+    ):
+        from netbox_dhcp_kea_plugin.models import DHCPServer
+
+        first = dhcp_server_factory(name="kea-bulk-c", ip_suffix=133)
+        second = dhcp_server_factory(name="kea-bulk-d", ip_suffix=134)
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_bulk_edit"),
+            {
+                "pk": [first.pk, second.pk],
+                "_apply": "",
+                "status": "offline",
+                "description": "bulk edited",
+            },
+        )
+
+        assert response.status_code in (200, 302), response.status_code
+        for server in DHCPServer.objects.filter(pk__in=[first.pk, second.pk]):
+            assert server.status == "offline"
+            assert server.description == "bulk edited"
+
+    def test_per_host_fields_are_not_offered(self):
+        """Bulk-setting these could only ever collide."""
+        from netbox_dhcp_kea_plugin.forms import DHCPServerBulkEditForm
+
+        fields = DHCPServerBulkEditForm().fields
+        for unique_to_one_host in ("name", "ip_address", "ha_address", "pki_fqdn"):
+            assert unique_to_one_host not in fields

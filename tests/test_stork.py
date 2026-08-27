@@ -1692,3 +1692,165 @@ class TestStorkEdgeCases:
 
         # Old group should no longer have this server
         assert dhcp_server not in agent_group_both.servers.all()
+
+
+@pytest.mark.django_db
+class TestStorkExporterBehindReverseProxy:
+    """The exporter cannot keep 0.0.0.0 when Envoy wants the same port.
+
+    Both bind the public address, so with the proxy in front the exporter has
+    to move to loopback and let the proxy forward to it.
+    """
+
+    def test_the_exporter_binds_loopback_when_proxied(self, agent_group_both, dhcp_server_factory):
+        server = dhcp_server_factory(
+            name="kea-exporter-proxied",
+            ip_suffix=111,
+            stork_agent_group=agent_group_both,
+            stork_proxy_enabled=True,
+        )
+
+        env = agent_group_both.to_env_content(server=server)
+
+        assert "STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS=127.0.0.1" in env
+        assert "STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS=0.0.0.0" not in env
+        # The port is unchanged; only the bind address moves.
+        assert "STORK_AGENT_PROMETHEUS_KEA_EXPORTER_PORT=9547" in env
+
+    def test_the_group_address_is_kept_when_not_proxied(
+        self, agent_group_both, dhcp_server_factory
+    ):
+        server = dhcp_server_factory(
+            name="kea-exporter-plain", ip_suffix=112, stork_agent_group=agent_group_both
+        )
+
+        env = agent_group_both.to_env_content(server=server)
+
+        assert "STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS=0.0.0.0" in env
+
+    def test_without_a_server_the_group_address_is_used(self, agent_group_both):
+        """The group renders standalone too, and then has no flag to consult."""
+        env = agent_group_both.to_env_content()
+
+        assert "STORK_AGENT_PROMETHEUS_KEA_EXPORTER_ADDRESS=0.0.0.0" in env
+
+    def test_the_proxy_plan_publishes_the_exporter_port(
+        self, agent_group_both, dhcp_server_factory
+    ):
+        """Envoy has to know which port to bind publicly and forward."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="exporter-proxy-cluster", mode="hot-standby", ha_proxy_enabled=True
+        )
+        server = dhcp_server_factory(
+            name="kea-exporter-plan",
+            ip_suffix=113,
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="10.30.0.1",
+            stork_agent_group=agent_group_both,
+            stork_proxy_enabled=True,
+        )
+
+        assert server.ha_proxy["exporter_port"] == 9547
+
+    def test_the_plan_omits_the_port_when_not_proxied(
+        self, agent_group_both, dhcp_server_factory
+    ):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="exporter-plain-cluster", mode="hot-standby", ha_proxy_enabled=True
+        )
+        server = dhcp_server_factory(
+            name="kea-exporter-noplan",
+            ip_suffix=114,
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="10.30.0.2",
+            stork_agent_group=agent_group_both,
+        )
+
+        assert server.ha_proxy["exporter_port"] is None
+
+    def test_the_flag_needs_an_exporting_agent_group(self, dhcp_server_factory):
+        from django.core.exceptions import ValidationError
+
+        server = dhcp_server_factory(name="kea-exporter-nogroup", ip_suffix=115)
+        server.stork_proxy_enabled = True
+
+        with pytest.raises(ValidationError) as exc:
+            server.clean()
+
+        assert "stork_proxy_enabled" in exc.value.message_dict
+
+    def test_the_flag_is_refused_for_a_stork_only_group(
+        self, agent_group_stork_only, dhcp_server_factory
+    ):
+        """Nothing to proxy when the group runs no exporter."""
+        from django.core.exceptions import ValidationError
+
+        server = dhcp_server_factory(
+            name="kea-exporter-storkonly", ip_suffix=116, stork_agent_group=agent_group_stork_only
+        )
+        server.stork_proxy_enabled = True
+
+        with pytest.raises(ValidationError) as exc:
+            server.clean()
+
+        assert "stork_proxy_enabled" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+class TestStorkServerURLUsesDNSName:
+    """The agent should dial the Stork server by name when IPAM records one.
+
+    With TLS this is not cosmetic: a certificate is issued for a name, and a
+    client dialling the bare address has nothing to match it against.
+    """
+
+    def _server(self, address, dns_name="", use_tls=False):
+        from ipam.models import IPAddress
+
+        from netbox_dhcp_kea_plugin.models import StorkServer
+
+        ip = IPAddress.objects.create(address=address, dns_name=dns_name)
+        return StorkServer.objects.create(
+            name=f"stork-{address.split('/')[0]}", ip_address=ip, rest_port=8080, use_tls=use_tls
+        )
+
+    def test_the_dns_name_is_preferred(self):
+        server = self._server("192.0.2.121/24", dns_name="stork.example.net")
+
+        assert server.url == "http://stork.example.net:8080"
+
+    def test_it_falls_back_to_the_address(self):
+        server = self._server("192.0.2.122/24")
+
+        assert server.url == "http://192.0.2.122:8080"
+
+    def test_a_blank_dns_name_falls_back(self):
+        server = self._server("192.0.2.123/24", dns_name="   ")
+
+        assert server.url == "http://192.0.2.123:8080"
+
+    def test_a_trailing_dot_is_stripped(self):
+        """An absolute name would not match the certificate as written."""
+        server = self._server("192.0.2.124/24", dns_name="stork.example.net.")
+
+        assert server.url == "http://stork.example.net:8080"
+
+    def test_tls_uses_the_name_too(self):
+        server = self._server("192.0.2.125/24", dns_name="stork.example.net", use_tls=True)
+
+        assert server.url == "https://stork.example.net:8080"
+
+    def test_the_agent_env_carries_the_named_url(self, agent_group_both):
+        stork = self._server("192.0.2.126/24", dns_name="stork.example.net")
+        agent_group_both.stork_server = stork
+        agent_group_both.save()
+
+        env = agent_group_both.to_env_content()
+
+        assert "STORK_AGENT_SERVER_URL=http://stork.example.net:8080" in env

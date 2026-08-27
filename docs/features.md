@@ -28,6 +28,9 @@ This page is the reference catalogue of every model and capability the plugin ex
 - HA peer connection is split into discrete fields (address, port, TLS toggle); the full URL is reconstructed automatically for Kea config output.
 - Automatic configuration sync from the primary to all HA peers.
 - HA-aware config generation guarantees consistent output across peers.
+- **PKI identity for peer pinning** — each server carries a `pki_fqdn`, the DNS name its certificate is issued for. The reverse-proxy plan publishes it per peer so each Envoy pins exactly the peers in its own relationship by SAN, which is what keeps one HA cluster from accepting another's members. Chosen from a netbox-plugin-dns record when that plugin is installed, typed otherwise.
+- **Relationship-level reverse proxy** — one toggle turns on the local Envoy sidecar pattern for every member (KEA binds loopback and dials local egress ports; the proxy owns TLS in both directions, so KEA never holds a certificate). It is deliberately all-or-nothing: a partly-proxied cluster cannot form an HA channel. Each server still sets its own **HA egress base port**, since loopback port availability is per host.
+- **Shared HA basic-auth credentials** — one optional user/password pair on the relationship, not on each member. It is written onto every peer entry Kea receives, including each server's own, so every member requires the same secret on its HA listener and presents it when dialling its peers. Leaving it blank keeps the HA channel unauthenticated.
 - Protection against orphaned configs — the primary cannot be deleted or demoted while subnets and client classes reference it.
 - Easy primary migration when promoting a former secondary.
 - UI hides config-management controls on non-primary peers.
