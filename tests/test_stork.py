@@ -40,6 +40,7 @@ def stork_server(db, stork_server_ip):
         rest_port=8080,
         rest_base_url="/",
         use_tls=False,
+        endpoint_type="ip",
         db_host="db.example.com",
         db_port=5432,
         db_name="stork",
@@ -67,6 +68,7 @@ def stork_server_tls(db):
         rest_port=8443,
         rest_base_url="/stork/",
         use_tls=True,
+        endpoint_type="ip",
         db_host="secure-db.example.com",
         db_port=5433,
         db_name="stork_prod",
@@ -233,6 +235,7 @@ class TestStorkServerModel:
             rest_base_url="/app/",
             rest_port=9090,
             use_tls=False,
+            endpoint_type="ip",
         )
         assert server.url == "http://10.0.0.150:9090/app"
 
@@ -1803,7 +1806,7 @@ class TestStorkExporterBehindReverseProxy:
 
 
 @pytest.mark.django_db
-class TestStorkServerURLUsesDNSName:
+class TestStorkServerEndpointSelection:
     """The agent should dial the Stork server by name when IPAM records one.
 
     With TLS this is not cosmetic: a certificate is issued for a name, and a
@@ -1825,15 +1828,21 @@ class TestStorkServerURLUsesDNSName:
 
         assert server.url == "http://stork.example.net:8080"
 
-    def test_it_falls_back_to_the_address(self):
+    def test_an_address_endpoint_renders_the_address(self):
         server = self._server("192.0.2.122/24")
+        server.endpoint_type = "ip"
+        server.save()
 
         assert server.url == "http://192.0.2.122:8080"
 
-    def test_a_blank_dns_name_falls_back(self):
+    def test_a_blank_dns_name_is_not_a_name(self):
+        """Whitespace is not an endpoint; dns mode has nothing to render."""
+        from django.core.exceptions import ValidationError
+
         server = self._server("192.0.2.123/24", dns_name="   ")
 
-        assert server.url == "http://192.0.2.123:8080"
+        with pytest.raises(ValidationError):
+            server.clean()
 
     def test_a_trailing_dot_is_stripped(self):
         """An absolute name would not match the certificate as written."""
@@ -1854,3 +1863,279 @@ class TestStorkServerURLUsesDNSName:
         env = agent_group_both.to_env_content()
 
         assert "STORK_AGENT_SERVER_URL=http://stork.example.net:8080" in env
+
+
+@pytest.mark.django_db
+class TestStorkEndpointIsChosenNotGuessed:
+    """The agent registration URL is a decision, not a preference order.
+
+    Both branches of the old implicit fallback produced a URL that failed TLS
+    verification: an address has no certificate to match, and IPAM's dns_name
+    is the host record, not necessarily the service name the certificate was
+    issued for. The agent has no skip-verification option for registration, so
+    the name has to be right.
+    """
+
+    def _server(self, address, dns_name="", **kwargs):
+        from ipam.models import IPAddress
+
+        from netbox_dhcp_kea_plugin.models import StorkServer
+
+        ip = IPAddress.objects.create(address=address, dns_name=dns_name)
+        return StorkServer.objects.create(
+            name=f"stork-{address.split('/')[0]}", ip_address=ip, rest_port=443, **kwargs
+        )
+
+    def _record(self, name="stork", zone_name="svc.example.net", value="192.0.2.140"):
+        from netbox_dns.models import NameServer, Record, View, Zone
+
+        view, _ = View.objects.get_or_create(name="default")
+        soa = NameServer.objects.get_or_create(name="ns-soa.example.net")[0]
+        zone, _ = Zone.objects.get_or_create(
+            name=zone_name, view=view, defaults={"soa_mname": soa, "soa_rname": "hostmaster.example.net"}
+        )
+        return Record.objects.create(zone=zone, name=name, type="A", value=value)
+
+    def test_ip_mode_renders_the_address(self):
+        server = self._server("192.0.2.141/24", dns_name="host.example.net", endpoint_type="ip")
+
+        assert server.endpoint_host == "192.0.2.141"
+        assert server.url == "http://192.0.2.141:443"
+
+    def test_a_bound_record_wins_over_the_ipam_name(self):
+        """The production failure: dns_name is the host, not the service."""
+        record = self._record(name="stork", value="192.0.2.142")
+        server = self._server("192.0.2.142/24", dns_name="host.internal.example.net")
+        server.endpoint_record_id = record.pk
+        server.save()
+
+        assert server.endpoint_host == "stork.svc.example.net"
+        assert server.url == "http://stork.svc.example.net:443"
+
+    def test_dns_mode_falls_back_to_the_ipam_name(self):
+        """Nothing breaks for a deployment that never binds a record."""
+        server = self._server("192.0.2.143/24", dns_name="host.example.net")
+
+        assert server.endpoint_host == "host.example.net"
+
+    def test_dns_mode_with_no_name_at_all_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        server = self._server("192.0.2.144/24")
+
+        with pytest.raises(ValidationError) as exc:
+            server.clean()
+
+        assert "endpoint_fqdn" in exc.value.message_dict
+
+    def test_ip_mode_with_no_name_is_fine(self):
+        server = self._server("192.0.2.145/24", endpoint_type="ip")
+
+        server.clean()
+
+    def test_a_typed_name_is_normalised(self):
+        server = self._server("192.0.2.146/24", endpoint_fqdn="Stork.SVC.Example.NET.")
+
+        assert server.endpoint_fqdn == "stork.svc.example.net"
+        assert server.url == "http://stork.svc.example.net:443"
+
+    def test_tls_over_an_address_warns_but_does_not_block(self):
+        """An IP SAN is unusual, not impossible — refusing it would be wrong."""
+        server = self._server("192.0.2.147/24", endpoint_type="ip", use_tls=True)
+
+        server.clean()
+        warnings = server.tls_verification_warnings()
+
+        assert len(warnings) == 1
+        assert "IP subject alternative name" in warnings[0]
+
+    def test_tls_over_a_name_does_not_warn(self):
+        server = self._server("192.0.2.148/24", dns_name="stork.example.net", use_tls=True)
+
+        assert server.tls_verification_warnings() == []
+
+    def test_the_agent_env_carries_the_chosen_endpoint(self, agent_group_both):
+        record = self._record(name="stork-env", value="192.0.2.149")
+        server = self._server("192.0.2.149/24", dns_name="host.example.net", use_tls=True)
+        server.endpoint_record_id = record.pk
+        server.save()
+        agent_group_both.stork_server = server
+        agent_group_both.save()
+
+        env = agent_group_both.to_env_content()
+
+        assert "STORK_AGENT_SERVER_URL=https://stork-env.svc.example.net:443" in env
+
+
+@pytest.mark.django_db
+class TestStorkEndpointRecordBinding:
+    """The endpoint record is bound exactly as DHCPServer's PKI record is."""
+
+    def _bound(self):
+        from ipam.models import IPAddress
+        from netbox_dns.models import NameServer, Record, View, Zone
+
+        from netbox_dhcp_kea_plugin.models import StorkServer
+
+        view, _ = View.objects.get_or_create(name="default")
+        soa = NameServer.objects.get_or_create(name="ns-soa.example.net")[0]
+        zone, _ = Zone.objects.get_or_create(
+            name="svc.example.net", view=view, defaults={"soa_mname": soa, "soa_rname": "hostmaster.example.net"}
+        )
+        record = Record.objects.create(zone=zone, name="stork-bound", type="A", value="192.0.2.150")
+        ip = IPAddress.objects.create(address="192.0.2.150/24")
+        server = StorkServer.objects.create(name="stork-bound", ip_address=ip, rest_port=443)
+        server.endpoint_record_id = record.pk
+        server.save()
+        return server, record
+
+    def test_binding_derives_the_name(self):
+        server, _ = self._bound()
+
+        assert server.endpoint_fqdn == "stork-bound.svc.example.net"
+
+    def test_a_bound_record_cannot_be_deleted(self):
+        from django.db.models import ProtectedError
+
+        server, record = self._bound()
+
+        with pytest.raises(ProtectedError) as exc:
+            record.delete()
+
+        assert server.name in str(exc.value)
+
+    def test_deleting_the_server_deletes_the_record(self):
+        from netbox_dns.models import Record
+
+        server, record = self._bound()
+
+        server.delete()
+
+        assert not Record.objects.filter(pk=record.pk).exists()
+
+    def test_renaming_the_record_re_derives_the_name(self):
+        server, record = self._bound()
+
+        record.name = "stork-renamed"
+        record.save()
+
+        server.refresh_from_db()
+        assert server.endpoint_fqdn == "stork-renamed.svc.example.net"
+
+
+class TestEndpointMigrationPreservesURLs:
+    """The upgrade must not move any URL.
+
+    url() used to prefer ip_address.dns_name and fall back to the address, so
+    the migration picks whichever each server already resolved to. Driven
+    against a stand-in registry: what matters is the choice, not the schema.
+    """
+
+    class _FakeIP:
+        def __init__(self, dns_name):
+            self.dns_name = dns_name
+
+    class _FakeServer:
+        def __init__(self, name, dns_name):
+            self.name = name
+            self.ip_address_id = 1
+            self.ip_address = TestEndpointMigrationPreservesURLs._FakeIP(dns_name)
+            self.endpoint_type = "dns"
+            self.saved = []
+
+        def save(self, update_fields=None):
+            self.saved.append(tuple(update_fields or ()))
+
+    def _run(self, servers):
+        import importlib
+
+        migration = importlib.import_module(
+            "netbox_dhcp_kea_plugin.migrations.0010_storkserver_endpoint_selection"
+        )
+
+        class _QS:
+            @staticmethod
+            def select_related(*_):
+                return servers
+
+        class _Model:
+            objects = _QS
+
+        class _Apps:
+            @staticmethod
+            def get_model(app_label, model_name):
+                return _Model
+
+        migration.preserve_current_endpoint(_Apps, None)
+
+    def test_a_named_server_keeps_rendering_its_name(self):
+        server = self._FakeServer("named", "stork.example.net")
+
+        self._run([server])
+
+        assert server.endpoint_type == "dns"
+
+    def test_an_unnamed_server_keeps_rendering_its_address(self):
+        server = self._FakeServer("unnamed", "")
+
+        self._run([server])
+
+        assert server.endpoint_type == "ip"
+
+    def test_a_whitespace_name_counts_as_unnamed(self):
+        server = self._FakeServer("blank", "   ")
+
+        self._run([server])
+
+        assert server.endpoint_type == "ip"
+
+    def test_an_absolute_name_still_counts_as_named(self):
+        server = self._FakeServer("absolute", "stork.example.net.")
+
+        self._run([server])
+
+        assert server.endpoint_type == "dns"
+
+
+@pytest.mark.django_db
+class TestSkipTLSVerificationIsLabelledForKea:
+    """The flag governs agent → Kea, not agent → server.
+
+    It sat in "Agent gRPC Settings", which reads as though it covered the
+    agent's relationship with the Stork server. It does not, and registration
+    has no equivalent switch — so the mislabelling invited exactly the wrong
+    diagnosis when registration failed.
+    """
+
+    def _fieldset_of(self, field_name):
+        from netbox_dhcp_kea_plugin.forms import StorkAgentGroupForm
+
+        for fieldset in StorkAgentGroupForm.fieldsets:
+            # items holds field names plus InlineFields/TabbedGroups wrappers.
+            for item in fieldset.items:
+                if item == field_name or field_name in getattr(item, "fields", ()):
+                    return fieldset.name
+        return None
+
+    def test_it_sits_in_its_own_kea_fieldset(self):
+        assert self._fieldset_of("skip_tls_cert_verification") == "Kea Connection"
+
+    def test_the_grpc_fieldset_no_longer_claims_it(self):
+        assert self._fieldset_of("agent_port") == "Agent gRPC Settings"
+
+    def test_the_help_text_names_the_direction(self):
+        from netbox_dhcp_kea_plugin.models import StorkAgentGroup
+
+        help_text = StorkAgentGroup._meta.get_field("skip_tls_cert_verification").help_text
+        assert "Agent → Kea" in help_text
+        assert "registration has no such option" in help_text
+
+    def test_the_rendered_comment_still_says_kea(self, agent_group_both):
+        """ISC's own variable is about the Kea connection; keep saying so."""
+        agent_group_both.skip_tls_cert_verification = True
+        agent_group_both.save()
+
+        env = agent_group_both.to_env_content()
+
+        assert "STORK_AGENT_SKIP_TLS_CERT_VERIFICATION=true" in env
+        assert "connections to Kea over TLS" in env

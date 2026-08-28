@@ -41,6 +41,7 @@ from .models import (
     SubnetPool,
     TSIGKey,
     VendorOptionSpace,
+    normalize_fqdn,
     pki_allowed_zone_suffixes,
 )
 
@@ -2152,6 +2153,9 @@ class StorkServerForm(NetBoxModelForm):
         FieldSet(
             InlineFields("rest_port", "rest_base_url", label="Port / Base URL"),
             "use_tls",
+            "endpoint_type",
+            "endpoint_record",
+            "endpoint_fqdn",
             name="REST API",
         ),
         FieldSet(
@@ -2171,6 +2175,51 @@ class StorkServerForm(NetBoxModelForm):
         ),
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._add_endpoint_record_picker()
+
+    def _add_endpoint_record_picker(self):
+        """Offer a netbox_dns record for the endpoint, when that plugin is present.
+
+        Unlike DHCPServer's PKI picker this does *not* replace the text field.
+        The Stork listener's name may legitimately be served by DNS that NetBox
+        does not manage, and a server that cannot be named is unregisterable.
+        """
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_netbox_dns"):
+            return
+        try:
+            from netbox_dns.models import Record as DNSRecord
+        except ImportError:
+            return
+
+        self.fields["endpoint_record"] = DynamicModelChoiceField(
+            queryset=DNSRecord.objects.filter(type__in=("A", "AAAA", "CNAME"), managed=False, status="active"),
+            query_params={"type": ["A", "AAAA", "CNAME"], "managed": False, "status": "active"},
+            required=False,
+            label="Endpoint DNS record",
+            help_text=(
+                "The record agents dial. Fills the endpoint FQDN and binds it: the record cannot "
+                "be deleted while bound, and renaming it updates the name here."
+            ),
+            initial=self.instance.endpoint_record_id if self.instance.pk else None,
+        )
+
+    def clean(self):
+        # NetBoxModelForm.clean() ends in a mixin that returns None on every
+        # path, so read self.cleaned_data rather than the return value.
+        super().clean()
+        cleaned_data = self.cleaned_data
+
+        if "endpoint_record" in self.fields:
+            record = cleaned_data.get("endpoint_record")
+            self.instance.endpoint_record_id = record.pk if record is not None else None
+            if record is not None:
+                cleaned_data["endpoint_fqdn"] = normalize_fqdn(record.fqdn)
+        cleaned_data["endpoint_fqdn"] = normalize_fqdn(cleaned_data.get("endpoint_fqdn"))
+        self.instance.endpoint_fqdn = cleaned_data["endpoint_fqdn"]
+        return cleaned_data
+
     class Meta:
         model = StorkServer
         fields = (
@@ -2181,6 +2230,8 @@ class StorkServerForm(NetBoxModelForm):
             "rest_port",
             "rest_base_url",
             "use_tls",
+            "endpoint_type",
+            "endpoint_fqdn",
             "db_host",
             "db_port",
             "db_name",
@@ -2216,6 +2267,8 @@ class StorkServerImportForm(NetBoxModelImportForm):
             "rest_port",
             "rest_base_url",
             "use_tls",
+            "endpoint_type",
+            "endpoint_fqdn",
             "db_host",
             "db_port",
             "db_name",
@@ -2250,8 +2303,11 @@ class StorkAgentGroupForm(NetBoxModelForm):
         ),
         FieldSet(
             "agent_port",
-            "skip_tls_cert_verification",
             name="Agent gRPC Settings",
+        ),
+        FieldSet(
+            "skip_tls_cert_verification",
+            name="Kea Connection",
         ),
         FieldSet(
             InlineFields("prometheus_exporter_address", "prometheus_exporter_port", label="Address / Port"),

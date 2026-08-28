@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — the Stork agent registration URL was guessed, not chosen
+`StorkServer.url` preferred `ip_address.dns_name` and silently fell back to the address. Both branches produced a URL that fails TLS verification: an address has no certificate to match against, and IPAM's `dns_name` records the *host*, not necessarily the *service* name the certificate was issued for. The agent has **no skip-verification option for registration**, so it exits and systemd gives up after five restarts.
+
+- **`StorkServer.endpoint_type`** — `dns` or `ip`, an explicit choice of how agents address this server.
+- **`endpoint_record_id` / `endpoint_fqdn`** — the same soft-reference-plus-derived-name pattern as `DHCPServer.pki_record_id`, sharing `signals.py`: the record cannot be deleted while bound, deleting the server deletes it, and renaming it re-derives the name.
+- The IPAM `dns_name` remains a fallback so nothing breaks for a deployment that never binds a record, but it is now the second choice rather than an invisible first. Saving `dns` with no name available anywhere is rejected.
+- Choosing `ip` with `use_tls` is **not** blocked — a certificate may carry an IP SAN — but the detail page warns that agents cannot otherwise verify it.
+- The migration sets `endpoint_type` to whatever each server already resolved to, so **no URL changes on upgrade**.
+
+### Changed — `skip_tls_cert_verification` is labelled for the connection it governs
+It sat under *Agent gRPC Settings*, reading as though it covered the agent's relationship with the Stork server. It does not: it renders `STORK_AGENT_SKIP_TLS_CERT_VERIFICATION`, which is agent → **Kea**. Moved to its own *Kea Connection* fieldset and relabelled, with help text naming the direction. No companion flag for the server was added — the agent offers none, and a field that cannot be honoured invites the wrong diagnosis.
+
 ## 0.10.0 (2026-08-20)
 
 !!! note

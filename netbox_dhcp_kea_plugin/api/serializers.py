@@ -602,6 +602,9 @@ class StorkServerSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:storkserver-detail")
     ip_address = IPAddressSerializer(nested=True, read_only=True)
     agent_groups = serializers.SerializerMethodField()
+    # The URL agents register against. Named endpoint_url because "url" is
+    # already NetBox's hyperlink to this object in the API.
+    endpoint_url = serializers.CharField(source="url", read_only=True)
 
     class Meta:
         model = StorkServer
@@ -616,6 +619,10 @@ class StorkServerSerializer(NetBoxModelSerializer):
             "rest_port",
             "rest_base_url",
             "use_tls",
+            "endpoint_type",
+            "endpoint_record_id",
+            "endpoint_fqdn",
+            "endpoint_url",
             "db_host",
             "db_port",
             "db_name",

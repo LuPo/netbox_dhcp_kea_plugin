@@ -14,6 +14,19 @@ from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
 
+def normalize_fqdn(value):
+    """Normalise a DNS name into the exact string a certificate carries.
+
+    ``Record.fqdn`` is stored absolute (``host.example.net.``) but a SAN matcher,
+    a TLS SNI and a URL host must be relative and lower-case. Divergence by a
+    trailing dot or by case fails verification with unhelpful errors, so every
+    path that stores one of these names goes through here.
+    """
+    if not value:
+        return ""
+    return value.strip().rstrip(".").lower()
+
+
 def pki_allowed_zone_suffixes():
     """Zone suffixes the internal PKI issues certificates for.
 
@@ -494,16 +507,8 @@ class DHCPServer(NetBoxModel):
 
     @staticmethod
     def normalize_pki_fqdn(value):
-        """Normalise a DNS name into the exact string a certificate carries.
-
-        ``Record.fqdn`` is stored absolute (``kea-a01.example.net.``) but a SAN
-        matcher and TLS SNI must be relative and lower-case. Divergence by a
-        trailing dot or by case fails the handshake with unhelpful errors, so
-        every path that sets ``pki_fqdn`` goes through here.
-        """
-        if not value:
-            return ""
-        return value.strip().rstrip(".").lower()
+        """Normalise a PKI identity. See :func:`normalize_fqdn`."""
+        return normalize_fqdn(value)
 
     def save(self, *args, **kwargs):
         # A bound record is the authority; otherwise normalise whatever was typed.
@@ -3901,6 +3906,44 @@ class StorkServer(NetBoxModel):
         help_text="Whether the Stork server REST API uses TLS/SSL",
     )
 
+    # How agents address this server. An implicit preference order cannot say
+    # which of several correct names is the one on the certificate, and getting
+    # it wrong fails registration outright — the Stork agent has no
+    # skip-verification option for registration, only for its Kea connection.
+    ENDPOINT_TYPE_CHOICES = (
+        ("dns", "DNS name"),
+        ("ip", "IP address"),
+    )
+    endpoint_type = models.CharField(
+        max_length=10,
+        choices=ENDPOINT_TYPE_CHOICES,
+        default="dns",
+        verbose_name="Agent endpoint",
+        help_text=(
+            "How agents address this server when registering. With TLS this must be a name: "
+            "a certificate is issued for a name, and a client dialling an address has nothing "
+            "to match it against."
+        ),
+    )
+    # Soft reference to netbox_dns.Record, exactly as DHCPServer.pki_record_id —
+    # a real FK would make netbox-plugin-dns mandatory. signals.py supplies the
+    # integrity for both.
+    endpoint_record_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Endpoint DNS record",
+        help_text="The netbox-plugin-dns record agents dial, when that plugin is installed.",
+    )
+    endpoint_fqdn = models.CharField(
+        max_length=253,
+        blank=True,
+        verbose_name="Endpoint FQDN",
+        help_text=(
+            "The name agents dial. This must match a subject alternative name on the "
+            "server's certificate. Derived from the endpoint DNS record when one is bound."
+        ),
+    )
+
     # --- Database Connection (useful for Ansible deployment) ---
     db_host = models.CharField(
         max_length=255,
@@ -4040,21 +4083,84 @@ class StorkServer(NetBoxModel):
 
         return "\n".join(lines)
 
+    def endpoint_record(self):
+        """Resolve the bound netbox_dns record, or None.
+
+        None when nothing is bound, when netbox_dns is not installed, or when
+        the row has gone — callers treat all three the same way.
+        """
+        if not self.endpoint_record_id:
+            return None
+        try:
+            from netbox_dns.models import Record as DNSRecord
+        except ImportError:
+            return None
+        return DNSRecord.objects.filter(pk=self.endpoint_record_id).first()
+
+    @property
+    def endpoint_host(self):
+        """The host agents dial, chosen explicitly rather than guessed.
+
+        IPAM's ``dns_name`` remains a fallback so nothing breaks for a
+        deployment that never binds a record, but it is now the second choice.
+        It records the *host*, which is not necessarily the *service* name the
+        certificate was issued for — preferring it silently is how a URL that
+        looks right fails verification.
+        """
+        if self.endpoint_type == "ip":
+            return str(self.ip_address.address.ip)
+        return self.endpoint_fqdn or normalize_fqdn(self.ip_address.dns_name)
+
     @property
     def url(self):
-        """Construct the full Stork server URL.
-
-        Prefers the DNS name IPAM records for the address, falling back to the
-        address itself. With TLS that is not cosmetic: a certificate is issued
-        for a name, and a client dialling the bare IP has nothing to match it
-        against — TLS SNI cannot carry an address at all (RFC 6066).
-        """
+        """Construct the full Stork server URL."""
         scheme = "https" if self.use_tls else "http"
-        host = (self.ip_address.dns_name or "").strip().rstrip(".")
-        if not host:
-            host = str(self.ip_address.address.ip)
         base = self.rest_base_url.rstrip("/")
-        return f"{scheme}://{host}:{self.rest_port}{base}"
+        return f"{scheme}://{self.endpoint_host}:{self.rest_port}{base}"
+
+    def save(self, *args, **kwargs):
+        # A bound record is the authority; otherwise normalise what was typed.
+        bound = self.endpoint_record()
+        if bound is not None:
+            self.endpoint_fqdn = normalize_fqdn(bound.fqdn)
+        else:
+            self.endpoint_fqdn = normalize_fqdn(self.endpoint_fqdn)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        """Reject only what cannot render a usable endpoint."""
+        super().clean()
+
+        if self.endpoint_type == "dns" and not self.endpoint_fqdn:
+            # The record wins when bound, so consult it before giving up.
+            bound = self.endpoint_record()
+            fallback = normalize_fqdn(self.ip_address.dns_name) if self.ip_address_id else ""
+            if bound is None and not fallback:
+                raise ValidationError(
+                    {
+                        "endpoint_fqdn": (
+                            "No name to give agents: bind an endpoint DNS record, enter the name "
+                            "directly, or set a DNS name on the IP address. Choose the IP address "
+                            "endpoint instead only if the certificate carries an IP SAN."
+                        )
+                    }
+                )
+
+    def tls_verification_warnings(self):
+        """Non-blocking observations about how agents will verify this server.
+
+        Dialling an address over TLS is unusual but not impossible — a
+        certificate may carry an IP SAN — so this is surfaced rather than
+        raised. Blocking it would refuse a valid configuration.
+        """
+        warnings = []
+        if self.use_tls and self.endpoint_type == "ip":
+            warnings.append(
+                "Agents will dial this server by IP address over TLS. They cannot verify its "
+                "certificate unless that certificate carries an IP subject alternative name, "
+                "which most internal CAs will not issue."
+            )
+        return warnings
 
 
 class StorkAgentGroup(NetBoxModel):
@@ -4138,7 +4244,13 @@ class StorkAgentGroup(NetBoxModel):
     # --- TLS / Security ---
     skip_tls_cert_verification = models.BooleanField(
         default=False,
-        help_text="Skip TLS certificate verification when the agent connects to Kea over TLS with self-signed certificates",
+        verbose_name="Skip Kea TLS verification",
+        help_text=(
+            "Agent → Kea only: skip certificate verification when the agent connects to Kea's "
+            "control API over TLS. This does not affect the agent's connection to the Stork "
+            "server — registration has no such option, so that endpoint's name must match its "
+            "certificate and the agent host must trust the issuing CA."
+        ),
     )
 
     # --- Logging ---

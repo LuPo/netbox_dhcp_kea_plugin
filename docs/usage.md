@@ -248,6 +248,30 @@ Writing the same pair everywhere therefore makes the channel authenticated symme
 
     The password is part of the JSON returned by the `kea-config/` endpoint and written to the deployed config file. Suppress diff output when deploying it, and treat archived config copies as holding the secret.
 
+### Stork agent endpoint
+
+`STORK_AGENT_SERVER_URL` in the generated agent env is built from an explicit choice, not a preference order, because getting it wrong fails registration outright — **the Stork agent has no skip-verification option for registration**, only for its connection to Kea.
+
+| Field | Meaning |
+|---|---|
+| `endpoint_type` | `dns` (default) or `ip` — how agents address this server. |
+| `endpoint_record_id` | The netbox-plugin-dns record the name is bound to, when that plugin is installed. |
+| `endpoint_fqdn` | The name agents dial. Derived from the bound record; normalised lower-case with any trailing dot stripped. |
+
+With `endpoint_type: dns` the name is taken from the bound record, falling back to the `dns_name` on the IPAM address. That fallback keeps existing deployments working, but it is deliberately the *second* choice: IPAM's `dns_name` records the **host**, which is not necessarily the **service** name the certificate was issued for. Preferring it silently is how a URL that looks correct fails verification.
+
+Saving with `endpoint_type: dns` and no name available anywhere is rejected — there would be nothing to render.
+
+!!! warning "TLS over an IP address"
+
+    Choosing `endpoint_type: ip` with `use_tls` is allowed but flagged on the detail page. Agents cannot verify the certificate unless it carries an IP subject alternative name, which most internal CAs will not issue. It is permitted rather than blocked because such a certificate is possible, if unusual.
+
+The endpoint name and the certificate on the Stork listener are **one decision, not two**. Server trust has exactly two real answers, and neither is a skip flag: the endpoint name must match a SAN on the certificate, and the agent host must trust the issuing CA.
+
+!!! note "`skip_tls_cert_verification` is about Kea, not the server"
+
+    That field on the agent group renders `STORK_AGENT_SKIP_TLS_CERT_VERIFICATION`, which governs the agent's connection to **Kea's control API**. It has no effect on registration with the Stork server. It appears under its own *Kea Connection* heading for that reason.
+
 ## D2 daemon configuration generation
 
 When DDNS is enabled, each `D2Daemon` exposes a per-instance endpoint that emits a complete `kea-dhcp-ddns.conf`:

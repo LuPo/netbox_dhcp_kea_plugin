@@ -319,7 +319,7 @@ class StorkServerFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = StorkServer
-        fields = ["id", "name", "status", "use_tls", "enable_metrics", "db_ssl_mode"]
+        fields = ["id", "name", "status", "use_tls", "enable_metrics", "db_ssl_mode", "endpoint_type", "endpoint_fqdn"]
 
     def search(self, queryset, name, value):
         if not value.strip():

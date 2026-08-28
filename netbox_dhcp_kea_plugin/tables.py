@@ -651,6 +651,9 @@ class StorkServerTable(NetBoxTable):
         linkify=False,
     )
 
+    endpoint_type = tables.Column(verbose_name="endpoint_type")
+    endpoint_fqdn = tables.Column(verbose_name="endpoint_fqdn")
+
     class Meta(NetBoxTable.Meta):
         model = StorkServer
         fields = (
@@ -660,6 +663,8 @@ class StorkServerTable(NetBoxTable):
             "ip_address",
             "rest_port",
             "use_tls",
+            "endpoint_type",
+            "endpoint_fqdn",
             "enable_metrics",
             "stork_version",
             "description",

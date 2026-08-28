@@ -1033,6 +1033,14 @@ class StaticReservationImportView(generic.BulkImportView):
 class StorkServerView(generic.ObjectView):
     queryset = models.StorkServer.objects.prefetch_related("agent_groups")
 
+    def get_extra_context(self, request, instance):
+        return {
+            # Dialling an address over TLS is unusual but not impossible, so
+            # this is shown rather than enforced at save time.
+            "tls_verification_warnings": instance.tls_verification_warnings(),
+            "endpoint_record": instance.endpoint_record(),
+        }
+
 
 class StorkServerListView(generic.ObjectListView):
     queryset = models.StorkServer.objects.annotate(

@@ -2,6 +2,17 @@
 {% load helpers %}
 
 {% block content %}
+{% if tls_verification_warnings %}
+<div class="row">
+    <div class="col">
+        {% for warning in tls_verification_warnings %}
+        <div class="alert alert-warning" role="alert">
+            <i class="mdi mdi-alert"></i> {{ warning }}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <div class="col col-md-6">
         <div class="card">
@@ -72,6 +83,17 @@
                             {% else %}
                             <span class="text-muted">—</span>
                             {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Agent Endpoint</th>
+                        <td>
+                            {% if endpoint_record %}
+                            <a href="{{ endpoint_record.get_absolute_url }}">{{ object.endpoint_host }}</a>
+                            {% else %}
+                            {{ object.endpoint_host|placeholder }}
+                            {% endif %}
+                            <span class="badge bg-info ms-1" style="color: #ffffff;">{{ object.get_endpoint_type_display }}</span>
                         </td>
                     </tr>
                     <tr>
