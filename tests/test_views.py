@@ -789,3 +789,41 @@ class TestDHCPServerProxyFlagsOnView:
 
         assert b"Stork Exporter Proxy" not in response.content
         assert b"Control Socket Proxy" in response.content
+
+
+@pytest.mark.django_db
+class TestDHCPServerCardOrder:
+    """The DDNS card sits in the right column, above Global Option Data."""
+
+    def _content(self, client, admin_user, server, monkeypatch, settings, ddns=True):
+        monkeypatch.setitem(settings.PLUGINS_CONFIG["netbox_dhcp_kea_plugin"], "enable_ddns", ddns)
+        client.force_login(admin_user)
+        response = client.get(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver", kwargs={"pk": server.pk})
+        )
+        assert response.status_code == 200
+        return response.content
+
+    def test_ddns_renders_above_global_option_data(
+        self, client, admin_user, dhcp_server_factory, settings, monkeypatch
+    ):
+        server = dhcp_server_factory(name="kea-cardorder", ip_suffix=171)
+
+        content = self._content(client, admin_user, server, monkeypatch, settings)
+
+        ddns = content.index(b'card-header">DDNS<')
+        options = content.index(b'card-header">Global Option Data<')
+        summary = content.index(b'card-header">Configuration Summary<')
+        assert ddns < options, "DDNS should come before Global Option Data"
+        # Configuration Summary ends the left column, so DDNS is now past it.
+        assert summary < ddns, "DDNS should be in the right-hand column"
+
+    def test_the_card_is_still_gated_on_the_ddns_toggle(
+        self, client, admin_user, dhcp_server_factory, settings, monkeypatch
+    ):
+        server = dhcp_server_factory(name="kea-cardorder-off", ip_suffix=172)
+
+        content = self._content(client, admin_user, server, monkeypatch, settings, ddns=False)
+
+        assert b'card-header">DDNS<' not in content
+        assert b'card-header">Global Option Data<' in content
