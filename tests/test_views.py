@@ -722,3 +722,70 @@ class TestDHCPServerBulkEdit:
         fields = DHCPServerBulkEditForm().fields
         for unique_to_one_host in ("name", "ip_address", "ha_address", "pki_fqdn"):
             assert unique_to_one_host not in fields
+
+
+@pytest.mark.django_db
+class TestDHCPServerProxyFlagsOnView:
+    """The three proxy settings were configurable but invisible."""
+
+    def _get(self, client, admin_user, server):
+        client.force_login(admin_user)
+        return client.get(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver", kwargs={"pk": server.pk})
+        )
+
+    def test_all_three_are_rendered(self, client, admin_user, dhcp_server_factory):
+        server = dhcp_server_factory(name="kea-proxyview", ip_suffix=161)
+
+        response = self._get(client, admin_user, server)
+
+        assert response.status_code == 200
+        assert b"Control Socket Proxy" in response.content
+        assert b"Stork Exporter Proxy" in response.content
+        assert b"HA Reverse Proxy" in response.content
+
+    def test_the_ha_flag_shows_it_comes_from_the_relationship(
+        self, client, admin_user, dhcp_server_factory
+    ):
+        """It is inherited, so the page should not imply it is set here."""
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="proxyview-cluster", mode="hot-standby", ha_proxy_enabled=True
+        )
+        server = dhcp_server_factory(
+            name="kea-proxyview-ha",
+            ip_suffix=162,
+            ha_relationship=relationship,
+            ha_role="primary",
+            ha_address="10.40.0.1",
+            pki_fqdn="kea-proxyview-ha.pki.example.net",
+        )
+
+        response = self._get(client, admin_user, server)
+
+        assert b"from relationship" in response.content
+        assert relationship.get_absolute_url().encode() in response.content
+        # The egress port only matters once the proxy is on.
+        assert b"HA Egress Base Port" in response.content
+
+    def test_the_egress_port_is_hidden_when_unproxied(
+        self, client, admin_user, dhcp_server_factory
+    ):
+        server = dhcp_server_factory(name="kea-proxyview-off", ip_suffix=163)
+
+        response = self._get(client, admin_user, server)
+
+        assert b"HA Egress Base Port" not in response.content
+        assert b"from relationship" not in response.content
+
+    def test_the_stork_row_follows_the_stork_toggle(
+        self, client, admin_user, dhcp_server_factory, settings, monkeypatch
+    ):
+        monkeypatch.setitem(settings.PLUGINS_CONFIG["netbox_dhcp_kea_plugin"], "enable_stork", False)
+        server = dhcp_server_factory(name="kea-proxyview-nostork", ip_suffix=164)
+
+        response = self._get(client, admin_user, server)
+
+        assert b"Stork Exporter Proxy" not in response.content
+        assert b"Control Socket Proxy" in response.content

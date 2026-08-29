@@ -180,6 +180,69 @@
             </div>
         </div>
         <div class="card">
+            <h5 class="card-header">
+                Reverse Proxy
+                <i class="mdi mdi-information-outline text-primary ms-1"
+                   data-bs-toggle="tooltip" data-bs-placement="top"
+                   title="Each of these moves one listener to loopback so a local proxy can bind the public address on its port. They are independent: a host may front its HA channel without fronting its control API."></i>
+            </h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>
+                            HA Reverse Proxy
+                            <i class="mdi mdi-information-outline text-primary ms-1"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Owned by the HA relationship, not this server — it is all or nothing for the cluster."></i>
+                        </th>
+                        <td>
+                            {% if object.ha_proxy_enabled %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% if object.ha_relationship %}
+                            <a href="{{ object.ha_relationship.get_absolute_url }}" class="badge bg-info ms-1" style="color: #ffffff;">from relationship</a>
+                            {% endif %}
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if object.ha_proxy_enabled %}
+                    <tr>
+                        <th>HA Egress Base Port</th>
+                        <td>{{ object.ha_egress_base_port|placeholder }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Control Socket Proxy</th>
+                        <td>
+                            {% if object.ctrl_socket_proxy_enabled %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if enable_stork %}
+                    <tr>
+                        <th>
+                            Stork Exporter Proxy
+                            <i class="mdi mdi-information-outline text-primary ms-1"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="The Prometheus exporter binds 127.0.0.1 instead of the agent group's address, leaving the public address on that port free for the proxy."></i>
+                        </th>
+                        <td>
+                            {% if object.stork_proxy_enabled %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        <div class="card">
             <h5 class="card-header">Reservation Mode Defaults</h5>
             <div class="card-body">
                 <table class="table table-hover attr-table">
