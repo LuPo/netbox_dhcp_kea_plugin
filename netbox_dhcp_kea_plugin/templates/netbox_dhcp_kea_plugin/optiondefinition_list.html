@@ -3,11 +3,11 @@
 {% load helpers %}
 {% load i18n %}
 
-{# 
+{% comment %}
   Custom list template for Option Definitions.
   Overrides content block to add toggle button for hiding/showing standard options.
   Based on NetBox's dcim/device/interfaces.html pattern.
-#}
+{% endcomment %}
 
 {% block content %}
     <div class="tab-pane show active" id="object-list" role="tabpanel" aria-labelledby="object-list-tab">

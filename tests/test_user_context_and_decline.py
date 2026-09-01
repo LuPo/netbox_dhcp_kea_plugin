@@ -184,6 +184,27 @@ class TestNewFieldsRenderOnDetailPages:
         assert b"User Context" in response.content
         assert b"rate-limit" in response.content
 
+    def test_the_client_class_label_column_is_pinned(self, client, admin_user):
+        """NetBox sizes attr-table labels to content, so they otherwise move.
+
+        A long test expression squeezes the label column, and every class then
+        renders its labels at a different position.
+        """
+        from netbox_dhcp_kea_plugin.models import ClientClass
+
+        cls = ClientClass.objects.create(
+            name="wide-class",
+            test_expression="ifelse(pkt4.msgtype == 4, hexstring(pkt4.mac, ':'), '') " * 3,
+        )
+
+        response = self._get(client, admin_user, "clientclass", cls.pk)
+
+        assert b"table-layout: fixed" in response.content
+        assert b"width: 30%" in response.content
+        # Django's {# #} is single-line only, so a multi-line one renders as
+        # text instead of being stripped.
+        assert b"NetBox sizes attr-table labels" not in response.content
+
     def test_the_subnet_page_shows_user_context(self, client, admin_user, subnet_factory):
         subnet = subnet_factory()
         subnet.user_context = {"limits": {"address-limit": 50}}
@@ -204,6 +225,11 @@ class TestNewFieldsRenderOnDetailPages:
         assert response.status_code == 200
         assert b"Decline Probation Period" in response.content
         assert b"86400 seconds (KEA default)" in response.content
+        # Right-hand column: past Configuration Summary, which ends the left one.
+        content = response.content
+        assert content.index(b'card-header">Configuration Summary<') < content.index(
+            b'card-header">Lease Handling<'
+        )
 
     def test_the_server_page_shows_a_configured_value(
         self, client, admin_user, dhcp_server_factory
@@ -249,3 +275,33 @@ class TestRouterIPWithAnUnsavedPrefix:
         routers = [o for o in subnet.to_kea_dict()["option-data"] if o["name"] == "routers"]
 
         assert routers and routers[0]["data"] == self._expected_first_address(subnet)
+
+
+@pytest.mark.django_db
+class TestServerCardsAlign:
+    """Values should line up down the page, not per-card.
+
+    With table-layout auto, a card whose values are short (a tick, a count)
+    lets the label column expand to most of the width, while a card with a
+    long value pulls it back — so the value column lands somewhere different
+    in every card.
+    """
+
+    def test_every_attr_table_pins_the_same_split(
+        self, client, admin_user, dhcp_server_factory
+    ):
+        from django.urls import reverse
+
+        server = dhcp_server_factory(name="kea-align", ip_suffix=195)
+        client.force_login(admin_user)
+
+        content = client.get(
+            reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver", kwargs={"pk": server.pk})
+        ).content
+
+        # Every attr-table on the page is pinned, and all to the same width —
+        # aligning them with each other is the whole point.
+        assert content.count(b'attr-table" style="table-layout: fixed;"') == content.count(
+            b'class="table table-hover attr-table'
+        )
+        assert content.count(b"width: 40%") >= 4

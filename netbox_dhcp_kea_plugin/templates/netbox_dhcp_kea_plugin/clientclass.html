@@ -8,7 +8,12 @@
         <div class="card">
             <h5 class="card-header">Client Class</h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                {# Pinned split: NetBox sizes attr-table labels to content, so they move per object. #}
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 25%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th scope="row">Name</th>
                         <td>{{ object.name }}</td>

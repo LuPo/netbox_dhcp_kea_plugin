@@ -27,7 +27,11 @@
         <div class="card">
             <h5 class="card-header">DHCP Server</h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th>Name</th>
                         <td>{{ object.name }}</td>
@@ -187,7 +191,11 @@
                    title="Each of these moves one listener to loopback so a local proxy can bind the public address on its port. They are independent: a host may front its HA channel without fronting its control API."></i>
             </h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th>
                             HA Reverse Proxy&nbsp;<i class="mdi mdi-information-outline text-primary"
@@ -241,30 +249,13 @@
             </div>
         </div>
         <div class="card">
-            <h5 class="card-header">Lease Handling</h5>
-            <div class="card-body">
-                <table class="table table-hover attr-table">
-                    <tr>
-                        <th>
-                            Decline Probation Period&nbsp;<i class="mdi mdi-information-outline text-primary"
-                               data-bs-toggle="tooltip" data-bs-placement="top"
-                               title="How long an address stays unavailable after a client DECLINEs it. Global only — KEA has no per-subnet form of this setting."></i>
-                        </th>
-                        <td>
-                            {% if object.decline_probation_period is not None %}
-                            {{ object.decline_probation_period }} seconds
-                            {% else %}
-                            <span class="text-muted">86400 seconds (KEA default)</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        <div class="card">
             <h5 class="card-header">Reservation Mode Defaults</h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th>Reservations Global</th>
                         <td>
@@ -301,7 +292,11 @@
         <div class="card mt-3">
             <h5 class="card-header">Configuration Summary</h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th>Subnets</th>
                         <td>{{ subnet_count }}</td>
@@ -430,11 +425,40 @@
         </div>
         {% endif %}
         {% if object.is_ha_primary %}
+        <div class="card">
+            <h5 class="card-header">Lease Handling</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
+                    <tr>
+                        <th>
+                            Decline Probation Period&nbsp;<i class="mdi mdi-information-outline text-primary"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="How long an address stays unavailable after a client DECLINEs it. Global only — KEA has no per-subnet form of this setting."></i>
+                        </th>
+                        <td>
+                            {% if object.decline_probation_period is not None %}
+                            {{ object.decline_probation_period }} seconds
+                            {% else %}
+                            <span class="text-muted">86400 seconds (KEA default)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
         {% if enable_ddns %}
         <div class="card">
             <h5 class="card-header">DDNS</h5>
             <div class="card-body">
-                <table class="table table-hover attr-table">
+                <table class="table table-hover attr-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 30%;">
+                        <col>
+                    </colgroup>
                     <tr>
                         <th>D2 Daemon</th>
                         <td>
