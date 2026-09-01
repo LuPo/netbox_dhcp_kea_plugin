@@ -37,6 +37,21 @@
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row">Valid Lifetime</th>
+                        <td>
+                            {% if object.valid_lifetime is not None %}{{ object.valid_lifetime }} seconds
+                            {% else %}<span class="text-muted">Inherited</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Timers (T1 / T2)</th>
+                        <td>
+                            {% if object.renew_timer is not None or object.rebind_timer is not None %}
+                            {{ object.renew_timer|default:"—" }} / {{ object.rebind_timer|default:"—" }} seconds
+                            {% else %}<span class="text-muted">Inherited</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">
                             User Context&nbsp;<i class="mdi mdi-information-outline text-primary"
                                data-bs-toggle="tooltip" data-bs-placement="top"

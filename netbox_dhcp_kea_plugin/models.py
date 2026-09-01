@@ -14,6 +14,29 @@ from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
 
+def validate_lease_timers(renew, rebind, valid, prefix=""):
+    """Check T1 < T2 < lease, which is what makes KEA emit the timer options.
+
+    KEA sends option 59 (rebind) only when rebind-timer is below valid-lifetime,
+    and option 58 (renew) only when renew-timer is below rebind-timer. It does
+    not complain about values that fail those tests — it just stops sending the
+    options, so a misordered set looks configured and does nothing.
+    """
+    errors = {}
+    if renew is not None and rebind is not None and renew >= rebind:
+        errors[f"{prefix}renew_timer"] = (
+            f"Renew timer ({renew}) must be below the rebind timer ({rebind}); KEA only sends "
+            "option 58 when it is, so otherwise the value is silently ignored."
+        )
+    if rebind is not None and valid is not None and rebind >= valid:
+        errors[f"{prefix}rebind_timer"] = (
+            f"Rebind timer ({rebind}) must be below the valid lifetime ({valid}); KEA only sends "
+            "option 59 when it is, so otherwise the value is silently ignored."
+        )
+    if errors:
+        raise ValidationError(errors)
+
+
 def validate_user_context(value, field_name="user_context"):
     """KEA requires user-context to be a JSON object.
 
@@ -388,6 +411,22 @@ class DHCPServer(NetBoxModel):
             "Expose the HTTP control socket through the local reverse proxy. The socket itself "
             "must be bound to 127.0.0.1."
         ),
+    )
+    valid_lifetime = models.PositiveIntegerField(
+        default=3600,
+        verbose_name="Valid lifetime",
+        help_text="Default lease lifetime in seconds, applied where no subnet or class overrides it.",
+    )
+    max_valid_lifetime = models.PositiveIntegerField(
+        default=7200,
+        verbose_name="Max valid lifetime",
+        help_text="Upper bound KEA will honour when a client requests a specific lease time.",
+    )
+    renew_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Renew timer (T1)", help_text="Seconds before the client begins renewing (T1). KEA sends it as option 58, and only when it is below the rebind timer. Leave blank to send nothing and let the client pick its own T1."
+    )
+    rebind_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Rebind timer (T2)", help_text="Seconds before the client begins rebinding (T2). KEA sends it as option 59, and only when it is below the valid lifetime. Leave blank to send nothing."
     )
     decline_probation_period = models.PositiveIntegerField(
         null=True,
@@ -786,6 +825,8 @@ class DHCPServer(NetBoxModel):
                 raise ValidationError(
                     {"ctrl_socket_unix_path": "Unix socket path is required when Unix control socket is enabled."}
                 )
+
+        validate_lease_timers(self.renew_timer, self.rebind_timer, self.valid_lifetime)
 
         # Validate the PKI identity
         self._validate_pki_identity()
@@ -1351,8 +1392,8 @@ class DHCPServer(NetBoxModel):
                 "interfaces-config": {
                     "interfaces": ["*"],  # Placeholder - should be configured per deployment
                 },
-                "valid-lifetime": 3600,
-                "max-valid-lifetime": 7200,
+                "valid-lifetime": self.valid_lifetime,
+                "max-valid-lifetime": self.max_valid_lifetime,
                 # Global reservation mode defaults (subnets can override per-subnet)
                 "reservations-global": self.reservations_global,
                 "reservations-in-subnet": self.reservations_in_subnet,
@@ -1366,6 +1407,10 @@ class DHCPServer(NetBoxModel):
         # value the operator never chose.
         if self.decline_probation_period is not None:
             dhcp4["decline-probation-period"] = self.decline_probation_period
+        if self.renew_timer is not None:
+            dhcp4["renew-timer"] = self.renew_timer
+        if self.rebind_timer is not None:
+            dhcp4["rebind-timer"] = self.rebind_timer
 
         # Add control sockets if configured
         control_sockets = self.get_control_sockets()
@@ -2159,6 +2204,21 @@ class ClientClass(NetBoxModel):
         help_text="Option data to send to clients matching this class",
     )
 
+    valid_lifetime = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Valid lifetime",
+        help_text=(
+            "Lease lifetime for clients matching this class, overriding the subnet and global "
+            "values. Requires KEA 1.9.5 or later. Leave blank to inherit."
+        ),
+    )
+    renew_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Renew timer (T1)", help_text="Seconds before the client begins renewing (T1). KEA sends it as option 58, and only when it is below the rebind timer. Leave blank to send nothing and let the client pick its own T1."
+    )
+    rebind_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Rebind timer (T2)", help_text="Seconds before the client begins rebinding (T2). KEA sends it as option 59, and only when it is below the valid lifetime. Leave blank to send nothing."
+    )
     template_test = models.BooleanField(
         default=False,
         verbose_name="Template class",
@@ -2216,6 +2276,7 @@ class ClientClass(NetBoxModel):
     def clean(self):
         super().clean()
         validate_user_context(self.user_context)
+        validate_lease_timers(self.renew_timer, self.rebind_timer, self.valid_lifetime)
 
         if self.template_test and not self.test_expression:
             raise ValidationError(
@@ -2412,6 +2473,13 @@ class ClientClass(NetBoxModel):
         if self.user_context:
             result["user-context"] = self.user_context
 
+        if self.valid_lifetime is not None:
+            result["valid-lifetime"] = self.valid_lifetime
+        if self.renew_timer is not None:
+            result["renew-timer"] = self.renew_timer
+        if self.rebind_timer is not None:
+            result["rebind-timer"] = self.rebind_timer
+
         # Add only-in-additional-list flag if set
         if self.only_in_additional_list:
             result["only-in-additional-list"] = True
@@ -2482,6 +2550,12 @@ class Subnet(NetBoxModel):
 
     prefix = models.OneToOneField(Prefix, on_delete=models.CASCADE, related_name="dhcp_config")
     server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="subnet_items")
+    renew_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Renew timer (T1)", help_text="Seconds before the client begins renewing (T1). KEA sends it as option 58, and only when it is below the rebind timer. Leave blank to send nothing and let the client pick its own T1."
+    )
+    rebind_timer = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Rebind timer (T2)", help_text="Seconds before the client begins rebinding (T2). KEA sends it as option 59, and only when it is below the valid lifetime. Leave blank to send nothing."
+    )
     user_context = models.JSONField(
         null=True,
         blank=True,
@@ -2620,6 +2694,7 @@ class Subnet(NetBoxModel):
     def clean(self):
         super().clean()
         validate_user_context(self.user_context)
+        validate_lease_timers(self.renew_timer, self.rebind_timer, self.valid_lifetime)
 
         if self.max_lifetime < self.valid_lifetime:
             raise ValidationError({"valid_lifetime": "Valid lifetime cannot be greater than max lifetime."})
@@ -3242,6 +3317,11 @@ class Subnet(NetBoxModel):
             "valid-lifetime": self.valid_lifetime,
             "max-valid-lifetime": self.max_lifetime,
         }
+
+        if self.renew_timer is not None:
+            result["renew-timer"] = self.renew_timer
+        if self.rebind_timer is not None:
+            result["rebind-timer"] = self.rebind_timer
 
         if self.user_context:
             result["user-context"] = self.user_context

@@ -426,6 +426,8 @@ class SubnetImportForm(NetBoxModelImportForm):
             "client_class",
             "valid_lifetime",
             "max_lifetime",
+            "renew_timer",
+            "rebind_timer",
             "routers_option_offset",
             "reservations_global",
             "reservations_in_subnet",
@@ -933,7 +935,12 @@ class DHCPServerForm(NetBoxModelForm):
                 name="General",
             ),
             FieldSet("option_data", "client_classes", name="DHCP Configuration"),
-            FieldSet("decline_probation_period", name="Lease Handling"),
+            FieldSet(
+                InlineFields("valid_lifetime", "max_valid_lifetime", label="Lifetime"),
+                InlineFields("renew_timer", "rebind_timer", label="Timers (T1 / T2)"),
+                "decline_probation_period",
+                name="Lease Handling",
+            ),
             FieldSet(
                 InlineFields(
                     "reservations_global",
@@ -1002,6 +1009,10 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_tls",
             "ha_auto_failover",
             "ha_egress_base_port",
+            "valid_lifetime",
+            "max_valid_lifetime",
+            "renew_timer",
+            "rebind_timer",
             "decline_probation_period",
             "pki_fqdn",
             "ctrl_socket_proxy_enabled",
@@ -1218,6 +1229,9 @@ class ClientClassForm(NetBoxModelForm):
             "name",
             "test_expression",
             "template_test",
+            "valid_lifetime",
+            "renew_timer",
+            "rebind_timer",
             "user_context",
             "description",
             "servers",
@@ -1238,6 +1252,11 @@ class ClientClassForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet("name", "test_expression", "template_test", "description", "tags", name="Client Class"),
+        FieldSet(
+            "valid_lifetime",
+            InlineFields("renew_timer", "rebind_timer", label="Timers (T1 / T2)"),
+            name="Lease Timing",
+        ),
         FieldSet("user_context", name="User Context"),
         FieldSet("servers", "option_data", name="Assignments"),
         FieldSet("only_in_additional_list", name="Evaluation"),
@@ -1369,6 +1388,7 @@ class SubnetForm(NetBoxModelForm):
         FieldSet("prefix", "server", name="Prefix Assignment"),
         FieldSet(
             InlineFields("valid_lifetime", "max_lifetime", label="Lifetime"),
+            InlineFields("renew_timer", "rebind_timer", label="Timers (T1 / T2)"),
             name="Lease Timing",
         ),
         FieldSet("routers_option_offset", "option_data", name="DHCP Options"),
@@ -1395,6 +1415,8 @@ class SubnetForm(NetBoxModelForm):
             "server",
             "valid_lifetime",
             "max_lifetime",
+            "renew_timer",
+            "rebind_timer",
             "routers_option_offset",
             "option_data",
             "client_class",

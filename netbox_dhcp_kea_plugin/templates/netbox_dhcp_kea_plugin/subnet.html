@@ -36,6 +36,20 @@
                         <td>{{ object.max_lifetime }} seconds</td>
                     </tr>
                     <tr>
+                        <th>Renew Timer (T1)</th>
+                        <td>
+                            {% if object.renew_timer is not None %}{{ object.renew_timer }} seconds
+                            {% else %}<span class="text-muted">Inherited</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Rebind Timer (T2)</th>
+                        <td>
+                            {% if object.rebind_timer is not None %}{{ object.rebind_timer }} seconds
+                            {% else %}<span class="text-muted">Inherited</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
                         <th>
                             User Context&nbsp;<i class="mdi mdi-information-outline text-primary"
                                data-bs-toggle="tooltip" data-bs-placement="top"

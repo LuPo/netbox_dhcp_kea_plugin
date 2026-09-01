@@ -279,10 +279,40 @@ A client that sends `DHCPDECLINE` puts the address into probation, and Kea's def
 client stuck in a decline loop therefore walks a pool: the declined lease is gone, so its
 next `DHCPDISCOVER` is answered with a *fresh* address, and so on.
 
+### Lease timers
+
+`valid-lifetime`, `renew-timer` (T1) and `rebind-timer` (T2) can be set at **three** levels,
+and Kea resolves them in this order: **client class → subnet → global**. All three are
+modelled:
+
+| Level | Fields |
+|---|---|
+| `DHCPServer` (global) | `valid_lifetime` (default 3600), `max_valid_lifetime` (7200), `renew_timer`, `rebind_timer` |
+| `Subnet` | `valid_lifetime`, `max_lifetime`, `renew_timer`, `rebind_timer` |
+| `ClientClass` | `valid_lifetime`, `renew_timer`, `rebind_timer` — needs Kea 1.9.5+ |
+
+The timers are optional at every level; left blank, nothing is emitted and the client picks
+its own T1/T2 from the lease time.
+
+!!! warning "Set the parameters, not the options"
+
+    Kea *generates* the wire options from these values — option 51 from `valid-lifetime`,
+    58 from `renew-timer`, 59 from `rebind-timer` — and applies conditions when doing so: it
+    sends option 59 only when `rebind-timer` is below `valid-lifetime`, and option 58 only
+    when `renew-timer` is below `rebind-timer`. Misordered values are **not** an error in
+    Kea; the options are simply not sent, so the configuration looks right and does nothing.
+    This plugin rejects that ordering at save time instead.
+
+    For the same reason the option definitions shipped here deliberately exclude codes
+    **50, 51, 53, 55, 58, 59** and **61** — the protocol machinery. They cannot be set as
+    option data, and should not be.
+
 ### `decline_probation_period` on DHCPServer
 
-Global only — Kea has no per-subnet form of this setting, which is why it lives on the
-server rather than the subnet alongside `valid_lifetime`. Leave it blank to omit the key
+Global only — `decline-probation-period` appears in Kea's `GLOBAL4_PARAMETERS` and in
+neither `SUBNET4_PARAMETERS` nor `SHARED_NETWORK4_PARAMETERS`, which is why it lives on the
+server rather than the subnet alongside `valid_lifetime`. It has no wire option at all; it
+is purely server-side behaviour. Leave it blank to omit the key
 and take Kea's default; set it to shorten the window. `0` is a legitimate value meaning
 "return the address immediately", and is emitted as such rather than treated as blank.
 
@@ -301,13 +331,22 @@ configuration from it; `libdhcp_limits.so` takes its limits from here:
 It must be a JSON **object** — Kea reads it as a map and refuses to start otherwise, so a
 list or scalar is rejected at save time instead.
 
-!!! warning "The limits hook does not solve decline-driven starvation"
+!!! tip "Rate-limiting declines is ISC's own recommendation"
 
-    It is tempting to rate-limit a class matching `pkt4.msgtype == 4`. It does not work.
-    `rate-limit` caps *"the rate at which packets receive a response"*, and Kea never
-    responds to a `DHCPDECLINE` — the decline is still processed and the lease still enters
-    probation. `address-limit` does not reach it either: Kea anonymises a lease when it
-    declines it, so declined addresses are attributed to no client and are not counted.
+    ISC's [Limiting DHCP DECLINE](https://kb.isc.org/docs/limiting-dhcp-decline) describes
+    exactly this: a client class that matches DECLINE messages, plus the limits hook, to stop
+    "any single client (MAC address) from declining more than three IP addresses per hour".
+    Combine it with `template_test` so the class spawns one subclass per MAC and the budget
+    is per client rather than shared:
+
+    ```
+    test expression:  ifelse(pkt4.msgtype == 4, hexstring(pkt4.mac, ':'), '')
+    template class:   yes
+    user context:     {"limits": {"rate-limit": "3 packets per hour"}}
+    ```
+
+    ISC pairs it with a shorter probation: the 24-hour default is "excessive for public
+    networks", where "values well under an hour are often appropriate".
 
 ### `template_test` on ClientClass
 

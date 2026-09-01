@@ -7,6 +7,8 @@ the two class/subnet constructs the limits hook and per-client classification
 need.
 """
 
+import re
+
 import pytest
 from django.core.exceptions import ValidationError
 
@@ -200,7 +202,8 @@ class TestNewFieldsRenderOnDetailPages:
         response = self._get(client, admin_user, "clientclass", cls.pk)
 
         assert b"table-layout: fixed" in response.content
-        assert b"width: 30%" in response.content
+        # The exact split is a design choice; that one is pinned at all is not.
+        assert re.search(rb"<col style=\"width: \d+%;\">", response.content)
         # Django's {# #} is single-line only, so a multi-line one renders as
         # text instead of being stripped.
         assert b"NetBox sizes attr-table labels" not in response.content
@@ -304,4 +307,137 @@ class TestServerCardsAlign:
         assert content.count(b'attr-table" style="table-layout: fixed;"') == content.count(
             b'class="table table-hover attr-table'
         )
-        assert content.count(b"width: 40%") >= 4
+        # Aligning the cards with each other is the point, so they must all use
+        # the same split — whatever that split happens to be.
+        widths = set(re.findall(rb"<col style=\"width: (\d+)%;\">", content))
+        assert len(widths) == 1, f"cards disagree on column width: {widths}"
+
+
+@pytest.mark.django_db
+class TestLeaseTimers:
+    """T1/T2 at all three levels KEA accepts them: global, subnet, client class."""
+
+    def test_the_global_lifetimes_are_editable(self, dhcp_server_factory):
+        """They were hardcoded at 3600/7200 before, so defaults must not move."""
+        server = dhcp_server_factory(name="kea-timers-default", ip_suffix=201)
+
+        dhcp4 = server.to_kea_dict()["Dhcp4"]
+
+        assert dhcp4["valid-lifetime"] == 3600
+        assert dhcp4["max-valid-lifetime"] == 7200
+        # Optional, so absent unless chosen.
+        assert "renew-timer" not in dhcp4
+        assert "rebind-timer" not in dhcp4
+
+    def test_global_timers_are_emitted_when_set(self, dhcp_server_factory):
+        server = dhcp_server_factory(name="kea-timers-global", ip_suffix=202)
+        server.valid_lifetime = 3600
+        server.renew_timer = 900
+        server.rebind_timer = 1800
+        server.save()
+
+        dhcp4 = server.to_kea_dict()["Dhcp4"]
+
+        assert (dhcp4["renew-timer"], dhcp4["rebind-timer"]) == (900, 1800)
+
+    def test_subnet_timers_are_emitted_when_set(self, subnet_factory):
+        subnet = subnet_factory()
+        subnet.renew_timer = 450
+        subnet.rebind_timer = 900
+        subnet.save()
+
+        result = subnet.to_kea_dict()
+
+        assert (result["renew-timer"], result["rebind-timer"]) == (450, 900)
+
+    def test_a_subnet_without_timers_emits_none(self, subnet_factory):
+        result = subnet_factory().to_kea_dict()
+
+        assert "renew-timer" not in result
+        assert "rebind-timer" not in result
+
+    def test_client_class_timers_are_emitted_when_set(self):
+        """Per-class lifetimes need KEA 1.9.5 or later."""
+        from netbox_dhcp_kea_plugin.models import ClientClass
+
+        cls = ClientClass.objects.create(
+            name="short-lease",
+            test_expression="pkt4.msgtype == 4",
+            valid_lifetime=600,
+            renew_timer=150,
+            rebind_timer=300,
+        )
+
+        result = cls.to_kea_dict()
+
+        assert result["valid-lifetime"] == 600
+        assert (result["renew-timer"], result["rebind-timer"]) == (150, 300)
+
+    def test_a_client_class_without_timers_emits_none(self):
+        from netbox_dhcp_kea_plugin.models import ClientClass
+
+        cls = ClientClass.objects.create(name="inherits", test_expression="")
+
+        result = cls.to_kea_dict()
+
+        for key in ("valid-lifetime", "renew-timer", "rebind-timer"):
+            assert key not in result
+
+
+@pytest.mark.django_db
+class TestLeaseTimerOrdering:
+    """KEA silently drops misordered timers rather than complaining.
+
+    Option 58 is sent only when renew < rebind, and option 59 only when
+    rebind < valid. A misordered set looks configured and does nothing, so it
+    is rejected here instead.
+    """
+
+    def test_renew_must_be_below_rebind(self, dhcp_server_factory):
+        server = dhcp_server_factory(name="kea-timers-bad1", ip_suffix=203)
+        server.renew_timer = 1800
+        server.rebind_timer = 900
+
+        with pytest.raises(ValidationError) as exc:
+            server.clean()
+
+        assert "renew_timer" in exc.value.message_dict
+
+    def test_rebind_must_be_below_the_valid_lifetime(self, dhcp_server_factory):
+        server = dhcp_server_factory(name="kea-timers-bad2", ip_suffix=204)
+        server.valid_lifetime = 3600
+        server.renew_timer = 900
+        server.rebind_timer = 7200
+
+        with pytest.raises(ValidationError) as exc:
+            server.clean()
+
+        assert "rebind_timer" in exc.value.message_dict
+
+    def test_a_correct_ordering_passes(self, dhcp_server_factory):
+        server = dhcp_server_factory(name="kea-timers-ok", ip_suffix=205)
+        server.valid_lifetime = 3600
+        server.renew_timer = 900
+        server.rebind_timer = 1800
+
+        server.clean()
+
+    def test_a_class_with_no_lifetime_only_checks_the_timers(self):
+        """valid_lifetime is optional on a class, so that half is skipped."""
+        from netbox_dhcp_kea_plugin.models import ClientClass
+
+        ClientClass(name="partial", test_expression="", renew_timer=100, rebind_timer=200).clean()
+
+        bad = ClientClass(name="partial-bad", test_expression="", renew_timer=300, rebind_timer=200)
+        with pytest.raises(ValidationError):
+            bad.clean()
+
+    def test_the_subnet_is_checked_too(self, subnet_factory):
+        subnet = subnet_factory()
+        subnet.renew_timer = 5000
+        subnet.rebind_timer = 6000  # above valid_lifetime
+
+        with pytest.raises(ValidationError) as exc:
+            subnet.clean()
+
+        assert "rebind_timer" in exc.value.message_dict

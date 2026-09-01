@@ -434,6 +434,28 @@
                         <col>
                     </colgroup>
                     <tr>
+                        <th>Valid Lifetime</th>
+                        <td>{{ object.valid_lifetime }} seconds</td>
+                    </tr>
+                    <tr>
+                        <th>Max Valid Lifetime</th>
+                        <td>{{ object.max_valid_lifetime }} seconds</td>
+                    </tr>
+                    <tr>
+                        <th>Renew Timer (T1)</th>
+                        <td>
+                            {% if object.renew_timer is not None %}{{ object.renew_timer }} seconds
+                            {% else %}<span class="text-muted">Not sent (client chooses)</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Rebind Timer (T2)</th>
+                        <td>
+                            {% if object.rebind_timer is not None %}{{ object.rebind_timer }} seconds
+                            {% else %}<span class="text-muted">Not sent (client chooses)</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
                         <th>
                             Decline Probation Period&nbsp;<i class="mdi mdi-information-outline text-primary"
                                data-bs-toggle="tooltip" data-bs-placement="top"
