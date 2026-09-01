@@ -112,9 +112,6 @@ class TestUserContext:
 
     def test_a_subnet_renders_its_user_context(self, subnet_factory):
         subnet = subnet_factory()
-        # Unrelated to this feature: the factory sets a routers offset, and
-        # get_router_ip() trips over the prefix type in the test DB.
-        subnet.routers_option_offset = 0
         subnet.user_context = {"limits": {"address-limit": 50}}
         subnet.save()
 
@@ -122,8 +119,6 @@ class TestUserContext:
 
     def test_a_subnet_without_one_emits_no_key(self, subnet_factory):
         subnet = subnet_factory()
-        subnet.routers_option_offset = 0
-        subnet.save()
 
         assert "user-context" not in subnet.to_kea_dict()
 
@@ -221,3 +216,36 @@ class TestNewFieldsRenderOnDetailPages:
 
         assert b"120 seconds" in response.content
         assert b"KEA default" not in response.content
+
+
+@pytest.mark.django_db
+class TestRouterIPWithAnUnsavedPrefix:
+    """get_router_ip() lacked the string guard clean() has.
+
+    Prefix.prefix only comes back as an IPNetwork once it has round-tripped
+    through the database. Before that it is whatever was passed in, and
+    to_kea_dict() reaches this method — so it raised AttributeError rather than
+    returning an address.
+    """
+
+    @staticmethod
+    def _expected_first_address(subnet):
+        import netaddr
+
+        return str(netaddr.IPNetwork(str(subnet.prefix.prefix)).network + 1)
+
+    def test_it_handles_a_string_prefix(self, subnet_factory):
+        subnet = subnet_factory()
+        subnet.routers_option_offset = 1
+
+        # Previously raised AttributeError: 'str' object has no attribute 'network'
+        assert subnet.get_router_ip() == self._expected_first_address(subnet)
+
+    def test_to_kea_dict_emits_the_routers_option(self, subnet_factory):
+        subnet = subnet_factory()
+        subnet.routers_option_offset = 1
+        subnet.save()
+
+        routers = [o for o in subnet.to_kea_dict()["option-data"] if o["name"] == "routers"]
+
+        assert routers and routers[0]["data"] == self._expected_first_address(subnet)

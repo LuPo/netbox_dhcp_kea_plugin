@@ -2682,6 +2682,13 @@ class Subnet(NetBoxModel):
             return None
 
         prefix = self.prefix.prefix
+        if isinstance(prefix, str):
+            # Same guard clean() already applies: the field only comes back as an
+            # IPNetwork once it has round-tripped through the database, and this
+            # is reachable from to_kea_dict() before that happens.
+            import netaddr
+
+            prefix = netaddr.IPNetwork(prefix)
         return str(prefix.network + self.routers_option_offset)
 
     def get_pools(self):
