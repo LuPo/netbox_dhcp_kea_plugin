@@ -441,3 +441,82 @@ class TestLeaseTimerOrdering:
             subnet.clean()
 
         assert "rebind_timer" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+class TestLeaseDefaultsFromPluginConfig:
+    """model_defaults seeds new objects, separately per scope.
+
+    The global block and its subnets are different scopes in KEA and often want
+    different starting points, so they are separate keys.
+    """
+
+    def _defaults(self, settings, monkeypatch, **models):
+        current = dict(settings.PLUGINS_CONFIG["netbox_dhcp_kea_plugin"].get("model_defaults", {}))
+        current.update(models)
+        monkeypatch.setitem(
+            settings.PLUGINS_CONFIG["netbox_dhcp_kea_plugin"], "model_defaults", current
+        )
+
+    def test_the_server_scope_seeds_new_servers(
+        self, dhcp_server_factory, settings, monkeypatch
+    ):
+        self._defaults(
+            settings,
+            monkeypatch,
+            DHCPServer={
+                "valid_lifetime": 1800,
+                "max_valid_lifetime": 3600,
+                "decline_probation_period": 120,
+            },
+        )
+        server = dhcp_server_factory(name="kea-cfg-global", ip_suffix=211)
+
+        dhcp4 = server.to_kea_dict()["Dhcp4"]
+
+        assert dhcp4["valid-lifetime"] == 1800
+        assert dhcp4["max-valid-lifetime"] == 3600
+        assert dhcp4["decline-probation-period"] == 120
+
+    def test_the_subnet_scope_is_independent_of_the_server_one(
+        self, dhcp_server_factory, prefix_factory, settings, monkeypatch
+    ):
+        """Different scopes, different keys — one must not leak into the other.
+
+        Built directly rather than through subnet_factory, which passes explicit
+        lifetimes and so would bypass the defaults under test.
+        """
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        self._defaults(
+            settings,
+            monkeypatch,
+            DHCPServer={"valid_lifetime": 1800, "max_valid_lifetime": 3600},
+            Subnet={"valid_lifetime": 600, "max_lifetime": 1200},
+        )
+        server = dhcp_server_factory(name="kea-cfg-subnet", ip_suffix=214)
+        subnet = Subnet.objects.create(prefix=prefix_factory(), server=server)
+
+        result = subnet.to_kea_dict()
+
+        # The subnet takes its own scope's values, not the server's.
+        assert result["valid-lifetime"] == 600
+        assert result["max-valid-lifetime"] == 1200
+        assert server.to_kea_dict()["Dhcp4"]["valid-lifetime"] == 1800
+
+    def test_probation_defaults_to_absent(self, dhcp_server_factory):
+        """Unset means omit the key, leaving KEA's 86400 rather than asserting one."""
+        server = dhcp_server_factory(name="kea-cfg-none", ip_suffix=212)
+
+        assert server.decline_probation_period is None
+        assert "decline-probation-period" not in server.to_kea_dict()["Dhcp4"]
+
+    def test_shipped_defaults_match_the_previously_hardcoded_values(
+        self, dhcp_server_factory
+    ):
+        """Upgrading must not move any rendered config."""
+        server = dhcp_server_factory(name="kea-cfg-shipped", ip_suffix=213)
+
+        dhcp4 = server.to_kea_dict()["Dhcp4"]
+
+        assert (dhcp4["valid-lifetime"], dhcp4["max-valid-lifetime"]) == (3600, 7200)

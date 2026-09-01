@@ -31,6 +31,16 @@ class DHCPKEAConfig(PluginConfig):
         "ddns_secret_backend": "plaintext",
         "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
         "model_defaults": {
+            # Global scope: the Dhcp4 block on each DHCP server.
+            "DHCPServer": {
+                "valid_lifetime": 3600,
+                "max_valid_lifetime": 7200,
+                # None omits the key entirely and lets KEA apply its own 86400,
+                # a full day per declined address. Set a shorter window here to
+                # have every new server start with it.
+                "decline_probation_period": None,
+            },
+            # Local scope: each subnet, which overrides the global values above.
             "Subnet": {
                 "valid_lifetime": 3600,
                 "max_lifetime": 7200,

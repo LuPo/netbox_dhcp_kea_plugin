@@ -16,9 +16,37 @@ PLUGINS_CONFIG = {
         "enable_netbox_dns": False,
         "enable_ddns": False,
         "pki_allowed_zone_suffixes": [],
+        "model_defaults": {
+            "DHCPServer": {
+                "valid_lifetime": 3600,
+                "max_valid_lifetime": 7200,
+                "decline_probation_period": None,
+            },
+            "Subnet": {
+                "valid_lifetime": 3600,
+                "max_lifetime": 7200,
+            },
+        },
     },
 }
 ```
+
+### Lease defaults, per scope
+
+`model_defaults` seeds **new** objects; it never rewrites existing ones, and any value can
+still be overridden per object in the UI. The two scopes are separate keys because Kea
+treats them as separate scopes — a subnet's lifetime overrides the global one, and the two
+often want different starting points:
+
+| Key | Applies to | Notes |
+|---|---|---|
+| `DHCPServer.valid_lifetime` / `max_valid_lifetime` | the global `Dhcp4` block | Rendered on every server. |
+| `DHCPServer.decline_probation_period` | the global `Dhcp4` block | `None` omits the key, leaving Kea's 86400 — a full day per declined address. Set a shorter window here to have every new server start with it. Global-only in Kea; there is no subnet form of it. |
+| `Subnet.valid_lifetime` / `max_lifetime` | each subnet | Overrides the global values above. |
+
+`renew_timer` and `rebind_timer` are deliberately not seeded: they are optional at every
+level, and a default would start sending options 58/59 to clients that were previously
+choosing their own T1/T2.
 
 Every setting is optional; omitted keys fall back to their default.
 
@@ -34,7 +62,7 @@ Every setting is optional; omitted keys fall back to their default.
 | `ddns_secret_backend` | `"plaintext"` | Backend identifier consulted by `TSIGKey.get_secret()`. Only `"plaintext"` is shipped today; `"vault"` is reserved. |
 | `pki_allowed_zone_suffixes` | `[]` | DNS zone suffixes your internal CA will issue certificates for, e.g. `[".pki.example.net"]`. A leading dot is optional. **Empty disables the check.** When set, a `DHCPServer.pki_fqdn` outside these zones is rejected on save — see [PKI identity](usage.md#pki-identity-pki_fqdn). |
 | `d2_default_control_socket_path` | `"/tmp/kea-dhcp-ddns-ctrl.sock"` | Pre-fills the control socket field on new `D2Daemon` rows. |
-| `model_defaults` | *(see below)* | Per-model default values, including reservation modes and lease lifetimes. |
+| `model_defaults` | *(see below)* | Per-model default values for new objects, keyed by model. Reservation modes, lease lifetimes and the decline probation period are settable separately for the **global** scope (`DHCPServer`) and the **local** one (`Subnet`). |
 
 ## Model defaults
 

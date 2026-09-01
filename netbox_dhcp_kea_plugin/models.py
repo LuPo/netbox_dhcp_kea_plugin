@@ -268,6 +268,24 @@ def get_default_reservations_only():
     return get_model_default("Subnet", "reservations_only", False)
 
 
+def get_default_server_valid_lifetime():
+    return get_model_default("DHCPServer", "valid_lifetime", 3600)
+
+
+def get_default_server_max_valid_lifetime():
+    return get_model_default("DHCPServer", "max_valid_lifetime", 7200)
+
+
+def get_default_decline_probation_period():
+    """Default probation window for new servers.
+
+    None means the key is omitted and KEA applies its own 86400 — a full day per
+    declined address. A deployment that wants something shorter everywhere sets
+    it here rather than on each server.
+    """
+    return get_model_default("DHCPServer", "decline_probation_period", None)
+
+
 class DHCPServer(NetBoxModel):
     """ISC KEA DHCP Server instance"""
 
@@ -413,12 +431,12 @@ class DHCPServer(NetBoxModel):
         ),
     )
     valid_lifetime = models.PositiveIntegerField(
-        default=3600,
+        default=get_default_server_valid_lifetime,
         verbose_name="Valid lifetime",
         help_text="Default lease lifetime in seconds, applied where no subnet or class overrides it.",
     )
     max_valid_lifetime = models.PositiveIntegerField(
-        default=7200,
+        default=get_default_server_max_valid_lifetime,
         verbose_name="Max valid lifetime",
         help_text="Upper bound KEA will honour when a client requests a specific lease time.",
     )
@@ -431,6 +449,7 @@ class DHCPServer(NetBoxModel):
     decline_probation_period = models.PositiveIntegerField(
         null=True,
         blank=True,
+        default=get_default_decline_probation_period,
         verbose_name="Decline probation period",
         help_text=(
             "Seconds an address stays unavailable after a client DECLINEs it. Leave blank "
