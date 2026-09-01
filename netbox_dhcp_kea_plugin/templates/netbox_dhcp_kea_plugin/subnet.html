@@ -1,5 +1,6 @@
 {% extends 'generic/object.html' %}
 {% load static %}
+{% load helpers %}
 
 {% block content %}
 <div class="row">
@@ -33,6 +34,20 @@
                     <tr>
                         <th>Max Lifetime</th>
                         <td>{{ object.max_lifetime }} seconds</td>
+                    </tr>
+                    <tr>
+                        <th>
+                            User Context&nbsp;<i class="mdi mdi-information-outline text-primary"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Passed through to KEA as user-context. Hook libraries read their configuration from here — libdhcp_limits.so takes per-subnet limits from it."></i>
+                        </th>
+                        <td>
+                            {% if object.user_context %}
+                            <pre class="mb-0">{{ object.user_context|json }}</pre>
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
                         <th>Router Option Offset</th>

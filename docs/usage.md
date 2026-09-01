@@ -272,6 +272,68 @@ The endpoint name and the certificate on the Stork listener are **one decision, 
 
     That field on the agent group renders `STORK_AGENT_SKIP_TLS_CERT_VERIFICATION`, which governs the agent's connection to **Kea's control API**. It has no effect on registration with the Stork server. It appears under its own *Kea Connection* heading for that reason.
 
+## Declines and pool starvation
+
+A client that sends `DHCPDECLINE` puts the address into probation, and Kea's default
+`decline-probation-period` is **86400 seconds** — a full day per declined address. A
+client stuck in a decline loop therefore walks a pool: the declined lease is gone, so its
+next `DHCPDISCOVER` is answered with a *fresh* address, and so on.
+
+### `decline_probation_period` on DHCPServer
+
+Global only — Kea has no per-subnet form of this setting, which is why it lives on the
+server rather than the subnet alongside `valid_lifetime`. Leave it blank to omit the key
+and take Kea's default; set it to shorten the window. `0` is a legitimate value meaning
+"return the address immediately", and is emitted as such rather than treated as blank.
+
+Shortening probation bounds how long a declined address is unusable. It does **not** bound
+the walk — see below.
+
+### `user_context` on ClientClass and Subnet
+
+A free-form JSON object emitted as Kea's `user-context`. Hook libraries read their
+configuration from it; `libdhcp_limits.so` takes its limits from here:
+
+```json
+{"limits": {"rate-limit": "10 packets per second"}}
+```
+
+It must be a JSON **object** — Kea reads it as a map and refuses to start otherwise, so a
+list or scalar is rejected at save time instead.
+
+!!! warning "The limits hook does not solve decline-driven starvation"
+
+    It is tempting to rate-limit a class matching `pkt4.msgtype == 4`. It does not work.
+    `rate-limit` caps *"the rate at which packets receive a response"*, and Kea never
+    responds to a `DHCPDECLINE` — the decline is still processed and the lease still enters
+    probation. `address-limit` does not reach it either: Kea anonymises a lease when it
+    declines it, so declined addresses are attributed to no client and are not counted.
+
+### `template_test` on ClientClass
+
+Renders the test expression as `template-test` instead of `test`. Kea evaluates it per
+packet and spawns a subclass named `SPAWN_<class>_<value>` for each distinct result — one
+class definition yielding one class per client. Both the template name and the spawned name
+are associated with the packet, so a subnet or pool may restrict on either: the template
+name matches any client the expression yields a value for, a spawned name matches one
+specific value.
+
+### What actually bounds the walk
+
+Neither of the above stops one device eating a pool. Two existing features do:
+
+- **Contain the offenders.** Restrict a small, dedicated pool to a client class matching
+  the misbehaving device types (by MAC OUI or vendor class) using a subnet pool's
+  **client class**. A device that declines in a loop then exhausts that pool, not the whole
+  subnet.
+- **Pin them.** A static reservation makes a looping client re-offered the *same* address
+  every time, so the loop costs one address instead of a pool.
+
+`libdhcp_ping_check.so` is in the hook catalogue and configurable through a hook's
+parameters, but temper expectations: it helps when an address is genuinely occupied, and
+declines from dual-homed hosts answering ARP for their own other interface are false
+conflicts that a ping check will not see.
+
 ## D2 daemon configuration generation
 
 When DDNS is enabled, each `D2Daemon` exposes a per-instance endpoint that emits a complete `kea-dhcp-ddns.conf`:

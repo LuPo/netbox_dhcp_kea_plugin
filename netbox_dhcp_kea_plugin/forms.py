@@ -933,6 +933,7 @@ class DHCPServerForm(NetBoxModelForm):
                 name="General",
             ),
             FieldSet("option_data", "client_classes", name="DHCP Configuration"),
+            FieldSet("decline_probation_period", name="Lease Handling"),
             FieldSet(
                 InlineFields(
                     "reservations_global",
@@ -1001,6 +1002,7 @@ class DHCPServerForm(NetBoxModelForm):
             "ha_tls",
             "ha_auto_failover",
             "ha_egress_base_port",
+            "decline_probation_period",
             "pki_fqdn",
             "ctrl_socket_proxy_enabled",
             "stork_proxy_enabled",
@@ -1215,6 +1217,8 @@ class ClientClassForm(NetBoxModelForm):
         fields = (
             "name",
             "test_expression",
+            "template_test",
+            "user_context",
             "description",
             "servers",
             "option_data",
@@ -1225,9 +1229,16 @@ class ClientClassForm(NetBoxModelForm):
             "ddns_policy",
             "tags",
         )
+        widgets = {
+            "user_context": forms.Textarea(attrs={"class": "font-monospace", "rows": 5}),
+        }
+        help_texts = {
+            "user_context": 'JSON object, e.g. {"limits": {"rate-limit": "10 packets per second"}}',
+        }
 
     fieldsets = (
-        FieldSet("name", "test_expression", "description", "tags", name="Client Class"),
+        FieldSet("name", "test_expression", "template_test", "description", "tags", name="Client Class"),
+        FieldSet("user_context", name="User Context"),
         FieldSet("servers", "option_data", name="Assignments"),
         FieldSet("only_in_additional_list", name="Evaluation"),
         FieldSet("next_server", "server_hostname", "boot_file_name", name="Boot Options"),
@@ -1373,6 +1384,7 @@ class SubnetForm(NetBoxModelForm):
             "auto_reservations",
             name="Reservations",
         ),
+        FieldSet("user_context", name="User Context"),
         FieldSet("ddns_policy", name="DDNS"),
     )
 
@@ -1392,9 +1404,16 @@ class SubnetForm(NetBoxModelForm):
             "reservations_out_of_pool",
             "reservations_only",
             "auto_reservations",
+            "user_context",
             "ddns_policy",
             "tags",
         )
+        widgets = {
+            "user_context": forms.Textarea(attrs={"class": "font-monospace", "rows": 5}),
+        }
+        help_texts = {
+            "user_context": 'JSON object, e.g. {"limits": {"address-limit": 50}}',
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

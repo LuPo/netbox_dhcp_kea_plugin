@@ -175,6 +175,7 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
     only_in_additional_list = django_filters.BooleanFilter(
         field_name="only_in_additional_list", label="Only in Additional List"
     )
+    template_test = django_filters.BooleanFilter(field_name="template_test", label="Template Class")
     server_id = django_filters.ModelChoiceFilter(
         field_name="servers",
         queryset=DHCPServer.objects.all(),
@@ -183,7 +184,7 @@ class ClientClassFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = ClientClass
-        fields = ["id", "name", "only_in_additional_list", "server_id"]
+        fields = ["id", "name", "only_in_additional_list", "template_test", "server_id"]
 
     def search(self, queryset, name, value):
         if not value.strip():

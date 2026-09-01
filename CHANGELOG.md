@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added — levers for decline-driven pool starvation
+A client stuck in a `DHCPDECLINE` loop walks a pool: each declined lease enters probation for `decline-probation-period` (Kea's default is 86400s — a day per address), and the client's next request is answered with a fresh address.
+
+- **`DHCPServer.decline_probation_period`** — emitted as the global `decline-probation-period`. Blank omits the key and takes Kea's default; `0` is kept as a real value ("return the address immediately") rather than treated as blank. Global only, since Kea has no per-subnet form.
+- **`user_context` on `ClientClass` and `Subnet`** — free-form JSON emitted as `user-context`, which is how hook libraries take their configuration; `libdhcp_limits.so` reads its limits from it. Validated as a JSON object, because Kea reads it as a map and refuses to start otherwise.
+- **`ClientClass.template_test`** — renders the expression as `template-test`, so Kea spawns a `SPAWN_<class>_<value>` subclass per distinct result. Both the template and spawned names are associated with the packet, so either can restrict a subnet or pool.
+
+**Note that the limits hook does not solve this particular problem.** `rate-limit` caps "the rate at which packets receive a response" and Kea never answers a `DHCPDECLINE`; `address-limit` counts leases attributed to a client, and Kea anonymises a lease when it declines it. What bounds the walk is containment (restrict a small dedicated pool to a class matching the offenders) and pinning (a reservation, so a loop costs one address) — both already supported.
+
 ### Fixed — the Stork agent registration URL was guessed, not chosen
 `StorkServer.url` preferred `ip_address.dns_name` and silently fell back to the address. Both branches produced a URL that fails TLS verification: an address has no certificate to match against, and IPAM's `dns_name` records the *host*, not necessarily the *service* name the certificate was issued for. The agent has **no skip-verification option for registration**, so it exits and systemd gives up after five restarts.
 

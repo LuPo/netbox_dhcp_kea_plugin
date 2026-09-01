@@ -322,6 +322,7 @@ class ClientClassTable(NetBoxTable):
     boot_file_name = tables.Column(verbose_name="boot_file_name")
     option_data_count = tables.Column(verbose_name="option_data_count", accessor="option_data__count", orderable=False)
     description = tables.Column(verbose_name="description")
+    template_test = BooleanColumn(verbose_name="template")
 
     class Meta(NetBoxTable.Meta):
         model = ClientClass
@@ -329,6 +330,7 @@ class ClientClassTable(NetBoxTable):
             "pk",
             "name",
             "test_expression",
+            "template_test",
             "only_in_additional_list",
             "next_server",
             "server_hostname",

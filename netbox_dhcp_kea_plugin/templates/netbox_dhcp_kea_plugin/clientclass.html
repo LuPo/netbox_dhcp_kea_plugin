@@ -18,6 +18,34 @@
                         <td><code>{{ object.test_expression }}</code></td>
                     </tr>
                     <tr>
+                        <th scope="row">
+                            Template Class&nbsp;<i class="mdi mdi-information-outline text-primary"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Rendered as template-test. KEA spawns a subclass named SPAWN_&lt;class&gt;_&lt;value&gt; per distinct result, so one class definition yields one class per client."></i>
+                        </th>
+                        <td>
+                            {% if object.template_test %}
+                            <i class="mdi mdi-check-bold text-success"></i>
+                            {% else %}
+                            <i class="mdi mdi-close-thick text-danger"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            User Context&nbsp;<i class="mdi mdi-information-outline text-primary"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Passed through to KEA as user-context. Hook libraries read their configuration from here — libdhcp_limits.so takes its limits from it."></i>
+                        </th>
+                        <td>
+                            {% if object.user_context %}
+                            <pre class="mb-0">{{ object.user_context|json }}</pre>
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">Only in Additional List</th>
                         <td>{% if object.only_in_additional_list %}Yes{% else %}No{% endif %}</td>
                     </tr>

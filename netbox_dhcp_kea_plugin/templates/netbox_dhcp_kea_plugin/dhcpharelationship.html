@@ -25,8 +25,7 @@
                         <th>Valid Configuration</th>
                         <td>
                             {% if configuration_errors %}
-                            <span class="badge bg-danger text-white">Invalid</span>
-                            <i class="mdi mdi-information-outline text-primary ms-1"
+                            <span class="badge bg-danger text-white">Invalid</span>&nbsp;<i class="mdi mdi-information-outline text-primary"
                                data-bs-toggle="tooltip" data-bs-placement="top"
                                title="{{ configuration_errors|join:' ' }}"></i>
                             {% else %}
@@ -70,8 +69,7 @@
                 <table class="table table-hover attr-table">
                     <tr>
                         <th>
-                            HA Reverse Proxy
-                            <i class="mdi mdi-information-outline text-primary ms-1"
+                            HA Reverse Proxy&nbsp;<i class="mdi mdi-information-outline text-primary"
                                data-bs-toggle="tooltip" data-bs-placement="top"
                                title="All or nothing for the relationship: every member routes HA traffic through its own local proxy, and KEA speaks plain HTTP over loopback in both directions."></i>
                         </th>

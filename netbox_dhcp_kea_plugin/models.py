@@ -14,6 +14,25 @@ from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
 
+def validate_user_context(value, field_name="user_context"):
+    """KEA requires user-context to be a JSON object.
+
+    A list or a scalar is rejected by KEA at config load, which is a bad place to
+    discover it — the server refuses to start. Catch it at save time instead.
+    """
+    if value in (None, "", {}):
+        return
+    if not isinstance(value, dict):
+        raise ValidationError(
+            {
+                field_name: (
+                    f"User context must be a JSON object, not {type(value).__name__}. "
+                    'KEA reads it as a map, e.g. {"limits": {"rate-limit": "3 packets per hour"}}.'
+                )
+            }
+        )
+
+
 def normalize_fqdn(value):
     """Normalise a DNS name into the exact string a certificate carries.
 
@@ -368,6 +387,17 @@ class DHCPServer(NetBoxModel):
         help_text=(
             "Expose the HTTP control socket through the local reverse proxy. The socket itself "
             "must be bound to 127.0.0.1."
+        ),
+    )
+    decline_probation_period = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Decline probation period",
+        help_text=(
+            "Seconds an address stays unavailable after a client DECLINEs it. Leave blank "
+            "for KEA's default of 86400 — a full day per declined address, which a client "
+            "stuck in a decline loop will drain a pool with. Global only; KEA has no "
+            "per-subnet form of this setting."
         ),
     )
     stork_proxy_enabled = models.BooleanField(
@@ -1332,6 +1362,11 @@ class DHCPServer(NetBoxModel):
 
         dhcp4 = result["Dhcp4"]
 
+        # Omitted rather than defaulted, so the rendered config does not assert a
+        # value the operator never chose.
+        if self.decline_probation_period is not None:
+            dhcp4["decline-probation-period"] = self.decline_probation_period
+
         # Add control sockets if configured
         control_sockets = self.get_control_sockets()
         if control_sockets:
@@ -2124,6 +2159,27 @@ class ClientClass(NetBoxModel):
         help_text="Option data to send to clients matching this class",
     )
 
+    template_test = models.BooleanField(
+        default=False,
+        verbose_name="Template class",
+        help_text=(
+            "Render the test expression as 'template-test' instead of 'test'. KEA evaluates "
+            "the expression per packet and spawns a subclass named SPAWN_<class>_<value> for "
+            "each distinct result — the way to get one class per client. Both names are "
+            "associated with the packet, so a pool or subnet can restrict on this class "
+            "(any client the expression yields a value for) or on a spawned name (one "
+            "specific value)."
+        ),
+    )
+    user_context = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Arbitrary JSON object attached to the class as "user-context". Some hook '
+            'libraries read it for configuration — libdhcp_limits.so takes its limits '
+            'from here, e.g. {"limits": {"rate-limit": "10 packets per second"}}.'
+        ),
+    )
     only_in_additional_list = models.BooleanField(
         default=False,
         help_text="When enabled, this class is only evaluated when explicitly listed in a subnet's evaluate-additional-classes, not for every packet. The class is still defined in the server's global client-classes, but KEA won't auto-evaluate it.",
@@ -2156,6 +2212,21 @@ class ClientClass(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:clientclass", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        validate_user_context(self.user_context)
+
+        if self.template_test and not self.test_expression:
+            raise ValidationError(
+                {
+                    "test_expression": (
+                        "A template class needs a test expression: the expression is what "
+                        "KEA evaluates to decide which subclass to spawn. An empty one would "
+                        "match nothing."
+                    )
+                }
+            )
 
     def has_option43_data(self):
         """Check if this class has any option data with option43 delivery type"""
@@ -2336,7 +2407,10 @@ class ClientClass(NetBoxModel):
 
         # Only include test if there's an expression (empty = unconditional class)
         if self.test_expression:
-            result["test"] = self.test_expression
+            result["template-test" if self.template_test else "test"] = self.test_expression
+
+        if self.user_context:
+            result["user-context"] = self.user_context
 
         # Add only-in-additional-list flag if set
         if self.only_in_additional_list:
@@ -2408,6 +2482,15 @@ class Subnet(NetBoxModel):
 
     prefix = models.OneToOneField(Prefix, on_delete=models.CASCADE, related_name="dhcp_config")
     server = models.ForeignKey(DHCPServer, on_delete=models.PROTECT, related_name="subnet_items")
+    user_context = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Arbitrary JSON object attached to the subnet as "user-context". Some hook '
+            'libraries read it for configuration — libdhcp_limits.so takes per-subnet '
+            'limits from here, e.g. {"limits": {"address-limit": 50}}.'
+        ),
+    )
     option_data = models.ManyToManyField(
         OptionData,
         blank=True,
@@ -2536,6 +2619,8 @@ class Subnet(NetBoxModel):
 
     def clean(self):
         super().clean()
+        validate_user_context(self.user_context)
+
         if self.max_lifetime < self.valid_lifetime:
             raise ValidationError({"valid_lifetime": "Valid lifetime cannot be greater than max lifetime."})
 
@@ -3150,6 +3235,9 @@ class Subnet(NetBoxModel):
             "valid-lifetime": self.valid_lifetime,
             "max-valid-lifetime": self.max_lifetime,
         }
+
+        if self.user_context:
+            result["user-context"] = self.user_context
 
         # Add pools from available IPs or IP ranges (includes pool-level config)
         pools = self.get_pools()
