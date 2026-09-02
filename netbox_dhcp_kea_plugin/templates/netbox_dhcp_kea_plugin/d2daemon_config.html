@@ -9,6 +9,19 @@
 {% endblock %}
 
 {% block content %}
+{% if requires_secret_substitution %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning" role="alert">
+            <i class="mdi mdi-alert"></i>
+            This configuration is a <strong>template</strong>. At least one TSIG key uses the
+            vault backend, so its secret is rendered as a reference rather than the secret
+            itself. Substitute it on the target before deploying — KEA will load this file,
+            but DDNS updates will fail TSIG authentication against a literal reference.
+        </div>
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <div class="col col-md-12">
         <div class="card mb-3">

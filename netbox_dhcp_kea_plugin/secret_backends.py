@@ -4,6 +4,10 @@ Abstracts secret storage so a future Vault / external-secret backend can be
 plugged in without schema changes. v1 ships only the ``plaintext`` backend,
 which returns the value stored in ``TSIGKey.secret_plaintext`` verbatim.
 
+Two backends ship: ``plaintext`` returns the secret held in the NetBox
+database, and ``vault`` returns a *reference* for the deployment to substitute
+on the target — NetBox never contacts the secret store itself.
+
 Register additional backends by calling ``register_backend(name, resolver)``
 where ``resolver`` is a callable ``(tsig_key) -> str``.
 """
@@ -23,9 +27,40 @@ def _plaintext_backend(tsig_key):
     return tsig_key.secret_plaintext
 
 
+def _vault_backend(tsig_key):
+    """Return a *reference* to the secret, never the secret itself.
+
+    NetBox deliberately does not talk to OpenBao. It emits a placeholder built
+    from ``secret_ref``, and the deployment substitutes it on the target, where
+    an agent already holds a certificate and a token. That keeps the secret out
+    of NetBox's database, its API responses, and every archived copy of the
+    rendered configuration — and removes any token lifecycle from NetBox.
+
+    The rendered configuration is therefore a *template*: still valid JSON, so
+    ``kea-dhcp-ddns -t`` parses it, but not deployable until substituted.
+    """
+    from netbox.plugins.utils import get_plugin_config
+
+    if not tsig_key.secret_ref:
+        raise TSIGSecretBackendError(
+            f"TSIG key '{tsig_key.name}' uses the vault backend but has no secret reference."
+        )
+
+    template = get_plugin_config("netbox_dhcp_kea_plugin", "ddns_secret_reference_template")
+    # str.replace rather than str.format: the default template contains "${BAO:"
+    # and format() would read "{BAO:" as a field with a format spec.
+    return template.replace("{ref}", tsig_key.secret_ref)
+
+
 TSIG_SECRET_BACKENDS = {
     "plaintext": _plaintext_backend,
+    "vault": _vault_backend,
 }
+
+
+def is_reference_backend(name):
+    """Whether this backend emits a placeholder rather than a usable secret."""
+    return name == "vault"
 
 
 def register_backend(name, resolver):

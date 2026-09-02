@@ -29,6 +29,11 @@ class DHCPKEAConfig(PluginConfig):
         "pki_allowed_zone_suffixes": [],
         "enable_ddns": False,
         "ddns_secret_backend": "plaintext",
+        # How a TSIG key with the "vault" backend renders its secret. "{ref}" is
+        # replaced by the key's secret_ref. NetBox never reads the secret store;
+        # the deployment substitutes this on the target, so the format only has
+        # to match whatever does the substituting.
+        "ddns_secret_reference_template": "${BAO:{ref}}",
         "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
         "model_defaults": {
             # Global scope: the Dhcp4 block on each DHCP server.

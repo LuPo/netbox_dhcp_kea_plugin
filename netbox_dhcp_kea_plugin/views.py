@@ -1357,6 +1357,7 @@ class D2DaemonConfigView(generic.ObjectView):
             {
                 "object": daemon,
                 "tab": self.tab,
+                "requires_secret_substitution": daemon.requires_secret_substitution(),
                 "config_json": json.dumps(config, indent=2),
             },
         )

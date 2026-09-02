@@ -59,6 +59,13 @@
                         <td>{{ object.get_ncr_format_display }}</td>
                     </tr>
                     <tr>
+                        <th>DNS Server Timeout</th>
+                        <td>
+                            {% if object.dns_server_timeout is not None %}{{ object.dns_server_timeout }} ms
+                            {% else %}<span class="text-muted">500 ms (KEA default)</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
                         <th>Domains</th>
                         <td>{{ object.domains.count }}</td>
                     </tr>

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Fixed — the `vault` TSIG backend was selectable but unimplemented
+`TSIGKey.secret_backend` offered `"vault"`, the form switched fields on it, and `clean()` required a `secret_ref` for it — but no resolver was registered, so choosing it made `kea-dhcp-ddns.conf` generation raise `TSIGSecretBackendError`.
+
+- **NetBox never contacts the secret store.** The backend renders `secret_ref` through the new `ddns_secret_reference_template` setting (default `"${BAO:{ref}}"`) and emits that reference; the deployment substitutes it on the target. No client, no credentials, no token renewal in NetBox, and the secret stays out of the database, the API and every archived config.
+- A vault-backed config is therefore a **template**. It remains valid JSON, but `D2Daemon.requires_secret_substitution` now reports when substitution is outstanding, and the Configuration tab says so.
+
+### Fixed — a DDNS domain could render a config Kea refuses to load
+`dns-servers` is built from the zone's nameservers by resolving their A/AAAA records, silently skipping any that do not resolve. A zone with none produced `"dns-servers": []`, which Kea rejects — the configuration looked correct in NetBox and failed on the server. `DDNSDomain.clean()` now refuses it.
+
+Similarly, `DDNSPolicy` could emit `ddns-ttl` alongside `ddns-ttl-percent` / `-min` / `-max`, which Kea treats as mutually exclusive and refuses. That combination is now rejected at save time.
+
+### Added — DDNS keys the plugin never emitted
+- **`D2Daemon.dns_server_timeout`** → `dns-server-timeout` (Kea default 500 ms).
+- **`DHCPServer.ddns_max_queue_size`** → `max-queue-size` in the `dhcp-ddns` block (Kea default 1024).
+- **`user-context`** on the `dhcp-ddns` block and on each `ddns-domain` entry.
+
+All are optional and omitted when unset, so no rendered configuration changes on upgrade.
+
 ### Added — lease timers at every level Kea accepts them
 `valid-lifetime`, `renew-timer` and `rebind-timer` may be set globally, per subnet and per client class (the last since Kea 1.9.5), resolved class → subnet → global. Previously the plugin modelled only a per-subnet `valid_lifetime`, and **hardcoded** `valid-lifetime: 3600` / `max-valid-lifetime: 7200` in the global block, so neither the global lifetimes nor T1/T2 could be expressed at all.
 

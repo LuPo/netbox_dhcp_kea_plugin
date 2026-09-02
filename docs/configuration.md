@@ -16,6 +16,7 @@ PLUGINS_CONFIG = {
         "enable_netbox_dns": False,
         "enable_ddns": False,
         "pki_allowed_zone_suffixes": [],
+        "ddns_secret_reference_template": "${BAO:{ref}}",
         "model_defaults": {
             "DHCPServer": {
                 "valid_lifetime": 3600,
@@ -59,7 +60,8 @@ Every setting is optional; omitted keys fall back to their default.
 | `enable_stork` | `True` | Toggle ISC Stork monitoring integration. When `False`, all Stork-related menu entries, form fields, filters, API endpoints, and UI affordances are hidden. |
 | `enable_netbox_dns` | `False` | Toggle the [`netbox-plugin-dns`](https://github.com/peteeckel/netbox-plugin-dns) integration: DNS A / AAAA / CNAME records as IP sources on `OptionData`, and the DNS record picker for a server's `pki_fqdn`. Required for `enable_ddns`. The DNS plugin stays optional — without it those fields fall back to plain values. |
 | `enable_ddns` | `False` | Toggle the optional Kea 3.0+ Dynamic DNS subsystem (D2 daemons, TSIG keys, DDNS domains, DDNS policies). Requires `enable_netbox_dns: True`. |
-| `ddns_secret_backend` | `"plaintext"` | Backend identifier consulted by `TSIGKey.get_secret()`. Only `"plaintext"` is shipped today; `"vault"` is reserved. |
+| `ddns_secret_backend` | `"plaintext"` | Default backend for a `TSIGKey` that does not pick one. `"plaintext"` reads the secret from the NetBox database; `"vault"` emits a reference for the deployment to substitute. |
+| `ddns_secret_reference_template` | `"${BAO:{ref}}"` | How a `vault`-backed TSIG key renders its secret. `{ref}` is replaced with the key's `secret_ref`. NetBox never contacts the secret store, so this only has to match whatever performs the substitution on the target. See [TSIG secrets](usage.md#tsig-secrets-stored-or-referenced). |
 | `pki_allowed_zone_suffixes` | `[]` | DNS zone suffixes your internal CA will issue certificates for, e.g. `[".pki.example.net"]`. A leading dot is optional. **Empty disables the check.** When set, a `DHCPServer.pki_fqdn` outside these zones is rejected on save — see [PKI identity](usage.md#pki-identity-pki_fqdn). |
 | `d2_default_control_socket_path` | `"/tmp/kea-dhcp-ddns-ctrl.sock"` | Pre-fills the control socket field on new `D2Daemon` rows. |
 | `model_defaults` | *(see below)* | Per-model default values for new objects, keyed by model. Reservation modes, lease lifetimes and the decline probation period are settable separately for the **global** scope (`DHCPServer`) and the **local** one (`Subnet`). |

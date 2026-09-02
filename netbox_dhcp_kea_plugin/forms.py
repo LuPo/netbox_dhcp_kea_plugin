@@ -961,6 +961,8 @@ class DHCPServerForm(NetBoxModelForm):
                 "d2_daemon",
                 "ddns_policy",
                 InlineFields("ddns_sender_ip", "ddns_sender_port", label="Sender"),
+                "ddns_max_queue_size",
+                "ddns_user_context",
                 name="DDNS",
             ),
             FieldSet(
@@ -998,6 +1000,8 @@ class DHCPServerForm(NetBoxModelForm):
             "ddns_sender_ip",
             "ddns_sender_port",
             "ddns_policy",
+            "ddns_max_queue_size",
+            "ddns_user_context",
             "ctrl_socket_type",
             "ctrl_socket_http_address",
             "ctrl_socket_http_port",
@@ -2500,7 +2504,7 @@ class D2DaemonForm(NetBoxModelForm):
             InlineFields("ip_address", "port", label="Listener"),
             name="NCR Listener",
         ),
-        FieldSet("ncr_protocol", "ncr_format", name="NCR Transport"),
+        FieldSet("ncr_protocol", "ncr_format", "dns_server_timeout", name="NCR Transport"),
         FieldSet("control_socket_path", name="Control Socket"),
     )
 
@@ -2514,6 +2518,7 @@ class D2DaemonForm(NetBoxModelForm):
             "port",
             "ncr_protocol",
             "ncr_format",
+            "dns_server_timeout",
             "control_socket_path",
             "tags",
         )
@@ -2584,11 +2589,15 @@ class DDNSDomainForm(NetBoxModelForm):
         help_text="TSIG key for authenticating updates to this zone (optional)",
     )
 
-    fieldsets = (FieldSet("d2_daemon", "zone", "tsig_key", "tags", name="General"),)
+    fieldsets = (
+        FieldSet("d2_daemon", "zone", "tsig_key", "tags", name="General"),
+        FieldSet("user_context", name="User Context"),
+    )
 
     class Meta:
         model = DDNSDomain
-        fields = ("d2_daemon", "zone", "tsig_key", "tags")
+        fields = ("d2_daemon", "zone", "tsig_key", "user_context", "tags")
+        widgets = {"user_context": forms.Textarea(attrs={"class": "font-monospace", "rows": 4})}
 
     def __init__(self, *args, **kwargs):
         if _DNSZone is None:

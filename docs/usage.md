@@ -381,7 +381,40 @@ When DDNS is enabled, each `D2Daemon` exposes a per-instance endpoint that emits
 GET /api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/
 ```
 
-The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across this daemon's domains), and the forward / reverse `ddns-domains` arrays partitioned by zone name.
+The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across this daemon's domains), and the forward / reverse `ddns-domains` arrays partitioned by zone name. `dns-server-timeout` is emitted when set on the daemon; left blank, Kea applies its default of 500 ms.
+
+### TSIG secrets: stored, or referenced
+
+Each `TSIGKey` picks how its secret is sourced:
+
+| Backend | `get_secret()` returns | Where the secret lives |
+|---|---|---|
+| `plaintext` | the secret itself | the NetBox database |
+| `vault` | a **reference**, built from `secret_ref` | wherever your secret store keeps it — never NetBox |
+
+**NetBox does not talk to the secret store.** The `vault` backend renders `secret_ref`
+through the [`ddns_secret_reference_template`](configuration.md#core-settings) setting and
+emits that string; whatever deploys the config substitutes it on the target. This keeps the
+secret out of the NetBox database, its API responses, and every archived copy of the
+rendered config — and means there is no token, credential or renewal to manage in NetBox.
+
+!!! warning "A vault-backed config is a template, not a deployable file"
+
+    The emitted `secret` is a placeholder such as `${BAO:kea/tsig/mykey#secret}`. The file
+    is still valid JSON and `kea-dhcp-ddns -t` will parse it, but D2 will fail TSIG
+    authentication if it is deployed unsubstituted. The daemon exposes
+    `requires_secret_substitution` so a deployment can assert on it rather than discover
+    this at runtime, and the Configuration tab shows a banner.
+
+### Validation worth knowing about
+
+- **A DDNS domain needs a nameserver that resolves.** `dns-servers` is built from the
+  zone's nameservers via their A/AAAA records; Kea requires at least one server per domain
+  and rejects the whole configuration given an empty list. A zone with no resolvable
+  nameserver is refused at save time rather than rendering `"dns-servers": []`.
+- **`ddns-ttl` excludes the other TTL keys.** Kea treats an absolute `ddns-ttl` as mutually
+  exclusive with `ddns-ttl-percent`, `ddns-ttl-min` and `ddns-ttl-max`, and refuses to load
+  a configuration setting both. A `DDNSPolicy` combining them is rejected here instead.
 
 ## Stork configuration
 

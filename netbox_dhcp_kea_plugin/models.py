@@ -446,6 +446,21 @@ class DHCPServer(NetBoxModel):
     rebind_timer = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="Rebind timer (T2)", help_text="Seconds before the client begins rebinding (T2). KEA sends it as option 59, and only when it is below the valid lifetime. Leave blank to send nothing."
     )
+    ddns_max_queue_size = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="DDNS max queue size",
+        help_text=(
+            "Maximum number of queued name-change requests before KEA starts dropping them. "
+            "Leave blank for KEA's default of 1024."
+        ),
+    )
+    ddns_user_context = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="DDNS user context",
+        help_text='Arbitrary JSON object attached to the dhcp-ddns block as "user-context".',
+    )
     decline_probation_period = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -846,6 +861,7 @@ class DHCPServer(NetBoxModel):
                 )
 
         validate_lease_timers(self.renew_timer, self.rebind_timer, self.valid_lifetime)
+        validate_user_context(self.ddns_user_context, "ddns_user_context")
 
         # Validate the PKI identity
         self._validate_pki_identity()
@@ -1113,6 +1129,10 @@ class DHCPServer(NetBoxModel):
             "ncr-protocol": daemon.ncr_protocol,
             "ncr-format": daemon.ncr_format,
         }
+        if self.ddns_max_queue_size is not None:
+            block["max-queue-size"] = self.ddns_max_queue_size
+        if self.ddns_user_context:
+            block["user-context"] = self.ddns_user_context
         # Sender IP/port are per-server (the local source endpoint that
         # sends NCRs), not shared across HA peers — read directly from self.
         if self.ddns_sender_ip:
@@ -4803,6 +4823,15 @@ class D2Daemon(NetBoxModel):
         default=53001,
         help_text="Port the D2 daemon listens on (default: 53001)",
     )
+    dns_server_timeout = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="DNS server timeout (ms)",
+        help_text=(
+            "Milliseconds D2 waits for a DNS server to answer a single update before giving "
+            "up on it. Leave blank for KEA's default of 500."
+        ),
+    )
     control_socket_path = models.CharField(
         max_length=512,
         blank=True,
@@ -4875,6 +4904,8 @@ class D2Daemon(NetBoxModel):
             "ncr-protocol": self.ncr_protocol,
             "ncr-format": self.ncr_format,
         }
+        if self.dns_server_timeout is not None:
+            dhcp_ddns["dns-server-timeout"] = self.dns_server_timeout
         if self.control_socket_path:
             dhcp_ddns["control-socket"] = {
                 "socket-type": "unix",
@@ -4886,6 +4917,21 @@ class D2Daemon(NetBoxModel):
         dhcp_ddns["reverse-ddns"] = {"ddns-domains": reverse_domains}
 
         return {"DhcpDdns": dhcp_ddns}
+
+    def requires_secret_substitution(self):
+        """Whether the emitted config is a template rather than deployable.
+
+        True when any TSIG key it references resolves to a placeholder instead of
+        a secret. Consumers should assert on this rather than discover it when D2
+        fails TSIG authentication against a literal reference.
+        """
+        from .secret_backends import is_reference_backend
+
+        return any(
+            is_reference_backend(domain.tsig_key.secret_backend)
+            for domain in self.domains.select_related("tsig_key")
+            if domain.tsig_key_id
+        )
 
 
 class DDNSDomain(NetBoxModel):
@@ -4902,6 +4948,11 @@ class DDNSDomain(NetBoxModel):
         on_delete=models.CASCADE,
         related_name="domains",
         help_text="The D2 daemon that handles this domain",
+    )
+    user_context = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Arbitrary JSON object attached to this ddns-domain entry as "user-context".',
     )
     # Zone and NameServer are FK'd through django's string-form model
     # references with db_constraint=False so the plugin still migrates
@@ -4994,7 +5045,37 @@ class DDNSDomain(NetBoxModel):
         }
         if self.tsig_key_id:
             entry["key-name"] = self.tsig_key.name
+        if self.user_context:
+            entry["user-context"] = self.user_context
         return entry
+
+    def resolvable_nameserver_ips(self):
+        """Every nameserver IP this domain would emit, flattened."""
+        ips = []
+        for ns in self.zone.nameservers.all():
+            ips.extend(self._resolve_nameserver_ips(ns.name))
+        return ips
+
+    def clean(self):
+        """Refuse a domain that would render an empty dns-servers list.
+
+        KEA requires one or more servers per ddns-domain and rejects the whole
+        configuration otherwise — so a zone whose nameservers resolve to nothing
+        produces a config that looks fine here and fails on the server.
+        """
+        super().clean()
+        validate_user_context(self.user_context)
+
+        if self.zone_id and not self.resolvable_nameserver_ips():
+            raise ValidationError(
+                {
+                    "zone": (
+                        f"Zone '{self.zone}' has no nameserver with a resolvable A/AAAA record in "
+                        "NetBox. KEA needs at least one DNS server per DDNS domain and refuses a "
+                        "configuration with an empty list, so this would render an unusable config."
+                    )
+                }
+            )
 
 
 class DDNSPolicy(NetBoxModel):
@@ -5072,6 +5153,36 @@ class DDNSPolicy(NetBoxModel):
         ("ddns_ttl_min", "ddns-ttl-min"),
         ("ddns_ttl_max", "ddns-ttl-max"),
     )
+
+    def clean(self):
+        """Reject TTL combinations KEA refuses to load.
+
+        ddns-ttl is mutually exclusive with ddns-ttl-percent, ddns-ttl-min and
+        ddns-ttl-max — an absolute TTL and a computed one cannot both apply, and
+        KEA rejects the whole configuration rather than picking one.
+        """
+        super().clean()
+
+        if self.ddns_ttl is None:
+            return
+        conflicting = [
+            name
+            for name, value in (
+                ("ddns_ttl_percent", self.ddns_ttl_percent),
+                ("ddns_ttl_min", self.ddns_ttl_min),
+                ("ddns_ttl_max", self.ddns_ttl_max),
+            )
+            if value is not None
+        ]
+        if conflicting:
+            raise ValidationError(
+                dict.fromkeys(
+                    ["ddns_ttl", *conflicting],
+                    "Cannot be combined with an absolute DDNS TTL — KEA treats ddns-ttl as "
+                    "mutually exclusive with ddns-ttl-percent, ddns-ttl-min and ddns-ttl-max, "
+                    "and refuses to load a configuration setting both.",
+                )
+            )
 
     def to_kea_overrides(self):
         """Return only the non-null/non-blank keys, kebab-cased for Kea.
