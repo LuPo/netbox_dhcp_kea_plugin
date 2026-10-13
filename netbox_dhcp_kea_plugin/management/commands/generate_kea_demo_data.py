@@ -35,6 +35,7 @@ from netbox.plugins.utils import get_plugin_config
 from virtualization.models import Cluster, ClusterType, VirtualMachine, VMInterface
 
 from netbox_dhcp_kea_plugin import DHCPKEAConfig
+from netbox_dhcp_kea_plugin.compat import service_port_fields
 from netbox_dhcp_kea_plugin.models import (
     ClientClass,
     DHCPHARelationship,
@@ -312,8 +313,7 @@ class Command(BaseCommand):
         service_template, created = ServiceTemplate.objects.get_or_create(
             name="KEA DHCP Server",
             defaults={
-                "protocol": "udp",
-                "ports": [67],
+                **service_port_fields("udp", [67]),
                 "description": "KEA DHCP Server service template for demo data",
             },
         )

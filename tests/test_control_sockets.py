@@ -39,9 +39,11 @@ def ctrl_service_template(db):
     """Create a service template for control socket tests."""
     from ipam.models import ServiceTemplate
 
+    from netbox_dhcp_kea_plugin.compat import service_port_fields
+
     template, _ = ServiceTemplate.objects.get_or_create(
         name="dhcp-ctrl-test",
-        defaults={"protocol": "udp", "ports": [67, 68]},
+        defaults=service_port_fields("udp", [67, 68]),
     )
     return template
 

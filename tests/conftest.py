@@ -151,10 +151,11 @@ def service_template(db):
     """Create a test ServiceTemplate."""
     from ipam.models import ServiceTemplate
 
+    from netbox_dhcp_kea_plugin.compat import service_port_fields
+
     return ServiceTemplate.objects.create(
         name="dhcp-test",
-        protocol="udp",
-        ports=[67, 68],
+        **service_port_fields("udp", [67, 68]),
     )
 
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed — saving a DHCP server with a service template failed on NetBox 4.7
+NetBox 4.7 replaced the `protocol` and `ports` columns of `Service` and `ServiceTemplate` with a single `port_mappings` list of `"protocol/port"` strings, keeping `protocol` and `ports` only as read-only properties. Saving a `DHCPServer` that links its Application Service filtered on `protocol` and created the Service with `ports`, so it raised `FieldError: Cannot resolve keyword 'protocol' into field` whenever a new server was created. `repair_dhcp_services` had the same lookup, and `generate_kea_demo_data` created its template with the old fields.
+
+- The new `compat` module finds the matching Service by parent and name, then compares `protocol` in Python. Reading it works on every version, so the lookup needs no version check.
+- Writing ports goes through `service_port_fields` / `port_fields_from`, which emit `port_mappings` on 4.7 and `protocol`/`ports` before it. **NetBox 4.6 and 4.7 are both supported.**
+
 ### Fixed — the `vault` TSIG backend was selectable but unimplemented
 `TSIGKey.secret_backend` offered `"vault"`, the form switched fields on it, and `clean()` required a `secret_ref` for it — but no resolver was registered, so choosing it made `kea-dhcp-ddns.conf` generation raise `TSIGSecretBackendError`.
 

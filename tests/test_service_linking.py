@@ -26,7 +26,9 @@ def vm_ip(db):
 def service_template(db):
     from ipam.models import ServiceTemplate
 
-    return ServiceTemplate.objects.create(name="KEA DHCP Server", protocol="udp", ports=[67, 68])
+    from netbox_dhcp_kea_plugin.compat import service_port_fields
+
+    return ServiceTemplate.objects.create(name="KEA DHCP Server", **service_port_fields("udp", [67, 68]))
 
 
 def _make_server(name, vm_ip, service_template):
@@ -47,19 +49,51 @@ def test_save_creates_and_links_service(vm_ip, service_template):
     assert server.service.name == "KEA DHCP Server"
 
 
+def test_created_service_copies_template_ports(vm_ip, service_template):
+    """Read back through protocol/ports, which work on every NetBox version: columns
+    before 4.7, properties derived from port_mappings from 4.7 on."""
+    server = _make_server("dhcp-ports", vm_ip, service_template)
+    server.refresh_from_db()
+    assert server.service.protocol == "udp"
+    assert server.service.ports == [67, 68]
+
+
+def test_same_name_other_protocol_is_not_linked(vm_ip, service_template):
+    """A Service with the template's name but another protocol is not this one."""
+    from django.contrib.contenttypes.models import ContentType
+    from ipam.models import Service
+
+    from netbox_dhcp_kea_plugin.compat import service_port_fields
+
+    parent = vm_ip.assigned_object.parent_object
+    tcp = Service.objects.create(
+        parent_object_type=ContentType.objects.get_for_model(parent),
+        parent_object_id=parent.pk,
+        name=service_template.name,
+        **service_port_fields("tcp", [67]),
+    )
+
+    server = _make_server("dhcp-other-protocol", vm_ip, service_template)
+    server.refresh_from_db()
+
+    assert server.service_id != tcp.pk
+    assert server.service.protocol == "udp"
+
+
 def test_save_links_preexisting_service(vm_ip, service_template):
     """Regression: a matching Service already exists → FK must be linked,
     not left null, and no duplicate created."""
     from django.contrib.contenttypes.models import ContentType
     from ipam.models import Service
 
+    from netbox_dhcp_kea_plugin.compat import port_fields_from
+
     parent = vm_ip.assigned_object.parent_object
     existing = Service.objects.create(
         parent_object_type=ContentType.objects.get_for_model(parent),
         parent_object_id=parent.pk,
         name=service_template.name,
-        protocol=service_template.protocol,
-        ports=service_template.ports,
+        **port_fields_from(service_template),
     )
 
     server = _make_server("dhcp-preexisting", vm_ip, service_template)

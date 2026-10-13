@@ -13,6 +13,8 @@ from django.utils.translation import gettext_lazy as _
 from ipam.models import IPAddress, IPRange, Prefix, Service, ServiceTemplate
 from netbox.models import NetBoxModel
 
+from netbox_dhcp_kea_plugin.compat import find_service_for_template, port_fields_from
+
 
 def validate_lease_timers(renew, rebind, valid, prefix=""):
     """Check T1 < T2 < lease, which is what makes KEA emit the timer options.
@@ -657,22 +659,16 @@ class DHCPServer(NetBoxModel):
         if not parent_object:
             return
 
-        parent_ct = ContentType.objects.get_for_model(parent_object)
-        match = {
-            "parent_object_type": parent_ct,
-            "parent_object_id": parent_object.pk,
-            "name": self.service_template.name,
-            "protocol": self.service_template.protocol,
-        }
-
         with transaction.atomic():
             # Link the matching Service if it already exists; otherwise create it.
-            service = Service.objects.filter(**match).first()
+            service = find_service_for_template(parent_object, self.service_template)
             if service is None:
                 service = Service.objects.create(
-                    ports=self.service_template.ports,
+                    parent_object_type=ContentType.objects.get_for_model(parent_object),
+                    parent_object_id=parent_object.pk,
+                    name=self.service_template.name,
                     description=self.service_template.description or f"DHCP Server: {self.name}",
-                    **match,
+                    **port_fields_from(self.service_template),
                 )
             if self.ip_address not in service.ipaddresses.all():
                 service.ipaddresses.add(self.ip_address)

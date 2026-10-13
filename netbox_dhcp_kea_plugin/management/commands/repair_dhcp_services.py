@@ -82,19 +82,14 @@ class Command(BaseCommand):
     def _preview_target(server):
         """Return the Service that would be linked (existing or a sentinel with
         pk=None meaning 'would create'), or None if the IP has no parent."""
-        from django.contrib.contenttypes.models import ContentType
-
         from ipam.models import Service
+
+        from netbox_dhcp_kea_plugin.compat import find_service_for_template
 
         if not server.ip_address or not server.ip_address.assigned_object:
             return None
         parent = server.ip_address.assigned_object.parent_object
         if not parent:
             return None
-        existing = Service.objects.filter(
-            parent_object_type=ContentType.objects.get_for_model(parent),
-            parent_object_id=parent.pk,
-            name=server.service_template.name,
-            protocol=server.service_template.protocol,
-        ).first()
+        existing = find_service_for_template(parent, server.service_template)
         return existing or Service()  # Service() has pk=None → "would create"
