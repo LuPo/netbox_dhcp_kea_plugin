@@ -1867,6 +1867,30 @@ class StaticReservationImportForm(NetBoxModelImportForm):
         )
 
 
+# Credential fields that are not *this user's* login. A text field next to a
+# password field reads as a login form, so browsers and password managers offer
+# to fill or "suggest a strong password" for it — which is how a generated
+# string once landed in the HA basic-auth *user* field and stopped a server
+# from starting. autocomplete is the hint browsers honour; the data-* ones are
+# for managers that apply their own heuristics on top.
+_NOT_A_LOGIN = {
+    "data-1p-ignore": "true",  # 1Password
+    "data-lpignore": "true",  # LastPass
+    "data-bwignore": "true",  # Bitwarden
+    "data-form-type": "other",  # Dashlane
+}
+
+
+def _secret_text_input():
+    return forms.TextInput(attrs={"autocomplete": "off", **_NOT_A_LOGIN})
+
+
+def _secret_password_input():
+    # "new-password" also stops the browser pairing a neighbouring text field
+    # as the username for this one.
+    return forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password", **_NOT_A_LOGIN})
+
+
 # DHCPHARelationship Forms
 class DHCPHARelationshipForm(NetBoxModelForm):
     d2_daemon = DynamicModelChoiceField(
@@ -1940,7 +1964,8 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "tags",
         )
         widgets = {
-            "ha_basic_auth_password": forms.PasswordInput(render_value=True),
+            "ha_basic_auth_user": _secret_text_input(),
+            "ha_basic_auth_password": _secret_password_input(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -2440,7 +2465,8 @@ class TSIGKeyForm(NetBoxModelForm):
         )
         widgets = {
             "secret_backend": HTMXSelect(),
-            "secret_plaintext": forms.PasswordInput(render_value=True),
+            # A saved password substituted here would break DDNS just as quietly.
+            "secret_plaintext": _secret_password_input(),
         }
 
     def __init__(self, *args, **kwargs):

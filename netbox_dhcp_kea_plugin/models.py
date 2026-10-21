@@ -1,5 +1,6 @@
 import dataclasses
 import ipaddress as ipaddress_module
+import re
 
 from dcim.choices import DeviceStatusChoices
 from dcim.models import Manufacturer
@@ -56,6 +57,36 @@ def validate_user_context(value, field_name="user_context"):
                 )
             }
         )
+
+
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def basic_auth_problems(user, password):
+    """What HTTP basic auth forbids in this credential pair, keyed by field.
+
+    RFC 7617 splits the decoded header on the *first* colon, so a colon in the
+    user-id is invalid while one in the password is fine; neither may contain
+    control characters. KEA enforces the colon rule by refusing to load the HA
+    hook at all, which stops the whole server from starting — so these are
+    worth catching long before a restart.
+    """
+    problems = {}
+    if user and ":" in user:
+        problems["ha_basic_auth_user"] = (
+            "The HA basic-auth user must not contain ':' — HTTP basic auth uses it to separate "
+            "user from password, and Kea refuses the whole HA configuration. If this field was "
+            "filled by a browser or password manager, it is probably the password."
+        )
+    elif user and _CONTROL_CHARACTERS.search(user):
+        problems["ha_basic_auth_user"] = (
+            "The HA basic-auth user must not contain control characters (tabs, newlines and the like)."
+        )
+    if password and _CONTROL_CHARACTERS.search(password):
+        problems["ha_basic_auth_password"] = (
+            "The HA basic-auth password must not contain control characters (tabs, newlines and the like)."
+        )
+    return problems
 
 
 def normalize_fqdn(value):
@@ -3838,32 +3869,44 @@ class DHCPHARelationship(NetBoxModel):
         """Validate the HA basic-auth pair.
 
         Both blank is valid — an unauthenticated HA channel is a legitimate
-        configuration — but half a credential pair never is.
+        configuration — but half a credential pair never is, and neither is a
+        value HTTP basic auth forbids. Every problem is reported at once: a
+        password pasted into the user field usually leaves the password field
+        empty too, and "password required" alone would point the wrong way.
         """
         super().clean()
 
+        errors = basic_auth_problems(self.ha_basic_auth_user, self.ha_basic_auth_password)
+
+        # The two cases below cannot collide with the character checks: those
+        # need the field set, these need it blank.
         if self.ha_basic_auth_user and not self.ha_basic_auth_password:
-            raise ValidationError(
-                {"ha_basic_auth_password": "A password is required when an HA basic-auth user is set."}
-            )
+            errors["ha_basic_auth_password"] = "A password is required when an HA basic-auth user is set."
         if self.ha_basic_auth_password and not self.ha_basic_auth_user:
-            raise ValidationError({"ha_basic_auth_user": "A user is required when an HA basic-auth password is set."})
+            errors["ha_basic_auth_user"] = "A user is required when an HA basic-auth password is set."
+
+        if errors:
+            raise ValidationError(errors)
 
     def configuration_errors(self):
-        """Why this relationship's membership does not satisfy its mode.
+        """Why this relationship cannot produce a working HA configuration.
 
         Returns a list of human-readable reasons, empty when the configuration
         is valid. The roles are mode-specific in KEA itself — a hot-standby pair
         is primary/standby, while secondary belongs to load-balancing — so the
         messages name the count found and, where the mistake is a role from the
         other mode, say so.
+
+        The credential checks repeat what clean() enforces, because rows saved
+        before clean() checked them are never re-validated. The detail page is
+        where an operator would notice one.
         """
+        errors = list(basic_auth_problems(self.ha_basic_auth_user, self.ha_basic_auth_password).values())
+
         roles = [server.ha_role for server in self.servers.all()]
         primary = roles.count("primary")
         secondary = roles.count("secondary")
         standby = roles.count("standby")
-
-        errors = []
 
         if self.mode == "hot-standby":
             if primary != 1:

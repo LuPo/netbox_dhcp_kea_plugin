@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — an HA basic-auth user Kea refuses could be saved
+A password manager filled a relationship's basic-auth **user** with a generated string containing colons. Kea refused the HA hook (`user ... must not contain a ':'`), and without the hook the server would not start — but the plugin had accepted the value and rendered it into every member's config.
+
+- **Validation.** The user may not contain `:` — RFC 7617 splits basic-auth credentials on the first colon, which is also what Kea enforces — and neither field may contain control characters. A colon in the password stays legal. Because the check is in `DHCPHARelationship.clean()`, it covers the form, the REST API and CSV import.
+- **Existing rows.** Relationships saved before the check are not re-validated, so `configuration_errors()` reports the same problems and the detail page marks the relationship invalid with the reason.
+- **Password managers.** The credential fields, and the TSIG key's plaintext secret, now carry `autocomplete="off"` / `"new-password"` plus the ignore hints 1Password, LastPass, Bitwarden and Dashlane recognise, so browsers stop treating the form as a login.
+
+No migration: validation and widget attributes only.
+
 ## 0.10.3 (2026-10-13)
 
 ### Fixed — saving a DHCP server with a service template failed on NetBox 4.7

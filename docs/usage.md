@@ -240,6 +240,17 @@ Both values are written onto **every** peer entry in the emitted `high-availabil
 
 Writing the same pair everywhere therefore makes the channel authenticated symmetrically. Leaving both blank is valid and yields an unauthenticated HA channel; setting only one of the two is rejected.
 
+**What the values may contain.** HTTP basic auth ([RFC 7617](https://www.rfc-editor.org/rfc/rfc7617#section-2)) splits the decoded credentials on the *first* colon, so the rules are asymmetric:
+
+| | `:` | Control characters (tab, newline, `\x00`–`\x1f`, `\x7f`) |
+|---|---|---|
+| User | **rejected** | rejected |
+| Password | allowed | rejected |
+
+The colon rule is not cosmetic: Kea refuses to load the HA hook when the user contains one, and without the hook the server does not start at all. Both rules are enforced on save — through the form, the REST API and CSV import — and a relationship saved before they existed shows the problem on its detail page instead.
+
+The form's credential fields also tell browsers and password managers not to fill them. A user field next to a password field otherwise reads as a login form, which is how a generated password ends up in the *user* field.
+
 !!! warning "Changing these changes every member at once"
 
     Because each member's listener requirement comes from the same field, editing the pair alters both sides of the channel. Fetch and deploy every member of the relationship **together** — a half-applied rollout leaves one server requiring credentials its partner is not yet sending, which surfaces as HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`.

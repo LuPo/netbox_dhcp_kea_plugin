@@ -578,6 +578,145 @@ class TestHABasicAuthValidation:
 
 
 @pytest.mark.django_db
+class TestHABasicAuthCharacters:
+    """Reject what HTTP basic auth forbids, before Kea refuses to start over it.
+
+    A password manager once filled the user field with a generated string
+    containing colons. Kea refused the HA hook, so the server did not start,
+    and nothing in NetBox had objected.
+    """
+
+    def _relationship(self, user="kea_ha", password="secret"):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        return DHCPHARelationship(
+            name="credential-characters",
+            mode="hot-standby",
+            ha_basic_auth_user=user,
+            ha_basic_auth_password=password,
+        )
+
+    def test_a_colon_in_the_user_is_rejected(self):
+        relationship = self._relationship(user="9:2+R{x:y")
+
+        with pytest.raises(ValidationError) as exc:
+            relationship.clean()
+
+        message = exc.value.message_dict["ha_basic_auth_user"][0]
+        assert "':'" in message
+        # The likely cause, for whoever pasted it.
+        assert "password manager" in message
+
+    def test_a_colon_in_the_password_is_accepted(self):
+        """RFC 7617 splits on the first colon only, so the password may hold one."""
+        self._relationship(password="pa:ss:word").clean()
+
+    @pytest.mark.parametrize("bad", ["kea\tha", "kea\nha", "kea\x00ha", "kea\x7fha"])
+    def test_a_control_character_in_the_user_is_rejected(self, bad):
+        with pytest.raises(ValidationError) as exc:
+            self._relationship(user=bad).clean()
+
+        assert "control characters" in exc.value.message_dict["ha_basic_auth_user"][0]
+
+    @pytest.mark.parametrize("bad", ["sec\tret", "sec\r\nret", "sec\x1fret", "sec\x7fret"])
+    def test_a_control_character_in_the_password_is_rejected(self, bad):
+        with pytest.raises(ValidationError) as exc:
+            self._relationship(password=bad).clean()
+
+        assert "control characters" in exc.value.message_dict["ha_basic_auth_password"][0]
+
+    def test_a_pasted_password_with_no_password_reports_both(self):
+        """"Password required" alone would point at the wrong field."""
+        with pytest.raises(ValidationError) as exc:
+            self._relationship(user="gen:er:ated", password="").clean()
+
+        assert set(exc.value.message_dict) == {"ha_basic_auth_user", "ha_basic_auth_password"}
+
+    def test_a_stored_bad_user_shows_on_the_relationship(self):
+        """Rows saved before the check are never re-validated.
+
+        QuerySet.update() bypasses clean(), standing in for such a row.
+        """
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(name="pre-existing-bad-user", mode="hot-standby")
+        DHCPHARelationship.objects.filter(pk=relationship.pk).update(
+            ha_basic_auth_user="9:2+R{x", ha_basic_auth_password="secret"
+        )
+        relationship.refresh_from_db()
+
+        reasons = relationship.configuration_errors()
+
+        assert any("must not contain ':'" in reason for reason in reasons)
+        assert relationship.is_valid_configuration() is False
+
+    def test_valid_credentials_add_no_configuration_errors(self):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(
+            name="good-credentials",
+            mode="passive-backup",
+            ha_basic_auth_user="kea_ha",
+            ha_basic_auth_password="pa:ss",
+        )
+
+        assert not any("basic-auth" in reason for reason in relationship.configuration_errors())
+
+
+@pytest.mark.django_db
+class TestHABasicAuthEntryPoints:
+    """The model check has to reach every way a value gets in."""
+
+    def test_the_api_rejects_a_colon_in_the_user(self, admin_user):
+        from django.urls import reverse
+        from rest_framework.test import APIClient
+
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        relationship = DHCPHARelationship.objects.create(name="api-credentials", mode="hot-standby")
+        client = APIClient()
+        client.force_authenticate(user=admin_user)
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:dhcpharelationship-detail", args=[relationship.pk])
+
+        response = client.patch(
+            url,
+            {"ha_basic_auth_user": "9:2+R{x", "ha_basic_auth_password": "secret"},
+            format="json",
+        )
+
+        assert response.status_code == 400, response.content
+        assert "ha_basic_auth_user" in response.json()
+        relationship.refresh_from_db()
+        assert relationship.ha_basic_auth_user == ""
+
+    def test_the_form_widgets_keep_password_managers_out(self):
+        from netbox_dhcp_kea_plugin.forms import DHCPHARelationshipForm
+
+        html = str(DHCPHARelationshipForm())
+
+        user = DHCPHARelationshipForm().fields["ha_basic_auth_user"].widget.attrs
+        password = DHCPHARelationshipForm().fields["ha_basic_auth_password"].widget.attrs
+        assert user["autocomplete"] == "off"
+        assert password["autocomplete"] == "new-password"
+        for attrs in (user, password):
+            assert attrs["data-1p-ignore"] == "true"
+            assert attrs["data-lpignore"] == "true"
+            assert attrs["data-bwignore"] == "true"
+            assert attrs["data-form-type"] == "other"
+        # And they reach the rendered markup, not just the widget object.
+        assert 'autocomplete="new-password"' in html
+
+    def test_the_tsig_secret_widget_does_too(self):
+        from netbox_dhcp_kea_plugin.forms import TSIGKeyForm
+
+        form = TSIGKeyForm(data={"secret_backend": "plaintext"})
+
+        attrs = form.fields["secret_plaintext"].widget.attrs
+        assert attrs["autocomplete"] == "new-password"
+        assert attrs["data-1p-ignore"] == "true"
+
+
+@pytest.mark.django_db
 class TestDHCPServerToKeaDictWithHA:
     """Tests for DHCPServer.to_kea_dict() with HA configuration."""
 
