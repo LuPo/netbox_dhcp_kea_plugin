@@ -1,0 +1,88 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  # publish-pypi.yaml runs this before publishing a tag
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: NetBox ${{ matrix.netbox }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # netbox-plugin-dns tracks NetBox minor versions: 1.6 for 4.6, 1.7 for 4.7.
+          - netbox: v4.6.10
+            netbox-dns: "~=1.6.0"
+            python: "3.12"
+          - netbox: v4.7.3
+            netbox-dns: "~=1.7.0"
+            python: "3.14"
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: netbox
+          POSTGRES_PASSWORD: netbox
+          POSTGRES_DB: netbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      # Settings committed in this repository, not a developer's configuration.py
+      NETBOX_CONFIGURATION: tests.netbox_configuration
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out NetBox ${{ matrix.netbox }}
+        uses: actions/checkout@v7
+        with:
+          repository: netbox-community/netbox
+          ref: ${{ matrix.netbox }}
+          path: netbox-src
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: netbox-src/requirements.txt
+
+      - name: Install NetBox
+        run: pip install -r netbox-src/requirements.txt
+
+      - name: Install netbox-plugin-dns
+        run: pip install "netbox-plugin-dns${{ matrix.netbox-dns }}"
+
+      - name: Install the plugin with its test extra
+        run: pip install -e ".[test]"
+
+      - name: Run tests
+        env:
+          # NetBox's source tree for `netbox.settings`, this repo for the configuration
+          PYTHONPATH: ${{ github.workspace }}/netbox-src/netbox:${{ github.workspace }}
+        run: >-
+          python -m pytest tests
+          --create-db
+          --no-header
+          -q

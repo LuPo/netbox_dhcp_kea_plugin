@@ -14,6 +14,12 @@ No migration: validation and widget attributes only.
 ### Fixed — a bound DNS record could be deleted, and renaming it was not followed
 `connect_dns_signals()` defines its `pre_delete` and `post_save` receivers as nested functions, and Django holds receivers by weak reference by default. Nothing else referred to them, so they could be garbage-collected right after startup and never run: a record bound as a server's PKI identity or a Stork endpoint could be deleted, and renaming it left the stored FQDN stale. Whether it happened depended on what else was installed. Both are now connected with `weak=False`.
 
+### Development — tests run in CI
+- `.github/workflows/tests.yaml` runs the suite on pushes to `main` and on pull requests, against NetBox 4.6 (netbox-plugin-dns 1.6, Python 3.12) and NetBox 4.7 (netbox-plugin-dns 1.7, Python 3.14).
+- It uses `tests/netbox_configuration.py`, selected with `NETBOX_CONFIGURATION=tests.netbox_configuration`, so results no longer depend on a developer's `configuration.py`.
+- A tag is published to PyPI only after those tests pass. The workflow actions are on their Node 24 releases.
+- `pytest-django` is in the `test` extra; `pre-commit` moved to `dev`.
+
 ## 0.10.3 (2026-10-13)
 
 ### Fixed — saving a DHCP server with a service template failed on NetBox 4.7

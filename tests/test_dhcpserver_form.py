@@ -20,6 +20,9 @@ def _form_data(server, **overrides):
         "ha_egress_base_port": server.ha_egress_base_port or 18080,
         "ctrl_socket_type": server.ctrl_socket_type or "",
         "pki_fqdn": server.pki_fqdn,
+        # Required on the form since the global lifetimes became editable
+        "valid_lifetime": server.valid_lifetime,
+        "max_valid_lifetime": server.max_valid_lifetime,
     }
     data.update(overrides)
     return data
