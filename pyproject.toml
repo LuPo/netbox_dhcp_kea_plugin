@@ -2,7 +2,8 @@
 # https://www.python.org/dev/peps/pep-0518/
 
 [build-system]
-requires = ["setuptools"]
+# 77 is the first release that reads an SPDX string in project.license (PEP 639)
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,10 +14,14 @@ authors = [
 ]
 description = "NetBox plugin for KEA DHCP configuration"
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 keywords = ["KEA", "DHCP"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Framework :: Django",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "Natural Language :: English",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -34,6 +39,10 @@ test = [
     "pytest-django>=4.14",
     "pytest-cov>=4.1.0",
 ]
+# make docs and the docs workflow build the site with it
+docs = [
+    "zensical",
+]
 dev = [
     "pre-commit==3.7.0",
     "ruff",
@@ -44,7 +53,8 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/LuPo/netbox_dhcp_kea_plugin/blob/main/README.md"
+Documentation = "https://lupo.github.io/netbox_dhcp_kea_plugin/"
+Changelog = "https://lupo.github.io/netbox_dhcp_kea_plugin/changelog/"
 Source = "https://github.com/LuPo/netbox_dhcp_kea_plugin"
 Tracker = "https://github.com/LuPo/netbox_dhcp_kea_plugin/issues"
 

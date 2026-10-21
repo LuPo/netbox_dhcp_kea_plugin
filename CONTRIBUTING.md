@@ -62,25 +62,25 @@ If you are proposing a feature:
 
 Ready to contribute? Here's how to set up `netbox-dhcp-kea-plugin` for local development.
 
-1. Fork the `netbox-dhcp-kea-plugin` repo on GitHub.
-2. Clone your fork locally
+1. Fork the `netbox_dhcp_kea_plugin` repo on GitHub, and clone your fork:
 
     ```
-    $ git clone git@github.com:your_name_here/netbox-dhcp-kea-plugin.git
+    $ git clone git@github.com:your_name_here/netbox_dhcp_kea_plugin.git
     ```
 
-3. Activate the NetBox virtual environment (see the NetBox documentation under [Setting up a Development Environment](https://docs.netbox.dev/en/stable/development/getting-started/)):
+2. Set up a NetBox development environment, as described in [Setting up a Development Environment](https://docs.netbox.dev/en/stable/development/getting-started/). The tests need NetBox's source tree and its requirements, plus PostgreSQL and Redis.
+
+3. Activate NetBox's virtual environment, and install the plugin in editable mode with its test and docs extras (see [Plugins Development](https://docs.netbox.dev/en/stable/plugins/development/)):
 
     ```
     $ source ~/.venv/netbox/bin/activate
+    $ pip install -e ".[test,docs]"
     ```
 
-4. Add the plugin to NetBox virtual environment in Develop mode (see [Plugins Development](https://docs.netbox.dev/en/stable/plugins/development/)):
-
-    To ease development, it is recommended to go ahead and install the plugin at this point using setuptools' develop mode. This will create symbolic links within your Python environment to the plugin development directory. Call setup.py from the plugin's root directory with the develop argument (instead of install):
+4. Install the netbox-plugin-dns release that matches your NetBox version, from the compatibility table in the README. The plugin cannot load without it:
 
     ```
-    $ python setup.py develop
+    $ pip install "netbox-plugin-dns~=1.7.0"
     ```
 
 5. Create a branch for local development:
@@ -89,33 +89,57 @@ Ready to contribute? Here's how to set up `netbox-dhcp-kea-plugin` for local dev
     $ git checkout -b name-of-your-bugfix-or-feature
     ```
 
-    Now you can make your changes locally.
+6. Commit your changes, push your branch to GitHub, and open a pull request through the GitHub website.
 
-6. Commit your changes and push your branch to GitHub:
+## Running the tests
 
-    ```
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
-    ```
+The tests import NetBox from `NETBOX_PATH`, the `netbox/` directory of your NetBox checkout:
 
-7. Submit a pull request through the GitHub website.
+```
+$ export NETBOX_PATH=~/netbox/netbox
+$ make test                          # whole suite, reusing the test database
+$ make test T=tests/test_models.py   # one file, or a node id
+$ make test K=test_pool STOP=1       # pytest -k, stop at the first failure
+```
+
+`make test` runs under the `configuration.py` of your NetBox checkout, so every plugin enabled there takes part. `make test-ci` runs the suite the way CI does: under `tests/netbox_configuration.py`, with only netbox-plugin-dns and this plugin enabled, in a database of its own (`test_netbox_ci`). It reads the connection from `NETBOX_DB_USER`, `NETBOX_DB_PASSWORD`, `NETBOX_DB_HOST`, `NETBOX_DB_PORT`, `NETBOX_REDIS_HOST`, `NETBOX_REDIS_PORT` and `NETBOX_REDIS_PASSWORD`, which default to user and password `netbox` on `localhost` with no Redis password:
+
+```
+$ export NETBOX_REDIS_PASSWORD=...
+$ make test-ci
+```
+
+`make help` lists every target and variable.
+
+## Building the docs
+
+The documentation site is built with [Zensical](https://zensical.org) from `docs/` and `zensical.toml`:
+
+```
+$ make docs          # live preview at http://localhost:8000
+$ make docs-check    # strict build that fails on broken links, as CI does
+```
 
 ## Pull Request Guidelines
 
 Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
-2. If the pull request adds functionality, the docs should be updated. Put
-   your new functionality into a function with a docstring, and add the
-   feature to the list in README.md.
-3. The pull request should work for Python 3.8, 3.9, 3.10 and 3.11. Check
-   https://github.com/LuPo/netbox_dhcp_kea_plugin/actions
-   and make sure that the tests pass for all supported Python versions.
-
+2. If the pull request adds functionality, the docs should be updated, and the change described under `Unreleased` in `CHANGELOG.md`.
+3. The pull request should work on every NetBox version in the README's compatibility table, with Python 3.12 or later. The [tests workflow](https://github.com/LuPo/netbox_dhcp_kea_plugin/actions/workflows/tests.yaml) runs the suite against each of them; make sure it passes.
 
 ## Deploying
 
-A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed (including an entry in CHANGELOG.md) and that all tests pass.
-Then in the github project go to `Releases` and create a new release with a new tag.  This will automatically upload the release to pypi:
+A reminder for the maintainers on how to release:
+
+1. Set the new version in `pyproject.toml` and `netbox_dhcp_kea_plugin/__init__.py`, and run `make lock`.
+2. Rename the `Unreleased` heading in `CHANGELOG.md` to the version and date.
+3. Commit, push `main`, and wait for the tests workflow to pass.
+4. Tag that commit with the bare version, and push the tag:
+
+    ```
+    $ git tag 0.10.4
+    $ git push origin 0.10.4
+    ```
+
+    The publish workflow runs the tests again, builds the package and uploads it to PyPI. It refuses a tag that does not match the package version.

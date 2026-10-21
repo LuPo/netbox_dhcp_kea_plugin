@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.4 (2026-10-21)
+## 0.10.4 (2026-10-22)
 
 ### Fixed — an HA basic-auth user Kea refuses could be saved
 A password manager filled a relationship's basic-auth **user** with a generated string containing colons. Kea refused the HA hook (`user ... must not contain a ':'`), and without the hook the server would not start — but the plugin had accepted the value and rendered it into every member's config.
@@ -13,6 +13,13 @@ No migration: validation and widget attributes only.
 
 ### Fixed — a bound DNS record could be deleted, and renaming it was not followed
 `connect_dns_signals()` defines its `pre_delete` and `post_save` receivers as nested functions, and Django holds receivers by weak reference by default. Nothing else referred to them, so they could be garbage-collected right after startup and never run: a record bound as a server's PKI identity or a Stork endpoint could be deleted, and renaming it left the stored FQDN stale. Whether it happened depended on what else was installed. Both are now connected with `weak=False`.
+
+### Documentation — install, compatibility and license
+- **Compatibility.** The table listed only NetBox 4.5 with 0.8.x. It now covers NetBox 4.5 to 4.7, with the netbox-plugin-dns release for each.
+- **netbox-plugin-dns is required**, and has been since 0.8.0. The DDNS models reference its zones and a migration depends on it, so NetBox neither starts nor migrates without it. The installation steps now install it and add `netbox_dns` to `PLUGINS`, and the docs no longer call it optional.
+- **Install from PyPI.** The instructions use the published package; installing from git is kept for the unreleased state of `main`.
+- **License.** `LICENSE` was empty. It now holds the GPL-3.0 text, and the package metadata declares `GPL-3.0-only`.
+- The contributing guide describes the current setup, tests, docs build and release steps.
 
 ### Development — tests run in CI
 - `.github/workflows/tests.yaml` runs the suite on pushes to `main` and on pull requests, against NetBox 4.6 (netbox-plugin-dns 1.6, Python 3.12) and NetBox 4.7 (netbox-plugin-dns 1.7, Python 3.14).
