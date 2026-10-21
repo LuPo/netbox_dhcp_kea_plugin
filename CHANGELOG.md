@@ -24,8 +24,10 @@ No migration: validation and widget attributes only.
 ### Development — tests run in CI
 - `.github/workflows/tests.yaml` runs the suite on pushes to `main` and on pull requests, against NetBox 4.6 (netbox-plugin-dns 1.6, Python 3.12) and NetBox 4.7 (netbox-plugin-dns 1.7, Python 3.14).
 - It uses `tests/netbox_configuration.py`, selected with `NETBOX_CONFIGURATION=tests.netbox_configuration`, so results no longer depend on a developer's `configuration.py`.
-- A tag is published to PyPI only after those tests pass. The workflow actions are on their Node 24 releases.
+- A tag is published to PyPI only after those tests pass, and only if it matches the package version. The workflow actions are on their Node 24 releases.
+- The docs workflow builds in strict mode, so a broken link fails it instead of being deployed.
 - `pytest-django` is in the `test` extra; `pre-commit` moved to `dev`.
+- New make targets: `docs` (live preview), `docs-build`, `docs-check` (the strict build), `test-ci` (the suite under the CI configuration, in a database of its own) and `dist` (build and check the package). `make help` groups the targets and shows each variable with its current value.
 
 ## 0.10.3 (2026-10-13)
 

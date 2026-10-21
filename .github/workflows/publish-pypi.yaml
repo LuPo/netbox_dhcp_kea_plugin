@@ -3,6 +3,10 @@ name: Publish Python 🐍 distribution 📦 to PyPI
 
 on: push
 
+# Read-only by default; the publish job adds the OIDC token it needs
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build distribution 📦
@@ -10,6 +14,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        persist-credentials: false  # the build needs no git access
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
@@ -22,6 +28,16 @@ jobs:
         --user
     - name: Build a binary wheel and a source tarball
       run: python3 -m build
+    # A tag without the version bump would publish the previous version's
+    # number, or fail on PyPI only after the tests have run
+    - name: Check the tag matches the package version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        wheel="dist/netbox_dhcp_kea_plugin-${GITHUB_REF_NAME}-py3-none-any.whl"
+        if [ ! -f "$wheel" ]; then
+          echo "::error::Tag ${GITHUB_REF_NAME} does not match the built package: $(ls dist | tr '\n' ' ')"
+          exit 1
+        fi
     - name: Store the distribution packages
       uses: actions/upload-artifact@v7
       with:
