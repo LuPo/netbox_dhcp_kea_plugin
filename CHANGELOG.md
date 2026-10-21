@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.4 (2026-10-21)
 
 ### Fixed — an HA basic-auth user Kea refuses could be saved
 A password manager filled a relationship's basic-auth **user** with a generated string containing colons. Kea refused the HA hook (`user ... must not contain a ':'`), and without the hook the server would not start — but the plugin had accepted the value and rendered it into every member's config.
