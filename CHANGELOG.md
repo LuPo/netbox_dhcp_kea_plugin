@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.3 (2026-10-13)
 
 ### Fixed — saving a DHCP server with a service template failed on NetBox 4.7
 NetBox 4.7 replaced the `protocol` and `ports` columns of `Service` and `ServiceTemplate` with a single `port_mappings` list of `"protocol/port"` strings, keeping `protocol` and `ports` only as read-only properties. Saving a `DHCPServer` that links its Application Service filtered on `protocol` and created the Service with `ports`, so it raised `FieldError: Cannot resolve keyword 'protocol' into field` whenever a new server was created. `repair_dhcp_services` had the same lookup, and `generate_kea_demo_data` created its template with the old fields.
@@ -26,6 +26,11 @@ Similarly, `DDNSPolicy` could emit `ddns-ttl` alongside `ddns-ttl-percent` / `-m
 
 All are optional and omitted when unset, so no rendered configuration changes on upgrade.
 
+### Added — lease defaults from plugin config, per scope
+`model_defaults` gains a `DHCPServer` section — `valid_lifetime`, `max_valid_lifetime` and `decline_probation_period` — alongside the existing `Subnet` one. They are separate keys because they are separate scopes in Kea: a subnet's lifetime overrides the global one. The shipped defaults are the values that were previously hardcoded, so nothing rendered moves. `renew_timer` and `rebind_timer` are deliberately not seeded, since a default would start sending options 58 and 59 to clients that were choosing their own T1/T2.
+
+## 0.10.2 (2026-09-01)
+
 ### Added — lease timers at every level Kea accepts them
 `valid-lifetime`, `renew-timer` and `rebind-timer` may be set globally, per subnet and per client class (the last since Kea 1.9.5), resolved class → subnet → global. Previously the plugin modelled only a per-subnet `valid_lifetime`, and **hardcoded** `valid-lifetime: 3600` / `max-valid-lifetime: 7200` in the global block, so neither the global lifetimes nor T1/T2 could be expressed at all.
 
@@ -44,6 +49,15 @@ A client stuck in a `DHCPDECLINE` loop walks a pool: each declined lease enters 
 
 Together these express ISC's own recipe in [Limiting DHCP DECLINE](https://kb.isc.org/docs/limiting-dhcp-decline): a template class matching DECLINE messages, carrying a `user-context` rate limit, so one MAC cannot decline more than N addresses per hour — paired with a probation period well under the 24-hour default. Containment (restricting a small pool to a class matching the offenders) and pinning (a reservation, so a loop costs one address) remain useful alongside it.
 
+### Fixed — `Subnet.get_router_ip()` on an unsaved prefix
+It dereferenced `prefix.network` without the `str` guard `Subnet.clean()` already had, so it raised `AttributeError` for a prefix that had not round-tripped through the database. It is reachable from `to_kea_dict()`.
+
+### Changed — detail page layout
+- The client class page and every card on the DHCP server page pin the label column, so values line up instead of starting wherever each table's longest value pushes them. *Lease Handling* moves to the right-hand column.
+- A multi-line `{# #}` comment at the top of the option definition list rendered as page text. Django's comment tag is single-line only; it is now a `{% comment %}` block.
+
+## 0.10.1 (2026-08-29)
+
 ### Fixed — the Stork agent registration URL was guessed, not chosen
 `StorkServer.url` preferred `ip_address.dns_name` and silently fell back to the address. Both branches produced a URL that fails TLS verification: an address has no certificate to match against, and IPAM's `dns_name` records the *host*, not necessarily the *service* name the certificate was issued for. The agent has **no skip-verification option for registration**, so it exits and systemd gives up after five restarts.
 
@@ -55,6 +69,10 @@ Together these express ISC's own recipe in [Limiting DHCP DECLINE](https://kb.is
 
 ### Changed — `skip_tls_cert_verification` is labelled for the connection it governs
 It sat under *Agent gRPC Settings*, reading as though it covered the agent's relationship with the Stork server. It does not: it renders `STORK_AGENT_SKIP_TLS_CERT_VERIFICATION`, which is agent → **Kea**. Moved to its own *Kea Connection* fieldset and relabelled, with help text naming the direction. No companion flag for the server was added — the agent offers none, and a field that cannot be honoured invites the wrong diagnosis.
+
+### Changed — DHCP server page
+- A *Reverse Proxy* card shows the HA reverse proxy (inherited from the relationship), the control socket proxy and the Stork exporter proxy, which were configurable but not shown.
+- The *DDNS* card moves to the right-hand column, above *Global Option Data*.
 
 ## 0.10.0 (2026-08-20)
 
