@@ -233,6 +233,20 @@ ddnsdomain_menu_item = PluginMenuItem(
     ),
 )
 
+ddnsserveroverride_menu_item = PluginMenuItem(
+    link="plugins:netbox_dhcp_kea_plugin:ddnsserveroverride_list",
+    link_text="DDNS Server Overrides",
+    permissions=["netbox_dhcp_kea_plugin.view_ddnsserveroverride"],
+    buttons=(
+        PluginMenuButton(
+            link="plugins:netbox_dhcp_kea_plugin:ddnsserveroverride_add",
+            title="Add",
+            icon_class="mdi mdi-plus-thick",
+            permissions=["netbox_dhcp_kea_plugin.add_ddnsserveroverride"],
+        ),
+    ),
+)
+
 ddnspolicy_menu_item = PluginMenuItem(
     link="plugins:netbox_dhcp_kea_plugin:ddnspolicy_list",
     link_text="DDNS Policies",
@@ -286,6 +300,7 @@ if enable_ddns:
                 tsigkey_menu_item,
                 d2daemon_menu_item,
                 ddnsdomain_menu_item,
+                ddnsserveroverride_menu_item,
                 ddnspolicy_menu_item,
             ),
         ),
@@ -328,6 +343,7 @@ else:
                 tsigkey_menu_item,
                 d2daemon_menu_item,
                 ddnsdomain_menu_item,
+                ddnsserveroverride_menu_item,
                 ddnspolicy_menu_item,
             ]
         )

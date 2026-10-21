@@ -10,6 +10,7 @@ from .models import (
     D2Daemon,
     DDNSDomain,
     DDNSPolicy,
+    DDNSServerOverride,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -370,8 +371,6 @@ class TSIGKeyFilterSet(NetBoxModelFilterSet):
 
 
 class D2DaemonFilterSet(NetBoxModelFilterSet):
-    ncr_protocol = django_filters.ChoiceFilter(choices=[("UDP", "UDP"), ("TCP", "TCP")])
-
     class Meta:
         model = D2Daemon
         fields = ["id", "name", "ip_address", "port", "ncr_protocol", "ncr_format"]
@@ -396,6 +395,17 @@ class DDNSDomainFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(d2_daemon__name__icontains=value))
 
 
+class DDNSServerOverrideFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = DDNSServerOverride
+        fields = ["id", "ddns_domain", "nameserver", "port", "tsig_key"]
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(nameserver__name__icontains=value) | Q(description__icontains=value))
+
+
 class DDNSPolicyFilterSet(NetBoxModelFilterSet):
     server = django_filters.ModelChoiceFilter(
         field_name="servers",
@@ -406,9 +416,9 @@ class DDNSPolicyFilterSet(NetBoxModelFilterSet):
         field_name="subnets",
         queryset=Subnet.objects.all(),
     )
-    client_class = django_filters.ModelChoiceFilter(
-        field_name="client_classes",
-        queryset=ClientClass.objects.all(),
+    pool = django_filters.ModelChoiceFilter(
+        field_name="pools",
+        queryset=SubnetPool.objects.all(),
     )
 
     class Meta:
@@ -420,7 +430,7 @@ class DDNSPolicyFilterSet(NetBoxModelFilterSet):
             "ddns_conflict_resolution_mode",
             "server",
             "subnet",
-            "client_class",
+            "pool",
         ]
 
     def search(self, queryset, name, value):

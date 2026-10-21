@@ -2,6 +2,21 @@
 {% load helpers %}
 
 {% block content %}
+{% if configuration_errors %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-danger" role="alert">
+            <i class="mdi mdi-alert"></i>
+            KEA would refuse to load this daemon's configuration:
+            <ul class="mb-0">
+                {% for error in configuration_errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <div class="col col-md-6">
         <div class="card">
@@ -68,6 +83,16 @@
                     <tr>
                         <th>Domains</th>
                         <td>{{ object.domains.count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hook Groups</th>
+                        <td>
+                            {% for group in object.hook_groups.all %}
+                            <a href="{{ group.get_absolute_url }}">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                            {{ ''|placeholder }}
+                            {% endfor %}
+                        </td>
                     </tr>
                 </table>
             </div>

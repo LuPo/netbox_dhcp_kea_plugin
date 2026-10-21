@@ -392,7 +392,19 @@ When DDNS is enabled, each `D2Daemon` exposes a per-instance endpoint that emits
 GET /api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/
 ```
 
-The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across this daemon's domains), and the forward / reverse `ddns-domains` arrays partitioned by zone name. `dns-server-timeout` is emitted when set on the daemon; left blank, Kea applies its default of 500 ms.
+The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across this daemon's domains and their server overrides), the forward / reverse `ddns-domains` arrays partitioned by zone name, and `hooks-libraries` from any hook group attached to the daemon. `dns-server-timeout` is emitted when set on the daemon; left blank, Kea applies its default of 500 ms.
+
+A configuration that carries a plaintext TSIG secret requires the `view_secret_tsigkey`
+permission to render. The endpoint answers **403** without it rather than redacting the
+secret, because a redacted copy is exactly what a deployment would install. The
+Configuration tab, which is for reading, shows the same config with the secrets hidden.
+
+### Per-server port and TSIG key
+
+A domain's `dns-servers` are derived from its zone's nameservers, so each is sent updates
+on port 53 under the domain's TSIG key. A **DDNS Server Override** changes that for one
+nameserver: its `port`, its `key-name`, or both. The DDNS domain page lists every
+nameserver with the address, port and key it renders, and links to add an override.
 
 ### TSIG secrets: stored, or referenced
 
@@ -426,6 +438,18 @@ rendered config — and means there is no token, credential or renewal to manage
 - **`ddns-ttl` excludes the other TTL keys.** Kea treats an absolute `ddns-ttl` as mutually
   exclusive with `ddns-ttl-percent`, `ddns-ttl-min` and `ddns-ttl-max`, and refuses to load
   a configuration setting both. A `DDNSPolicy` combining them is rejected here instead.
+- **NCRs travel over UDP.** Kea accepts `TCP` as a value and then refuses to load it, in
+  `kea-dhcp-ddns` and in the DHCP server's `dhcp-ddns` block alike, so UDP is the only choice.
+- **The D2 control socket cannot live in `/tmp`.** Kea 3.0 only creates control sockets in
+  its run directory (usually `/var/run/kea`, or `KEA_CONTROL_SOCKET_DIR`) and refuses to
+  start otherwise. A path in `/tmp` or `/var/tmp` is rejected.
+- **The sender must match the D2 server.** An explicit `ddns_sender_ip` must be the same
+  address family as the D2 listener, and may not be the listener's exact address and port.
+  Left blank, Kea picks the wildcard address of the right family itself.
+- **A D2 port or DNS server timeout of 0 is refused**, as Kea refuses both.
+
+D2 daemons saved before these checks existed are not re-validated; their detail page lists
+anything Kea would refuse.
 
 ## Stork configuration
 

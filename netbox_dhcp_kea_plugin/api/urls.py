@@ -25,6 +25,7 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
     router.register("tsig-keys", views.TSIGKeyViewSet)
     router.register("d2-daemons", views.D2DaemonViewSet)
     router.register("ddns-domains", views.DDNSDomainViewSet)
+    router.register("ddns-server-overrides", views.DDNSServerOverrideViewSet)
     router.register("ddns-policies", views.DDNSPolicyViewSet)
 
 urlpatterns = router.urls + [

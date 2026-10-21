@@ -5,6 +5,7 @@ from ipam.models import IPAddress, Prefix
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
@@ -27,6 +28,7 @@ from ..models import (
     D2Daemon,
     DDNSDomain,
     DDNSPolicy,
+    DDNSServerOverride,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -46,6 +48,7 @@ from .serializers import (
     D2DaemonSerializer,
     DDNSDomainSerializer,
     DDNSPolicySerializer,
+    DDNSServerOverrideSerializer,
     DHCPHARelationshipSerializer,
     DHCPServerSerializer,
     HookGroupSerializer,
@@ -384,8 +387,16 @@ class D2DaemonViewSet(NetBoxModelViewSet):
     def kea_config(self, request, pk=None):
         """
         Return the complete kea-dhcp-ddns configuration for this D2 daemon.
+
+        A configuration carrying TSIG secrets is refused, not redacted, for a user
+        without ``view_secret_tsigkey``: a redacted copy is what a deployment would
+        install, and D2 would then fail TSIG authentication with nothing pointing here.
         """
         daemon = self.get_object()
+        if daemon.contains_secrets() and not request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"):
+            raise PermissionDenied(
+                "This configuration contains TSIG secrets. Rendering it requires the view_secret_tsigkey permission."
+            )
         return Response(daemon.to_kea_dict())
 
 
@@ -395,7 +406,13 @@ class DDNSDomainViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.DDNSDomainFilterSet
 
 
+class DDNSServerOverrideViewSet(NetBoxModelViewSet):
+    queryset = DDNSServerOverride.objects.select_related("ddns_domain", "tsig_key")
+    serializer_class = DDNSServerOverrideSerializer
+    filterset_class = filtersets.DDNSServerOverrideFilterSet
+
+
 class DDNSPolicyViewSet(NetBoxModelViewSet):
-    queryset = DDNSPolicy.objects.prefetch_related("servers", "subnets", "client_classes")
+    queryset = DDNSPolicy.objects.prefetch_related("servers", "subnets", "pools")
     serializer_class = DDNSPolicySerializer
     filterset_class = filtersets.DDNSPolicyFilterSet

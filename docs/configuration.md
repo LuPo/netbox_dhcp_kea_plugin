@@ -63,7 +63,7 @@ Every setting is optional; omitted keys fall back to their default.
 | `ddns_secret_backend` | `"plaintext"` | Default backend for a `TSIGKey` that does not pick one. `"plaintext"` reads the secret from the NetBox database; `"vault"` emits a reference for the deployment to substitute. |
 | `ddns_secret_reference_template` | `"${BAO:{ref}}"` | How a `vault`-backed TSIG key renders its secret. `{ref}` is replaced with the key's `secret_ref`. NetBox never contacts the secret store, so this only has to match whatever performs the substitution on the target. See [TSIG secrets](usage.md#tsig-secrets-stored-or-referenced). |
 | `pki_allowed_zone_suffixes` | `[]` | DNS zone suffixes your internal CA will issue certificates for, e.g. `[".pki.example.net"]`. A leading dot is optional. **Empty disables the check.** When set, a `DHCPServer.pki_fqdn` outside these zones is rejected on save — see [PKI identity](usage.md#pki-identity-pki_fqdn). |
-| `d2_default_control_socket_path` | `"/tmp/kea-dhcp-ddns-ctrl.sock"` | Pre-fills the control socket field on new `D2Daemon` rows. |
+| `d2_default_control_socket_path` | `"/var/run/kea/kea-ddns-ctrl-socket"` | Pre-fills the control socket field on new `D2Daemon` rows. Kea 3.0 accepts control sockets only in its run directory, so a path in `/tmp` is rejected. |
 | `model_defaults` | *(see below)* | Per-model default values for new objects, keyed by model. Reservation modes, lease lifetimes and the decline probation period are settable separately for the **global** scope (`DHCPServer`) and the **local** one (`Subnet`). |
 
 ## Model defaults

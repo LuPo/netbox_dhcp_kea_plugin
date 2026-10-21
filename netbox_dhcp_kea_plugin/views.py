@@ -74,7 +74,12 @@ class HookHookGroupsView(generic.ObjectView):
 
 # HookGroup Views
 class HookGroupView(generic.ObjectView):
-    queryset = models.HookGroup.objects.prefetch_related("hooks", "servers")
+    queryset = models.HookGroup.objects.prefetch_related("hooks", "servers", "d2_daemons")
+
+    def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
+        return {"enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns")}
 
 
 class HookGroupListView(generic.ObjectListView):
@@ -550,12 +555,9 @@ class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
 
     def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
-
         return {
             "kea_config_hex": instance.to_kea_json(ascii_format=False, indent=4),
             "kea_config_ascii": instance.to_kea_json(ascii_format=True, indent=4),
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -947,11 +949,13 @@ class SubnetReservationsView(generic.ObjectView):
 
 # SubnetPool Views
 class SubnetPoolView(generic.ObjectView):
-    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class").prefetch_related(
+    queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class", "ddns_policy").prefetch_related(
         "evaluate_additional_classes", "option_data"
     )
 
     def get_extra_context(self, request, instance):
+        from netbox.plugins.utils import get_plugin_config
+
         # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
         # These classes are already evaluated globally by KEA, so listing them in
         # evaluate-additional-classes is redundant.
@@ -960,6 +964,7 @@ class SubnetPoolView(generic.ObjectView):
         return {
             "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
             "redundant_eval_classes": redundant_eval_classes,
+            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
         }
 
 
@@ -1283,7 +1288,11 @@ class TSIGKeyImportView(generic.BulkImportView):
 
 
 class D2DaemonView(generic.ObjectView):
-    queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("domains")
+    queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("domains", "hook_groups")
+
+    def get_extra_context(self, request, instance):
+        # Rows saved before a check existed are never re-validated.
+        return {"configuration_errors": instance.configuration_errors()}
 
 
 class D2DaemonListView(generic.ObjectListView):
@@ -1350,7 +1359,11 @@ class D2DaemonConfigView(generic.ObjectView):
 
     def get(self, request, pk):
         daemon = self.get_object(pk=pk)
-        config = daemon.to_kea_dict()
+        # Viewing a daemon must not reveal what the TSIG key page itself withholds.
+        secrets_redacted = daemon.contains_secrets() and not request.user.has_perm(
+            "netbox_dhcp_kea_plugin.view_secret_tsigkey"
+        )
+        config = daemon.to_kea_dict(redact_secrets=secrets_redacted)
         return render(
             request,
             self.template_name,
@@ -1358,6 +1371,7 @@ class D2DaemonConfigView(generic.ObjectView):
                 "object": daemon,
                 "tab": self.tab,
                 "requires_secret_substitution": daemon.requires_secret_substitution(),
+                "secrets_redacted": secrets_redacted,
                 "config_json": json.dumps(config, indent=2),
             },
         )
@@ -1370,6 +1384,10 @@ class DDNSDomainView(generic.ObjectView):
     queryset = models.DDNSDomain.objects.select_related("d2_daemon", "zone", "tsig_key").prefetch_related(
         "zone__nameservers"
     )
+
+    def get_extra_context(self, request, instance):
+        # What each nameserver renders as, with the override (if any) that shapes it.
+        return {"nameserver_entries": instance.nameserver_entries()}
 
 
 class DDNSDomainListView(generic.ObjectListView):
@@ -1406,18 +1424,47 @@ class DDNSDomainImportView(generic.BulkImportView):
     model_form = forms.DDNSDomainImportForm
 
 
+# --- DDNSServerOverride Views ---
+
+
+class DDNSServerOverrideView(generic.ObjectView):
+    queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "ddns_domain__zone", "tsig_key")
+
+
+class DDNSServerOverrideListView(generic.ObjectListView):
+    queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "tsig_key")
+    table = tables.DDNSServerOverrideTable
+    filterset = filtersets.DDNSServerOverrideFilterSet
+    filterset_form = forms.DDNSServerOverrideFilterForm
+
+
+class DDNSServerOverrideEditView(generic.ObjectEditView):
+    queryset = models.DDNSServerOverride.objects.all()
+    form = forms.DDNSServerOverrideForm
+
+
+class DDNSServerOverrideDeleteView(generic.ObjectDeleteView):
+    queryset = models.DDNSServerOverride.objects.all()
+
+
+class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DDNSServerOverride.objects.all()
+    filterset = filtersets.DDNSServerOverrideFilterSet
+    table = tables.DDNSServerOverrideTable
+
+
 # --- DDNSPolicy Views ---
 
 
 class DDNSPolicyView(generic.ObjectView):
-    queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "client_classes")
+    queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "pools")
 
 
 class DDNSPolicyListView(generic.ObjectListView):
     queryset = models.DDNSPolicy.objects.annotate(
         servers_count=Count("servers", distinct=True),
         subnets_count=Count("subnets", distinct=True),
-        client_classes_count=Count("client_classes", distinct=True),
+        pools_count=Count("pools", distinct=True),
     )
     table = tables.DDNSPolicyTable
     filterset = filtersets.DDNSPolicyFilterSet
@@ -1452,8 +1499,8 @@ def get_ddnspolicy_subnets_count(obj):
     return obj.subnets.count()
 
 
-def get_ddnspolicy_client_classes_count(obj):
-    return obj.client_classes.count()
+def get_ddnspolicy_pools_count(obj):
+    return obj.pools.count()
 
 
 @register_model_view(models.DDNSPolicy, name="servers", path="servers")
@@ -1494,20 +1541,21 @@ class DDNSPolicySubnetsView(generic.ObjectView):
         )
 
 
-@register_model_view(models.DDNSPolicy, name="clientclasses", path="client-classes")
-class DDNSPolicyClientClassesView(generic.ObjectView):
+@register_model_view(models.DDNSPolicy, name="pools", path="pools")
+class DDNSPolicyPoolsView(generic.ObjectView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_clientclasses.html"
+    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_pools.html"
     tab = ViewTab(
-        label="Client Classes",
-        badge=get_ddnspolicy_client_classes_count,
+        label="Pools",
+        badge=get_ddnspolicy_pools_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
     def get(self, request, pk):
         policy = self.get_object(pk=pk)
+        pools = policy.pools.select_related("subnet", "subnet__prefix", "ip_range")
         return render(
             request,
             self.template_name,
-            {"object": policy, "client_classes": policy.client_classes.all(), "tab": self.tab},
+            {"object": policy, "pools": pools, "tab": self.tab},
         )

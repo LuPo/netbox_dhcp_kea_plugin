@@ -7,6 +7,7 @@ from .models import (
     D2Daemon,
     DDNSDomain,
     DDNSPolicy,
+    DDNSServerOverride,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -818,6 +819,33 @@ class DDNSDomainTable(NetBoxTable):
         exclude = ("id",)
 
 
+class DDNSServerOverrideTable(NetBoxTable):
+    ddns_domain = tables.Column(linkify=True, verbose_name="DDNS Domain")
+    nameserver = tables.Column(verbose_name="Nameserver")
+    port = tables.Column(verbose_name="Port")
+    tsig_key = tables.Column(linkify=True, verbose_name="TSIG Key")
+    description = tables.Column(verbose_name="Description")
+
+    class Meta(NetBoxTable.Meta):
+        model = DDNSServerOverride
+        fields = (
+            "pk",
+            "ddns_domain",
+            "nameserver",
+            "port",
+            "tsig_key",
+            "description",
+            "actions",
+        )
+        default_columns = (
+            "ddns_domain",
+            "nameserver",
+            "port",
+            "tsig_key",
+        )
+        exclude = ("id",)
+
+
 class DDNSPolicyTable(NetBoxTable):
     name = tables.Column(linkify=True, verbose_name="Name")
     ddns_send_updates = BooleanColumn(verbose_name="Send Updates")
@@ -835,9 +863,9 @@ class DDNSPolicyTable(NetBoxTable):
         orderable=False,
         linkify=False,
     )
-    client_classes_count = tables.Column(
-        verbose_name="Client Classes",
-        accessor="client_classes__count",
+    pools_count = tables.Column(
+        verbose_name="Pools",
+        accessor="pools__count",
         orderable=False,
         linkify=False,
     )
@@ -853,7 +881,7 @@ class DDNSPolicyTable(NetBoxTable):
             "ddns_conflict_resolution_mode",
             "servers_count",
             "subnets_count",
-            "client_classes_count",
+            "pools_count",
             "description",
             "actions",
         )
@@ -863,6 +891,6 @@ class DDNSPolicyTable(NetBoxTable):
             "ddns_qualifying_suffix",
             "servers_count",
             "subnets_count",
-            "client_classes_count",
+            "pools_count",
         )
         exclude = ("id",)

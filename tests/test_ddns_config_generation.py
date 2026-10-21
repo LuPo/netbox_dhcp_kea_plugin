@@ -1,4 +1,4 @@
-"""Kea config emission for DDNS — server, subnet, and class layers.
+"""Kea config emission for DDNS — server, subnet, and pool layers.
 
 Verifies that DDNSPolicy.to_kea_overrides() output is spread verbatim into the
 correct JSON level and that *no* Python-side merging happens between layers
@@ -34,13 +34,29 @@ def policy_subnet(db):
 
 
 @pytest.fixture
-def policy_class(db):
+def policy_pool(db):
     from netbox_dhcp_kea_plugin.models import DDNSPolicy
 
     return DDNSPolicy.objects.create(
-        name="class-policy",
+        name="pool-policy",
         ddns_generated_prefix="myhost",
+        hostname_char_set="[^A-Za-z0-9.-]",
     )
+
+
+@pytest.fixture
+def ddns_pool(db, subnet_factory, prefix_factory):
+    from ipam.models import IPRange
+    from netaddr import IPNetwork
+
+    from netbox_dhcp_kea_plugin.models import SubnetPool
+
+    subnet = subnet_factory(prefix=prefix_factory("10.77.0.0/24"))
+    ip_range = IPRange.objects.create(
+        start_address=IPNetwork("10.77.0.10/24"),
+        end_address=IPNetwork("10.77.0.50/24"),
+    )
+    return SubnetPool.objects.create(subnet=subnet, ip_range=ip_range)
 
 
 def test_server_policy_emits_at_dhcp4_top_level(dhcp_server, policy_server):
@@ -99,18 +115,36 @@ def test_no_python_side_merging_between_server_and_subnet(
     assert "ddns-send-updates" not in target
 
 
-def test_class_policy_emits_inside_client_class_dict(
-    dhcp_server, client_class, policy_class
-):
-    client_class.ddns_policy = policy_class
-    client_class.save()
-    client_class.servers.add(dhcp_server)
+def test_pool_policy_emits_inside_pool_dict(ddns_pool, policy_pool):
+    ddns_pool.ddns_policy = policy_pool
+    ddns_pool.save()
 
+    pool = ddns_pool.to_kea_dict()
+    assert pool["ddns-generated-prefix"] == "myhost"
+    assert pool["hostname-char-set"] == "[^A-Za-z0-9.-]"
+
+
+def test_pool_policy_does_not_leak_into_subnet(ddns_pool, policy_pool):
+    ddns_pool.ddns_policy = policy_pool
+    ddns_pool.save()
+
+    subnet = ddns_pool.subnet.to_kea_dict()
+    assert "ddns-generated-prefix" not in subnet
+    pools = subnet["pools"]
+    assert any(p.get("ddns-generated-prefix") == "myhost" for p in pools)
+
+
+def test_client_class_never_carries_ddns_keys(dhcp_server, client_class):
+    # KEA's client-class grammar has no ddns-* keys and refuses the whole
+    # configuration on one, so the model offers no way to attach a policy.
+    from netbox_dhcp_kea_plugin.models import ClientClass
+
+    assert "ddns_policy" not in {f.name for f in ClientClass._meta.get_fields()}
+
+    client_class.servers.add(dhcp_server)
     dhcp4 = dhcp_server.to_kea_dict()["Dhcp4"]
-    classes = dhcp4.get("client-classes", [])
-    assert classes
-    target = next(c for c in classes if c["name"] == client_class.name)
-    assert target.get("ddns-generated-prefix") == "myhost"
+    target = next(c for c in dhcp4["client-classes"] if c["name"] == client_class.name)
+    assert not [key for key in target if key.startswith("ddns-") or key.startswith("hostname-char")]
 
 
 def test_no_ddns_keys_when_no_policy_attached(dhcp_server):

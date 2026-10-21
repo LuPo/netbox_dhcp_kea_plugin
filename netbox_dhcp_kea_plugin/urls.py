@@ -404,8 +404,45 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
             name="ddnspolicy_subnets",
         ),
         path(
-            "ddns-policies/<int:pk>/client-classes/",
-            views.DDNSPolicyClientClassesView.as_view(),
-            name="ddnspolicy_clientclasses",
+            "ddns-policies/<int:pk>/pools/",
+            views.DDNSPolicyPoolsView.as_view(),
+            name="ddnspolicy_pools",
+        ),
+        # DDNSServerOverride URLs
+        path(
+            "ddns-server-overrides/",
+            views.DDNSServerOverrideListView.as_view(),
+            name="ddnsserveroverride_list",
+        ),
+        path(
+            "ddns-server-overrides/add/",
+            views.DDNSServerOverrideEditView.as_view(),
+            name="ddnsserveroverride_add",
+        ),
+        path(
+            "ddns-server-overrides/delete/",
+            views.DDNSServerOverrideBulkDeleteView.as_view(),
+            name="ddnsserveroverride_bulk_delete",
+        ),
+        path(
+            "ddns-server-overrides/<int:pk>/",
+            views.DDNSServerOverrideView.as_view(),
+            name="ddnsserveroverride",
+        ),
+        path(
+            "ddns-server-overrides/<int:pk>/edit/",
+            views.DDNSServerOverrideEditView.as_view(),
+            name="ddnsserveroverride_edit",
+        ),
+        path(
+            "ddns-server-overrides/<int:pk>/delete/",
+            views.DDNSServerOverrideDeleteView.as_view(),
+            name="ddnsserveroverride_delete",
+        ),
+        path(
+            "ddns-server-overrides/<int:pk>/changelog/",
+            ObjectChangeLogView.as_view(),
+            name="ddnsserveroverride_changelog",
+            kwargs={"model": models.DDNSServerOverride},
         ),
     ]

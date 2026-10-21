@@ -1,10 +1,7 @@
 """TSIG key secret backends.
 
-Abstracts secret storage so a future Vault / external-secret backend can be
-plugged in without schema changes. v1 ships only the ``plaintext`` backend,
-which returns the value stored in ``TSIGKey.secret_plaintext`` verbatim.
-
-Two backends ship: ``plaintext`` returns the secret held in the NetBox
+Abstracts secret storage so an external secret store can be plugged in without
+schema changes. Two backends ship: ``plaintext`` returns the secret held in the NetBox
 database, and ``vault`` returns a *reference* for the deployment to substitute
 on the target — NetBox never contacts the secret store itself.
 
@@ -63,6 +60,11 @@ def is_reference_backend(name):
     return name == "vault"
 
 
+def backend_name_for(tsig_key):
+    """The backend a key resolves through: its own, else the plugin-wide default."""
+    return tsig_key.secret_backend or get_plugin_config("netbox_dhcp_kea_plugin", "ddns_secret_backend")
+
+
 def register_backend(name, resolver):
     """Register a new secret backend.
 
@@ -78,9 +80,7 @@ def resolve_secret(tsig_key):
     Falls back to the plugin-wide default (``ddns_secret_backend``) when the
     key doesn't pin its own backend.
     """
-    backend_name = tsig_key.secret_backend or get_plugin_config(
-        "netbox_dhcp_kea_plugin", "ddns_secret_backend"
-    )
+    backend_name = backend_name_for(tsig_key)
     try:
         backend = TSIG_SECRET_BACKENDS[backend_name]
     except KeyError as exc:

@@ -34,6 +34,18 @@
                         <th>Servers</th>
                         <td>{{ object.servers.count }}</td>
                     </tr>
+                    {% if enable_ddns %}
+                    <tr>
+                        <th>D2 Daemons</th>
+                        <td>
+                            {% for daemon in object.d2_daemons.all %}
+                            <a href="{{ daemon.get_absolute_url }}">{{ daemon.name }}</a>{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                            {{ ''|placeholder }}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>

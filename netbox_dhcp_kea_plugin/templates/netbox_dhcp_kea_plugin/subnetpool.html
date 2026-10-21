@@ -33,6 +33,18 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if enable_ddns %}
+                    <tr>
+                        <th>DDNS Policy</th>
+                        <td>
+                            {% if object.ddns_policy %}
+                            <a href="{{ object.ddns_policy.get_absolute_url }}">{{ object.ddns_policy.name }}</a>
+                            {% else %}
+                            <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <th>Description</th>
                         <td>

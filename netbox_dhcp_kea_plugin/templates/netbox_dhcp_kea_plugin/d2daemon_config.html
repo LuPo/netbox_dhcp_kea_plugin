@@ -22,6 +22,17 @@
     </div>
 </div>
 {% endif %}
+{% if secrets_redacted %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-info" role="alert">
+            <i class="mdi mdi-lock"></i>
+            TSIG secrets are hidden. Revealing them requires the <em>view_secret_tsigkey</em>
+            permission, so this copy cannot be deployed as shown.
+        </div>
+    </div>
+</div>
+{% endif %}
 <div class="row">
     <div class="col col-md-12">
         <div class="card mb-3">

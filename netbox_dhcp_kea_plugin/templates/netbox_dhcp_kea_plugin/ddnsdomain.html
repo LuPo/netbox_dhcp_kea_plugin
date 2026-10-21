@@ -30,22 +30,66 @@
                             {% endif %}
                         </td>
                     </tr>
+                    <tr>
+                        <th>User Context</th>
+                        <td>
+                            {% if object.user_context %}
+                            <pre class="mb-0">{{ object.user_context|json }}</pre>
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>
     </div>
     <div class="col col-md-6">
         <div class="card">
-            <h5 class="card-header">Zone Nameservers</h5>
+            <h5 class="card-header">DNS Servers</h5>
             <div class="card-body">
-                {% if object.zone and object.zone.nameservers.all %}
-                <ul class="list-unstyled mb-0">
-                    {% for ns in object.zone.nameservers.all %}
-                    <li>{{ ns }}</li>
-                    {% endfor %}
-                </ul>
+                {% if nameserver_entries %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nameserver</th>
+                            <th>Addresses</th>
+                            <th>Port</th>
+                            <th>TSIG Key</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ns, ips, override in nameserver_entries %}
+                        <tr>
+                            <td>{{ ns }}</td>
+                            <td>
+                                {% for ip in ips %}{{ ip }}{% if not forloop.last %}<br>{% endif %}
+                                {% empty %}<span class="text-muted">Not resolvable — skipped</span>{% endfor %}
+                            </td>
+                            <td>{% if override.port %}{{ override.port }}{% else %}53{% endif %}</td>
+                            <td>
+                                {% if override.tsig_key %}
+                                <a href="{{ override.tsig_key.get_absolute_url }}">{{ override.tsig_key.name }}</a>
+                                {% elif object.tsig_key %}
+                                <span class="text-muted">{{ object.tsig_key.name }} (domain)</span>
+                                {% else %}
+                                {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if override %}
+                                <a href="{{ override.get_absolute_url }}">Override</a>
+                                {% elif perms.netbox_dhcp_kea_plugin.add_ddnsserveroverride %}
+                                <a href="{% url 'plugins:netbox_dhcp_kea_plugin:ddnsserveroverride_add' %}?ddns_domain={{ object.pk }}&nameserver={{ ns.pk }}&return_url={{ object.get_absolute_url }}">Add override</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
                 <p class="text-muted small mt-2 mb-0">
-                    IPs are resolved at config-emit time from netbox-dns A/AAAA records.
+                    Addresses are resolved at config-emit time from netbox-dns A/AAAA records.
                 </p>
                 {% else %}
                 <p class="text-muted mb-0">Zone has no nameservers assigned.</p>

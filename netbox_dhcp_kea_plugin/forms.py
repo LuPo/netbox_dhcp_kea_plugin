@@ -28,6 +28,7 @@ from .models import (
     D2Daemon,
     DDNSDomain,
     DDNSPolicy,
+    DDNSServerOverride,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -1221,11 +1222,6 @@ class ClientClassForm(NetBoxModelForm):
         required=False,
         help_text="Option data to send to clients matching this class",
     )
-    ddns_policy = DynamicModelChoiceField(
-        queryset=DDNSPolicy.objects.all(),
-        required=False,
-        help_text="Class-level DDNS policy overrides (ddns-* tunables)",
-    )
 
     class Meta:
         model = ClientClass
@@ -1244,7 +1240,6 @@ class ClientClassForm(NetBoxModelForm):
             "next_server",
             "server_hostname",
             "boot_file_name",
-            "ddns_policy",
             "tags",
         )
         widgets = {
@@ -1265,7 +1260,6 @@ class ClientClassForm(NetBoxModelForm):
         FieldSet("servers", "option_data", name="Assignments"),
         FieldSet("only_in_additional_list", name="Evaluation"),
         FieldSet("next_server", "server_hostname", "boot_file_name", name="Boot Options"),
-        FieldSet("ddns_policy", name="DDNS"),
     )
 
     def __init__(self, *args, **kwargs):
@@ -1281,11 +1275,6 @@ class ClientClassForm(NetBoxModelForm):
         self._redirected_to_primary = False
         self._redirected_server_names = []
         self._primary_server_names = []
-
-        # Hide DDNS fields when DDNS is disabled in plugin settings
-        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
-            if "ddns_policy" in self.fields:
-                del self.fields["ddns_policy"]
 
     def clean_option_data(self):
         """Validate that no two option data entries have the same space and code."""
@@ -1692,11 +1681,17 @@ class SubnetPoolForm(NetBoxModelForm):
         required=False,
         help_text="DHCP options specific to this pool",
     )
+    ddns_policy = DynamicModelChoiceField(
+        queryset=DDNSPolicy.objects.all(),
+        required=False,
+        help_text="Pool-level DDNS policy overrides (ddns-* tunables)",
+    )
 
     fieldsets = (
         FieldSet("subnet", "ip_range", name="Pool Assignment"),
         FieldSet("client_class", "evaluate_additional_classes", name="Client Classes"),
         FieldSet("option_data", name="DHCP Options"),
+        FieldSet("ddns_policy", name="DDNS"),
         FieldSet("description", "tags", name="Metadata"),
     )
 
@@ -1708,12 +1703,17 @@ class SubnetPoolForm(NetBoxModelForm):
             "client_class",
             "evaluate_additional_classes",
             "option_data",
+            "ddns_policy",
             "description",
             "tags",
         )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Hide DDNS fields when DDNS is disabled in plugin settings
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("ddns_policy", None)
 
         # Determine the subnet from existing instance or initial data (query params)
         subnet_obj = None
@@ -2157,6 +2157,12 @@ class HookGroupForm(NetBoxModelForm):
         required=False,
         help_text="Select DHCP servers that will use this hook group",
     )
+    d2_daemons = DynamicModelMultipleChoiceField(
+        queryset=D2Daemon.objects.all(),
+        required=False,
+        label="D2 daemons",
+        help_text="D2 daemons that load this group's kea-dhcp-ddns hooks",
+    )
 
     class Meta:
         model = HookGroup
@@ -2166,6 +2172,7 @@ class HookGroupForm(NetBoxModelForm):
             "library_path",
             "hooks",
             "servers",
+            "d2_daemons",
             "tags",
         )
 
@@ -2174,7 +2181,13 @@ class HookGroupForm(NetBoxModelForm):
         FieldSet("library_path", name="Library Path"),
         FieldSet("hooks", name="Hooks"),
         FieldSet("servers", name="DHCP Servers"),
+        FieldSet("d2_daemons", name="D2 Daemons"),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("d2_daemons", None)
 
 
 class HookGroupFilterForm(NetBoxModelFilterSetForm):
@@ -2573,10 +2586,6 @@ class D2DaemonFilterForm(NetBoxModelFilterSetForm):
     model = D2Daemon
     name = forms.CharField(required=False)
     ip_address = DynamicModelChoiceField(queryset=IPAddress.objects.all(), required=False)
-    ncr_protocol = forms.ChoiceField(
-        choices=[("", "---------"), ("UDP", "UDP"), ("TCP", "TCP")],
-        required=False,
-    )
 
 
 class D2DaemonImportForm(NetBoxModelImportForm):
@@ -2596,6 +2605,7 @@ class D2DaemonImportForm(NetBoxModelImportForm):
             "port",
             "ncr_protocol",
             "ncr_format",
+            "dns_server_timeout",
             "control_socket_path",
         )
 
@@ -2668,8 +2678,30 @@ class DDNSDomainForm(NetBoxModelForm):
                     super()._post_clean()
                 finally:
                     self.cleaned_data["zone"] = zone_list
+                self._clean_remaining_zones(zone_list[1:])
                 return
         super()._post_clean()
+
+    def _clean_remaining_zones(self, zones):
+        """Run model validation for every zone after the first.
+
+        _post_clean() validates one instance, and save() creates the rest with
+        get_or_create(), which skips clean() — so without this a second zone
+        whose nameservers resolve to nothing would render an empty dns-servers
+        list that KEA refuses.
+        """
+        for zone in zones:
+            candidate = DDNSDomain(
+                d2_daemon=self.cleaned_data.get("d2_daemon"),
+                zone=zone,
+                tsig_key=self.cleaned_data.get("tsig_key"),
+                user_context=self.cleaned_data.get("user_context"),
+            )
+            try:
+                candidate.clean()
+            except ValidationError as exc:
+                zone_errors = exc.message_dict.get("zone") if hasattr(exc, "error_dict") else None
+                self.add_error("zone", zone_errors or exc.messages)
 
     def save(self, commit=True):
         # Edit path: standard single-instance save.
@@ -2680,6 +2712,7 @@ class DDNSDomainForm(NetBoxModelForm):
         zones = [zones_or_one] if isinstance(zones_or_one, _DNSZone) else list(zones_or_one or [])
         d2_daemon = self.cleaned_data["d2_daemon"]
         tsig_key = self.cleaned_data.get("tsig_key")
+        user_context = self.cleaned_data.get("user_context")
         tags = self.cleaned_data.get("tags") or []
 
         created = []
@@ -2687,11 +2720,12 @@ class DDNSDomainForm(NetBoxModelForm):
             obj, was_created = DDNSDomain.objects.get_or_create(
                 d2_daemon=d2_daemon,
                 zone=z,
-                defaults={"tsig_key": tsig_key},
+                defaults={"tsig_key": tsig_key, "user_context": user_context},
             )
             new_tsig_pk = tsig_key.pk if tsig_key else None
-            if not was_created and obj.tsig_key_id != new_tsig_pk:
+            if not was_created and (obj.tsig_key_id, obj.user_context) != (new_tsig_pk, user_context):
                 obj.tsig_key = tsig_key
+                obj.user_context = user_context
                 obj.save()
             if tags:
                 obj.tags.set(tags)
@@ -2720,6 +2754,52 @@ class DDNSDomainImportForm(NetBoxModelImportForm):
     class Meta:
         model = DDNSDomain
         fields = ("d2_daemon", "zone", "tsig_key")
+
+
+try:
+    from netbox_dns.models import NameServer as _DNSNameServer
+except ImportError:  # netbox_dns is optional unless enable_ddns=True
+    _DNSNameServer = None
+
+
+class DDNSServerOverrideForm(NetBoxModelForm):
+    ddns_domain = DynamicModelChoiceField(queryset=DDNSDomain.objects.all(), label="DDNS domain")
+    tsig_key = DynamicModelChoiceField(
+        queryset=TSIGKey.objects.all(),
+        required=False,
+        quick_add=True,
+        help_text="TSIG key for updates sent to this server, replacing the domain's key. Leave blank to keep it.",
+    )
+
+    fieldsets = (
+        FieldSet("ddns_domain", "nameserver", "description", "tags", name="General"),
+        FieldSet("port", "tsig_key", name="DNS Server Entry"),
+    )
+
+    class Meta:
+        model = DDNSServerOverride
+        fields = ("ddns_domain", "nameserver", "port", "tsig_key", "description", "tags")
+
+    def __init__(self, *args, **kwargs):
+        if _DNSNameServer is None:
+            raise RuntimeError("DDNSServerOverrideForm requires netbox-plugin-dns to be installed.")
+        super().__init__(*args, **kwargs)
+        self.fields["nameserver"] = DynamicModelChoiceField(
+            queryset=_DNSNameServer.objects.all(),
+            help_text="One of the domain's zone nameservers",
+        )
+        # Offer only the selected domain's nameservers once one is chosen.
+        ddns_domain = get_field_value(self, "ddns_domain")
+        if ddns_domain:
+            domain = DDNSDomain.objects.filter(pk=ddns_domain).select_related("zone").first()
+            if domain is not None:
+                self.fields["nameserver"].widget.add_query_param("zone_id", str(domain.zone_id))
+
+
+class DDNSServerOverrideFilterForm(NetBoxModelFilterSetForm):
+    model = DDNSServerOverride
+    ddns_domain = DynamicModelChoiceField(queryset=DDNSDomain.objects.all(), required=False)
+    tsig_key = DynamicModelChoiceField(queryset=TSIGKey.objects.all(), required=False)
 
 
 class DHCPServerBulkEditForm(NetBoxModelBulkEditForm):
@@ -2867,8 +2947,8 @@ class DDNSPolicyFilterForm(NetBoxModelFilterSetForm):
         queryset=Subnet.objects.all(),
         required=False,
     )
-    client_class = DynamicModelChoiceField(
-        queryset=ClientClass.objects.all(),
+    pool = DynamicModelChoiceField(
+        queryset=SubnetPool.objects.all(),
         required=False,
     )
 

@@ -238,16 +238,17 @@ To disable Stork entirely, set `enable_stork: False` in `PLUGINS_CONFIG`.
 
 ## Dynamic DNS (DDNS)
 
-Optional Kea 3.0+ DDNS support — models the `kea-dhcp-ddns` (D2) configuration surface and the `ddns-*` policy knobs `kea-dhcp4`/`kea-dhcp6` render at server / subnet / client-class scope.
+Optional Kea 3.0+ DDNS support — models the `kea-dhcp-ddns` (D2) configuration surface and the `ddns-*` policy knobs `kea-dhcp4`/`kea-dhcp6` render at server / subnet / pool scope.
 
 Gated by `enable_ddns: True` and requires `enable_netbox_dns: True` (zones and nameservers are sourced from `netbox-plugin-dns`; TSIG keys are plugin-local).
 
 ### Models
 
-- **`TSIGKey`** — RFC 2845 keys with algorithm choices (`HMAC-MD5` / `SHA1` / `SHA224` / `SHA256` / `SHA384` / `SHA512`), optional digest-bits truncation, and a pluggable `secret_backend` registry (`plaintext` shipped; `vault` reserved). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste `tsig-keygen` output verbatim or save and let the plugin mint one. Plaintext reveal is gated by the `view_secret_tsigkey` permission.
-- **`D2Daemon`** — one row per logical D2 service. `listener_mode` chooses between **local** (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and **remote** (single shared instance pinned to an IPAM record). Each daemon exposes a `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
-- **`DDNSDomain`** — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward / reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the zone's `NameServer` rows (A / AAAA / CNAME chain). The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
-- **`DDNSPolicy`** — reusable `ddns-*` override group attachable at server / subnet / client-class scope (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix` / `-qualifying-suffix`, `hostname-char-set` / `-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — only the keys you set are emitted, kebab-cased.
+- **`TSIGKey`** — RFC 2845 keys with algorithm choices (`HMAC-MD5` / `SHA1` / `SHA224` / `SHA256` / `SHA384` / `SHA512`), optional digest-bits truncation, and a pluggable `secret_backend` registry (`plaintext` stores the secret; `vault` emits a reference for the deployment to substitute). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste `tsig-keygen` output verbatim or save and let the plugin mint one. Plaintext reveal is gated by the `view_secret_tsigkey` permission — on the key itself and in every rendered D2 configuration.
+- **`D2Daemon`** — one row per logical D2 service. `listener_mode` chooses between **local** (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and **remote** (single shared instance pinned to an IPAM record). Hook groups can attach `kea-dhcp-ddns` hooks such as GSS-TSIG. Each daemon exposes a `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
+- **`DDNSDomain`** — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward / reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the A / AAAA records of the zone's `NameServer` rows. The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
+- **`DDNSServerOverride`** — the port and TSIG key for one nameserver's entries in a domain's `dns-servers`. Without one, a server is sent updates on port 53 under the domain's key.
+- **`DDNSPolicy`** — reusable `ddns-*` override group attachable at server / subnet / pool scope (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix` / `-qualifying-suffix`, `hostname-char-set` / `-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — only the keys you set are emitted, kebab-cased.
 
 ### HA-pair precedence
 
@@ -263,9 +264,9 @@ No Python-side merging of override hierarchies. Each non-null `DDNSPolicy.to_kea
 
 - server-level → `Dhcp4` / `Dhcp6` root
 - subnet-level → subnet dict
-- class-level → client-class dict
+- pool-level → pool dict (Kea 2.7.6+)
 
-Kea resolves the precedence chain itself when processing packets.
+Kea resolves the precedence chain itself when processing packets. Client classes take no `ddns-*` keys at all — Kea's parser refuses the whole configuration on one — so a policy for a group of clients belongs on the pool those clients draw from.
 
 ### Bulk edit + quick-add
 

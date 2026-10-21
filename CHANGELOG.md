@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+Every Kea rule below was checked against Kea 3.0's own grammar and parsers (`dhcp4_parser.yy`, `d2_parser.yy`, `d2_client_cfg.cc`, `d2_config.cc`), not against prose.
+
+### Removed — DDNS policies on client classes (breaking)
+`ClientClass.ddns_policy` rendered `ddns-*` keys into the client-class entry. Kea's client-class grammar has no such keys: it answers `got unexpected keyword` and refuses the whole configuration, so a server with a class-level policy did not start.
+
+- The field, its form field, the `ddns_policy` key of `ClientClassSerializer` and the policy's *Client Classes* tab are gone. Any value stored there is dropped by the migration.
+- Scope DDNS for a group of clients to the **pool** they draw from instead (below).
+
+### Added — DDNS policies on pools
+`SubnetPool.ddns_policy` emits the policy's keys inside the pool entry. Kea has accepted all 14 at pool level since 2.7.6. The policy gains a *Pools* tab, and its list and filters count and filter by pool instead of client class.
+
+### Fixed — TSIG secrets were readable by anyone who could view a D2 daemon
+The TSIG key page, form and API hide the secret without `view_secret_tsigkey`, but the D2 daemon's *Configuration* tab and `d2-daemons/<id>/kea-config/` printed every plaintext secret to anyone with `view_d2daemon`.
+
+- **API.** A configuration carrying a plaintext secret now answers **403** without the permission. It is refused rather than redacted, because a redacted copy is what a deployment would install, and D2 would then fail TSIG authentication with nothing pointing back here.
+- **Configuration tab.** Shows the configuration with secrets replaced by a placeholder, and says so.
+- Vault-backed keys render a reference, not a secret, and need no permission.
+
+### Fixed — D2 values Kea refuses to load
+- **NCR protocol `TCP`** was offered on the D2 daemon. Both `kea-dhcp-ddns` and the DHCP server's `dhcp-ddns` parser reject it, so UDP is now the only choice.
+- **The default control socket was `/tmp/kea-dhcp-ddns-ctrl.sock`.** Kea 3.0 creates control sockets only in its run directory and refuses to start otherwise. `d2_default_control_socket_path` now defaults to `/var/run/kea/kea-ddns-ctrl-socket`, and a path in `/tmp` or `/var/tmp` is rejected.
+- **Port 0 and a DNS server timeout of 0** are rejected, as Kea rejects both.
+- Daemons saved before these checks are not re-validated; their detail page lists what Kea would refuse.
+
+### Fixed — a DDNS sender Kea refuses could be saved
+`DHCPServer.ddns_sender_ip` was free text. It must now be an IP address of the same family as the D2 listener (Kea's `address family mismatch`), and not the listener's own address and port.
+
+### Fixed — creating several DDNS domains at once
+The multi-zone create form validated only the first zone, so a later zone whose nameservers resolve to nothing rendered `"dns-servers": []`. Every zone is now validated. It also dropped `user_context`, which now reaches every row created.
+
+### Added — per-server port and TSIG key
+A domain's DNS servers come from its zone's nameservers, so each was sent updates on port 53 under the domain's key. **`DDNSServerOverride`** sets the `port` and `key-name` of one nameserver's entries; its key joins the daemon's `tsig-keys`. The DDNS domain page now lists each nameserver with the address, port and key it renders, and shows `user_context`.
+
+### Added — hooks for kea-dhcp-ddns
+`HookGroup.d2_daemons` attaches a group to D2 daemons, which render its `kea-dhcp-ddns` hooks as `hooks-libraries`. The GSS-TSIG hook was in the catalogue with nowhere to load it.
+
+### Changed
+- The `vault` secret backend is labelled *OpenBao / Vault (by reference)*, matching its `${BAO:…}` default.
+- `D2DaemonImportForm` accepts `dns_server_timeout`.
+
+### Migration
+`0015_remove_clientclass_ddns_policy_hookgroup_d2_daemons_and_more` adds `SubnetPool.ddns_policy`, `HookGroup.d2_daemons` and the `DDNSServerOverride` model, and removes `ClientClass.ddns_policy`. The choice changes need no migration.
+
 ## 0.10.4 (2026-10-22)
 
 ### Fixed — an HA basic-auth user Kea refuses could be saved

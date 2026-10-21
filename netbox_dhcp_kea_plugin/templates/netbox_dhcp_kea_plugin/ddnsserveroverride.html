@@ -1,0 +1,47 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-6">
+        <div class="card">
+            <h5 class="card-header">DDNS Server Override</h5>
+            <div class="card-body">
+                <table class="table table-hover attr-table">
+                    <tr>
+                        <th>DDNS Domain</th>
+                        <td><a href="{{ object.ddns_domain.get_absolute_url }}">{{ object.ddns_domain }}</a></td>
+                    </tr>
+                    <tr>
+                        <th>Nameserver</th>
+                        <td>{{ object.nameserver }}</td>
+                    </tr>
+                    <tr>
+                        <th>Port</th>
+                        <td>
+                            {% if object.port %}{{ object.port }}
+                            {% else %}<span class="text-muted">53 (default)</span>{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>TSIG Key</th>
+                        <td>
+                            {% if object.tsig_key %}
+                            <a href="{{ object.tsig_key.get_absolute_url }}">{{ object.tsig_key.name }}</a>
+                            {% elif object.ddns_domain.tsig_key %}
+                            <span class="text-muted">Domain key ({{ object.ddns_domain.tsig_key.name }})</span>
+                            {% else %}
+                            {{ ''|placeholder }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ object.description|placeholder }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

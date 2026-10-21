@@ -34,7 +34,8 @@ class DHCPKEAConfig(PluginConfig):
         # the deployment substitutes this on the target, so the format only has
         # to match whatever does the substituting.
         "ddns_secret_reference_template": "${BAO:{ref}}",
-        "d2_default_control_socket_path": "/tmp/kea-dhcp-ddns-ctrl.sock",
+        # KEA 3.0 accepts control sockets only in its run directory, never /tmp.
+        "d2_default_control_socket_path": "/var/run/kea/kea-ddns-ctrl-socket",
         "model_defaults": {
             # Global scope: the Dhcp4 block on each DHCP server.
             "DHCPServer": {

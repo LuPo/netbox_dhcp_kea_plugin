@@ -11,6 +11,7 @@ from ..models import (
     D2Daemon,
     DDNSDomain,
     DDNSPolicy,
+    DDNSServerOverride,
     DHCPHARelationship,
     DHCPServer,
     Hook,
@@ -108,6 +109,7 @@ class HookGroupSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:hookgroup-detail")
     hooks = NestedHookSerializer(many=True, read_only=True)
     servers = NestedDHCPServerSerializer(many=True, read_only=True)
+    d2_daemons = serializers.SerializerMethodField()
 
     class Meta:
         model = HookGroup
@@ -120,11 +122,20 @@ class HookGroupSerializer(NetBoxModelSerializer):
             "library_path",
             "hooks",
             "servers",
+            "d2_daemons",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("d2_daemons", None)
+
+    def get_d2_daemons(self, obj):
+        return [{"id": daemon.id, "name": daemon.name} for daemon in obj.d2_daemons.all()]
 
 
 class VendorOptionSpaceSerializer(NetBoxModelSerializer):
@@ -360,7 +371,6 @@ class DHCPServerSerializer(NetBoxModelSerializer):
 class ClientClassSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:clientclass-detail")
     option_data = OptionDataSerializer(many=True, read_only=True)
-    ddns_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientClass
@@ -381,22 +391,11 @@ class ClientClassSerializer(NetBoxModelSerializer):
             "next_server",
             "server_hostname",
             "boot_file_name",
-            "ddns_policy",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
-            self.fields.pop("ddns_policy", None)
-
-    def get_ddns_policy(self, obj):
-        if obj.ddns_policy is None:
-            return None
-        return {"id": obj.ddns_policy.id, "name": obj.ddns_policy.name}
 
 
 class SubnetSerializer(NetBoxModelSerializer):
@@ -460,6 +459,7 @@ class SubnetPoolSerializer(NetBoxModelSerializer):
     client_class = NestedClientClassSerializer(read_only=True)
     evaluate_additional_classes = NestedClientClassSerializer(many=True, read_only=True)
     option_data = OptionDataSerializer(many=True, read_only=True)
+    ddns_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = SubnetPool
@@ -472,12 +472,23 @@ class SubnetPoolSerializer(NetBoxModelSerializer):
             "client_class",
             "evaluate_additional_classes",
             "option_data",
+            "ddns_policy",
             "description",
             "tags",
             "custom_fields",
             "created",
             "last_updated",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
+            self.fields.pop("ddns_policy", None)
+
+    def get_ddns_policy(self, obj):
+        if obj.ddns_policy is None:
+            return None
+        return {"id": obj.ddns_policy.id, "name": obj.ddns_policy.name}
 
 
 class NestedIPAddressSerializer(WritableNestedSerializer):
@@ -803,6 +814,37 @@ class DDNSDomainSerializer(NetBoxModelSerializer):
         if obj.zone_id is None:
             return None
         return {"id": obj.zone_id, "name": obj.zone.name}
+
+
+class NestedDDNSDomainSerializer(WritableNestedSerializer):
+    class Meta:
+        model = DDNSDomain
+        fields = ["id", "url", "display"]
+
+
+class DDNSServerOverrideSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_dhcp_kea_plugin-api:ddnsserveroverride-detail"
+    )
+    ddns_domain = NestedDDNSDomainSerializer()
+    tsig_key = NestedTSIGKeySerializer(required=False, allow_null=True)
+
+    class Meta:
+        model = DDNSServerOverride
+        fields = (
+            "id",
+            "url",
+            "display",
+            "ddns_domain",
+            "nameserver",
+            "port",
+            "tsig_key",
+            "description",
+            "tags",
+            "custom_fields",
+            "created",
+            "last_updated",
+        )
 
 
 class DDNSPolicySerializer(NetBoxModelSerializer):
