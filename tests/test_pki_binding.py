@@ -28,6 +28,36 @@ def dns_record(db):
     return Record.objects.create(zone=_make_zone(), name="kea-bound", type="A", value="192.0.2.71")
 
 
+@pytest.mark.parametrize(
+    "signal_name,dispatch_uid",
+    [
+        ("pre_delete", "netbox_dhcp_kea_plugin.protect_bound_record"),
+        ("post_save", "netbox_dhcp_kea_plugin.resync_bound_fqdn"),
+    ],
+)
+def test_record_receivers_are_held_strongly(signal_name, dispatch_uid):
+    """The receivers in connect_dns_signals() are nested functions.
+
+    Connected weakly — Django's default — they are garbage-collected as soon
+    as that function returns, and protect/re-derive silently stop working.
+    Checking liveness alone is not enough: in a NetBox where another plugin
+    happens to keep them referenced they survive anyway, which is how this
+    once passed locally and failed on a plain configuration.
+    """
+    import weakref
+
+    from django.db.models import signals
+
+    stored = [
+        receiver
+        for lookup_key, receiver, _sender, _is_async in getattr(signals, signal_name).receivers
+        if lookup_key[0] == dispatch_uid
+    ]
+
+    assert stored, f"{dispatch_uid} is not connected"
+    assert not isinstance(stored[0], weakref.ref), f"{dispatch_uid} is connected by weak reference"
+
+
 @pytest.mark.django_db
 class TestPKIRecordBinding:
     def test_binding_derives_the_published_name(self, dhcp_server_factory, dns_record):

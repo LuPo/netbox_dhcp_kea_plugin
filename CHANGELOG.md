@@ -11,6 +11,9 @@ A password manager filled a relationship's basic-auth **user** with a generated 
 
 No migration: validation and widget attributes only.
 
+### Fixed — a bound DNS record could be deleted, and renaming it was not followed
+`connect_dns_signals()` defines its `pre_delete` and `post_save` receivers as nested functions, and Django holds receivers by weak reference by default. Nothing else referred to them, so they could be garbage-collected right after startup and never run: a record bound as a server's PKI identity or a Stork endpoint could be deleted, and renaming it left the stored FQDN stale. Whether it happened depended on what else was installed. Both are now connected with `weak=False`.
+
 ## 0.10.3 (2026-10-13)
 
 ### Fixed — saving a DHCP server with a service template failed on NetBox 4.7

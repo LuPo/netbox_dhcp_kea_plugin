@@ -47,7 +47,16 @@ def connect_dns_signals():
     except ImportError:
         return False
 
-    @receiver(pre_delete, sender=DNSRecord, dispatch_uid="netbox_dhcp_kea_plugin.protect_bound_record")
+    # weak=False is required: these are nested functions, and Django holds
+    # receivers by weak reference by default. Nothing else refers to them once
+    # this function returns, so a weak connection is collected on the spot and
+    # the receiver silently never runs.
+    @receiver(
+        pre_delete,
+        sender=DNSRecord,
+        weak=False,
+        dispatch_uid="netbox_dhcp_kea_plugin.protect_bound_record",
+    )
     def protect_bound_record(sender, instance, **kwargs):
         holders = []
         protected = set()
@@ -65,7 +74,12 @@ def connect_dns_signals():
                 protected,
             )
 
-    @receiver(post_save, sender=DNSRecord, dispatch_uid="netbox_dhcp_kea_plugin.resync_bound_fqdn")
+    @receiver(
+        post_save,
+        sender=DNSRecord,
+        weak=False,
+        dispatch_uid="netbox_dhcp_kea_plugin.resync_bound_fqdn",
+    )
     def resync_bound_fqdn(sender, instance, **kwargs):
         """Keep every published name identical to the record it is bound to."""
         from .models import normalize_fqdn
