@@ -1956,7 +1956,10 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             name="Reverse Proxy",
         ),
         FieldSet(
-            InlineFields("ha_basic_auth_user", "ha_basic_auth_password", label="Credentials"),
+            "ha_basic_auth_user",
+            "ha_basic_auth_password_backend",
+            "ha_basic_auth_password",
+            "ha_basic_auth_password_ref",
             name="HA Authentication",
         ),
         FieldSet(
@@ -1984,6 +1987,8 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             "ha_proxy_enabled",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "ha_basic_auth_password_backend",
+            "ha_basic_auth_password_ref",
             "description",
             "d2_daemon",
             "ddns_enable_updates",
@@ -1993,6 +1998,8 @@ class DHCPHARelationshipForm(NetBoxModelForm):
         widgets = {
             "ha_basic_auth_user": _secret_text_input(),
             "ha_basic_auth_password": _secret_password_input(),
+            # Re-renders the form, so only the field for the chosen backend is shown.
+            "ha_basic_auth_password_backend": HTMXSelect(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -2001,6 +2008,21 @@ class DHCPHARelationshipForm(NetBoxModelForm):
             for fname in ("d2_daemon", "ddns_enable_updates", "ddns_policy"):
                 if fname in self.fields:
                     del self.fields[fname]
+        # A stored password or an OpenBao reference, never both.
+        if get_field_value(self, "ha_basic_auth_password_backend") == "vault":
+            self.fields.pop("ha_basic_auth_password", None)
+        else:
+            self.fields.pop("ha_basic_auth_password_ref", None)
+
+    def clean(self):
+        super().clean()
+        # The hidden field is not submitted, so clear its stored value here: switching to
+        # OpenBao drops the password NetBox held, and back to plaintext drops the reference.
+        if self.cleaned_data.get("ha_basic_auth_password_backend") == "vault":
+            self.instance.ha_basic_auth_password = ""
+        else:
+            self.instance.ha_basic_auth_password_ref = ""
+        return self.cleaned_data
 
 
 class DHCPHARelationshipFilterForm(NetBoxModelFilterSetForm):
@@ -2045,6 +2067,8 @@ class DHCPHARelationshipImportForm(NetBoxModelImportForm):
             "ha_proxy_enabled",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "ha_basic_auth_password_backend",
+            "ha_basic_auth_password_ref",
             "description",
             "tags",
         )

@@ -1146,7 +1146,7 @@ class DHCPServer(NetBoxModel):
             )
         return advisories
 
-    def get_ha_config(self):
+    def get_ha_config(self, redact_secrets=False):
         """Generate HA configuration if this server is part of an HA relationship.
 
         Returns:
@@ -1155,7 +1155,15 @@ class DHCPServer(NetBoxModel):
         if not self.ha_relationship:
             return None
 
-        return self.ha_relationship.to_kea_dict(this_server=self)
+        return self.ha_relationship.to_kea_dict(this_server=self, redact_secrets=redact_secrets)
+
+    def contains_secrets(self):
+        """Whether this server's Dhcp4 config carries a secret NetBox holds (the HA password)."""
+        return bool(self.ha_relationship_id and self.ha_relationship.holds_secret)
+
+    def requires_secret_substitution(self):
+        """Whether this server's Dhcp4 config carries a reference for the deployment to substitute."""
+        return bool(self.ha_relationship_id and self.ha_relationship.requires_secret_substitution)
 
     @property
     def effective_d2_daemon(self):
@@ -1539,8 +1547,11 @@ class DHCPServer(NetBoxModel):
             )
         return sockets
 
-    def to_kea_dict(self):
+    def to_kea_dict(self, redact_secrets=False):
         """Return a complete KEA Dhcp4 configuration dictionary for this server.
+
+        ``redact_secrets`` replaces the HA basic-auth password NetBox holds with a
+        placeholder; pass it when rendering for a user who may not see it.
 
         In HA mode, this method uses get_effective_* methods to pull configuration
         from the primary server, ensuring all HA peers have identical subnet configs.
@@ -1701,7 +1712,7 @@ class DHCPServer(NetBoxModel):
         hooks_libraries = self.get_hooks_libraries("kea-dhcp4")
 
         # Add HA hooks-libraries if this server is part of an HA relationship
-        ha_config = self.get_ha_config()
+        ha_config = self.get_ha_config(redact_secrets=redact_secrets)
         if ha_config:
             # Track libraries already added from hook groups
             seen_libraries = {h.get("library") for h in hooks_libraries}
@@ -3947,6 +3958,25 @@ class DHCPHARelationship(NetBoxModel):
             "basic-auth user. Leave blank for an unauthenticated HA channel."
         ),
     )
+    ha_basic_auth_password_backend = models.CharField(
+        max_length=20,
+        choices=(
+            ("plaintext", "Plaintext (stored in NetBox DB)"),
+            ("vault", "OpenBao / Vault (by reference)"),
+        ),
+        default="plaintext",
+        verbose_name="HA basic-auth password backend",
+        help_text=(
+            "Where the password comes from. 'Vault' renders a reference the deployment substitutes, "
+            "so the password never enters NetBox."
+        ),
+    )
+    ha_basic_auth_password_ref = models.CharField(
+        max_length=512,
+        blank=True,
+        verbose_name="HA basic-auth password reference",
+        help_text="OpenBao reference, <path>#<field>, e.g. dhcp/site-a/ha-auth#password. Used with the vault backend.",
+    )
 
     description = models.CharField(max_length=200, blank=True)
     d2_daemon = models.ForeignKey(
@@ -3980,6 +4010,50 @@ class DHCPHARelationship(NetBoxModel):
         ordering = ("name",)
         verbose_name = "DHCP HA Relationship"
         verbose_name_plural = "DHCP HA Relationships"
+        permissions = [
+            ("view_secret_dhcpharelationship", "Can view the HA basic-auth password"),
+        ]
+
+    REDACTED_SECRET = "<redacted>"
+
+    @property
+    def password_by_reference(self):
+        return self.ha_basic_auth_password_backend == "vault"
+
+    @property
+    def has_password(self):
+        return bool(self.ha_basic_auth_password_ref if self.password_by_reference else self.ha_basic_auth_password)
+
+    @property
+    def holds_secret(self):
+        """Whether NetBox holds the password itself, so rendering it must be gated."""
+        return not self.password_by_reference and bool(self.ha_basic_auth_password)
+
+    @property
+    def requires_secret_substitution(self):
+        """Whether the rendered password is a reference for the deployment to substitute."""
+        return self.password_by_reference and bool(self.ha_basic_auth_password_ref)
+
+    def rendered_password(self, redact=False):
+        """The basic-auth password as KEA's config carries it: the value, a reference, or redacted."""
+        from netbox_dhcp_kea_plugin.secret_backends import render_reference
+
+        if self.password_by_reference:
+            return render_reference(self.ha_basic_auth_password_ref) if self.ha_basic_auth_password_ref else ""
+        if redact and self.ha_basic_auth_password:
+            return self.REDACTED_SECRET
+        return self.ha_basic_auth_password
+
+    def _credential_problems(self):
+        """Field → reason for the credential pair, whichever backend holds the password."""
+        # Only a password NetBox holds can be checked for characters.
+        password = "" if self.password_by_reference else self.ha_basic_auth_password
+        errors = basic_auth_problems(self.ha_basic_auth_user, password)
+        if self.password_by_reference and self.ha_basic_auth_password_ref:
+            problem = TSIGKey.secret_ref_problem(self.ha_basic_auth_password_ref)
+            if problem:
+                errors["ha_basic_auth_password_ref"] = problem
+        return errors
 
     def __str__(self):
         return self.name
@@ -3998,14 +4072,24 @@ class DHCPHARelationship(NetBoxModel):
         """
         super().clean()
 
-        errors = basic_auth_problems(self.ha_basic_auth_user, self.ha_basic_auth_password)
+        errors = self._credential_problems()
+        password_field = "ha_basic_auth_password_ref" if self.password_by_reference else "ha_basic_auth_password"
 
         # The two cases below cannot collide with the character checks: those
         # need the field set, these need it blank.
-        if self.ha_basic_auth_user and not self.ha_basic_auth_password:
-            errors["ha_basic_auth_password"] = "A password is required when an HA basic-auth user is set."
-        if self.ha_basic_auth_password and not self.ha_basic_auth_user:
+        if self.ha_basic_auth_user and not self.has_password:
+            errors[password_field] = (
+                "A password reference is required when an HA basic-auth user is set."
+                if self.password_by_reference
+                else "A password is required when an HA basic-auth user is set."
+            )
+        if self.has_password and not self.ha_basic_auth_user:
             errors["ha_basic_auth_user"] = "A user is required when an HA basic-auth password is set."
+        # A plaintext password left behind by a switch to the vault backend would stay in the database.
+        if self.password_by_reference and self.ha_basic_auth_password:
+            errors["ha_basic_auth_password"] = (
+                "Clear the stored password when the password comes from OpenBao, so NetBox no longer holds it."
+            )
 
         if errors:
             raise ValidationError(errors)
@@ -4023,7 +4107,7 @@ class DHCPHARelationship(NetBoxModel):
         before clean() checked them are never re-validated. The detail page is
         where an operator would notice one.
         """
-        errors = list(basic_auth_problems(self.ha_basic_auth_user, self.ha_basic_auth_password).values())
+        errors = list(self._credential_problems().values())
 
         roles = [server.ha_role for server in self.servers.all()]
         primary = roles.count("primary")
@@ -4072,12 +4156,14 @@ class DHCPHARelationship(NetBoxModel):
         """
         return not self.configuration_errors()
 
-    def to_kea_dict(self, this_server=None):
+    def to_kea_dict(self, this_server=None, redact_secrets=False):
         """Generate KEA high-availability configuration.
 
         Args:
             this_server: The DHCPServer instance for which this config is being generated.
                         Used to set "this-server-name" in the configuration.
+            redact_secrets: Replace a password NetBox holds with a placeholder; pass it when
+                        rendering for a user without view_secret_dhcpharelationship.
 
         Returns:
             dict: KEA high-availability hook library configuration
@@ -4135,8 +4221,9 @@ class DHCPHARelationship(NetBoxModel):
             # presents when dialing. Anything less is authentication in one direction.
             if self.ha_basic_auth_user:
                 peer_dict["basic-auth-user"] = self.ha_basic_auth_user
-            if self.ha_basic_auth_password:
-                peer_dict["basic-auth-password"] = self.ha_basic_auth_password
+            password = self.rendered_password(redact=redact_secrets)
+            if password:
+                peer_dict["basic-auth-password"] = password
             peers_config.append(peer_dict)
 
         ha_config["peers"] = peers_config

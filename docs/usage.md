@@ -232,7 +232,9 @@ The HA channel's HTTP basic-auth credentials belong to the **relationship**, not
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `ha_basic_auth_user` | string | `""` | Username every member requires on its HA listener and presents to its peers. |
-| `ha_basic_auth_password` | string | `""` | The paired password. |
+| `ha_basic_auth_password_backend` | `plaintext` / `vault` | `plaintext` | Where the password comes from: stored in NetBox, or an OpenBao reference. |
+| `ha_basic_auth_password` | string | `""` | The paired password, with the `plaintext` backend. |
+| `ha_basic_auth_password_ref` | string | `""` | OpenBao reference `<path>#<field>`, with the `vault` backend. |
 
 Both values are written onto **every** peer entry in the emitted `high-availability` hook configuration, including the entry whose `name` matches `this-server-name`. That is deliberate, and it reflects how Kea reads the peer list:
 
@@ -256,9 +258,19 @@ The form's credential fields also tell browsers and password managers not to fil
 
     Because each member's listener requirement comes from the same field, editing the pair alters both sides of the channel. Fetch and deploy every member of the relationship **together** — a half-applied rollout leaves one server requiring credentials its partner is not yet sending, which surfaces as HTTP 401 on the HA channel and, after `max-response-delay`, a spurious `partner-down`.
 
-!!! danger "The credentials appear in the rendered configuration"
+!!! danger "A stored password appears in the rendered configuration"
 
-    The password is part of the JSON returned by the `kea-config/` endpoint and written to the deployed config file. Suppress diff output when deploying it, and treat archived config copies as holding the secret.
+    With the `plaintext` backend the password is part of the JSON returned by the `kea-config/` endpoint and written to the deployed config file. Suppress diff output when deploying it, and treat archived config copies as holding the secret.
+
+**Keeping the password out of NetBox.** With the `vault` backend, every peer's `basic-auth-password` is rendered as a reference, such as `${BAO:dhcp/site-a/ha-auth#password}`, through the same [`ddns_secret_reference_template`](configuration.md#core-settings) as TSIG keys, and checked against the same `ddns_secret_reference_pattern`. The deployment substitutes it on the target, exactly as for a [TSIG secret](#tsig-secrets-stored-or-referenced). The form shows the password or the reference field, whichever the backend uses, and switching to `vault` clears the stored password.
+
+**Who may see a stored password.** The `view_secret_dhcpharelationship` permission gates it, as `view_secret_tsigkey` gates TSIG secrets:
+
+- the server's *KEA Configuration* tab shows `<redacted>` without it, with a lock icon on the title;
+- the tab's Download and the `kea-config/` endpoint answer **403** without it, rather than hand out a copy that would fail HA authentication once deployed;
+- the relationship's REST representation accepts the password but does not return it.
+
+A reference needs no permission: it is not a secret.
 
 ### Stork agent endpoint
 

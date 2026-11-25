@@ -130,6 +130,15 @@ class DHCPServerViewSet(NetBoxModelViewSet):
         redacted for a user without ``view_secret_tsigkey``.
         """
         server = self.get_object()
+        # Refused rather than redacted, as for TSIG secrets: a redacted copy is what a
+        # deployment would install, and HA would then fail to authenticate.
+        if server.contains_secrets() and not request.user.has_perm(
+            "netbox_dhcp_kea_plugin.view_secret_dhcpharelationship"
+        ):
+            raise PermissionDenied(
+                "This configuration contains the HA basic-auth password. Rendering it requires the "
+                "view_secret_dhcpharelationship permission."
+            )
         config = server.to_kea_dict()
         if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns") and server.runs_local_d2():
             derived = server.derived_ddns()
