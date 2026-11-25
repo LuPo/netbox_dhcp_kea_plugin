@@ -113,3 +113,19 @@ class PKIFQDNAttr(attrs.ObjectAttribute):
 
     def get_context(self, obj, attr, value, context):
         return {"record": obj.pki_record(), "dns_integration": self.dns_integration()}
+
+
+class MethodListAttr(attrs.RelatedObjectListAttr):
+    """Related objects returned by calling a method of the object, e.g. ``servers_using()``."""
+
+    def get_value(self, obj):
+        method = getattr(obj, self.accessor, None)
+        return method() if callable(method) else None
+
+
+class DefaultedAttr(attrs.TextAttr):
+    """A value with a stated default shown when it is blank, e.g. "500 ms (KEA default)"."""
+
+    def __init__(self, *args, default_label, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.placeholder = format_html('<span class="text-muted">{}</span>', default_label)

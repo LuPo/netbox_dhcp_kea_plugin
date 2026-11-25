@@ -1530,11 +1530,23 @@ class StorkAgentGroupConfigView(generic.ObjectView):
 @register_model_view(models.TSIGKey)
 class TSIGKeyView(generic.ObjectView):
     queryset = models.TSIGKey.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            "can_view_secret": request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"),
-        }
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.TSIGKeyPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.TSIGSecretPanel(),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.DDNSDomain",
+                filters={"tsig_key": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.TSIGKey, "list", path="", detail=False)
@@ -1576,13 +1588,25 @@ class TSIGKeyImportView(generic.BulkImportView):
 @register_model_view(models.D2Daemon)
 class D2DaemonView(generic.ObjectView):
     queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("hook_groups")
+    template_name = "generic/object.html"
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.ErrorListPanel(
+                    "configuration_errors", _("KEA would refuse to load this daemon's configuration:")
+                )
+            )
+        ),
+        layout.Row(
+            layout.Column(ui_panels.D2DaemonPanel(), TagsPanel(), PluginContentPanel("left_page")),
+            layout.Column(ui_panels.D2NCRPanel(), CustomFieldsPanel(), PluginContentPanel("right_page")),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
         # Rows saved before a check existed are never re-validated.
-        return {
-            "configuration_errors": instance.configuration_errors(),
-            "servers": instance.servers_using(),
-        }
+        return {"configuration_errors": instance.configuration_errors()}
 
 
 @register_model_view(models.D2Daemon, "list", path="", detail=False)
@@ -1627,23 +1651,21 @@ class D2DaemonDomainsView(generic.ObjectView):
     """The domains each server using the daemon derives, and why."""
 
     queryset = models.D2Daemon.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/d2daemon_domains.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Servers & Domains",
+        label=_("Servers & Domains"),
         badge=get_d2daemon_servers_count,
         permission="netbox_dhcp_kea_plugin.view_d2daemon",
     )
+    layout = layout.Layout(
+        layout.Row(layout.Column(TemplatePanel("netbox_dhcp_kea_plugin/panels/d2_groups.html"))),
+    )
 
-    def get(self, request, pk):
+    def get_extra_context(self, request, instance):
         from .ddns import group_by_relationship
 
-        daemon = self.get_object(pk=pk)
-        derived_by_server = [(server, server.derived_ddns()) for server in daemon.servers_using()]
-        return render(
-            request,
-            self.template_name,
-            {"object": daemon, "groups": group_by_relationship(derived_by_server), "tab": self.tab},
-        )
+        derived_by_server = [(server, server.derived_ddns()) for server in instance.servers_using()]
+        return {"groups": group_by_relationship(derived_by_server)}
 
 
 def _d2_config_context(request, render_config, contains_secrets, requires_substitution):
@@ -1664,26 +1686,33 @@ def _d2_config_context(request, render_config, contains_secrets, requires_substi
 @register_model_view(models.D2Daemon, name="config", path="config")
 class D2DaemonConfigView(generic.ObjectView):
     queryset = models.D2Daemon.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/d2daemon_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_d2daemon",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/d2_local_note.html"),
+                ui_panels.kea_config_panel("d2-config", condition=lambda daemon, _ctx: not daemon.is_local),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        daemon = self.get_object(pk=pk)
-        context = {"object": daemon, "tab": self.tab, "servers": daemon.servers_using()}
-        if not daemon.is_local:
-            domains, _errors = daemon.derived_domains()
+    def get_extra_context(self, request, instance):
+        context = {"servers": instance.servers_using()}
+        if not instance.is_local:
+            domains, _errors = instance.derived_domains()
             context.update(
                 _d2_config_context(
                     request,
-                    lambda redact: daemon.render(domains, redact_secrets=redact),
-                    daemon.contains_secrets(domains),
-                    daemon.requires_secret_substitution(domains),
+                    lambda redact: instance.render(domains, redact_secrets=redact),
+                    instance.contains_secrets(domains),
+                    instance.requires_secret_substitution(domains),
                 )
             )
-        return render(request, self.template_name, context)
+        return context
 
 
 @register_model_view(models.DHCPServer, name="d2config", path="d2-config")

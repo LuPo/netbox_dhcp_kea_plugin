@@ -1,9 +1,4 @@
-{% extends 'generic/object.html' %}
-{% load helpers %}
-
-{% block content %}
-<div class="row">
-    <div class="col col-md-12">
+{# Servers using a D2 daemon, one collapsible entry per HA relationship or standalone server. #}
         <div class="alert alert-info" role="alert">
             <i class="mdi mdi-information"></i>
             <div>
@@ -71,6 +66,3 @@
             </div>
         </div>
         {% endfor %}
-    </div>
-</div>
-{% endblock %}

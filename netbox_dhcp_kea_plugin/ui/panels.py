@@ -7,9 +7,11 @@ from netbox.ui import attrs, panels
 from netbox.ui.actions import CopyContent, PanelAction
 
 from netbox_dhcp_kea_plugin.ui.attrs import (
+    DefaultedAttr,
     InheritedBooleanAttr,
     InheritedFromHAAttr,
     JSONAttr,
+    MethodListAttr,
     PKIFQDNAttr,
     SecondsAttr,
     SecretSetAttr,
@@ -653,12 +655,69 @@ def d2_config_title_icons(context):
     return format_html("{}", mark_safe("".join(str(icon) for icon in icons)))
 
 
-def kea_config_panel(element_id, title=_("kea-dhcp-ddns.conf"), **kwargs):
+def kea_config_panel(element_id, title=None, **kwargs):
     """A D2 configuration rendered by the view as ``d2_config``, with its info icons."""
     return KeaJSONPanel(
         lambda _obj, ctx: ctx.get("d2_config"),
-        title=title,
+        title=title or _("kea-dhcp-ddns.conf"),
         element_id=element_id,
         title_icons=d2_config_title_icons,
         **kwargs,
     )
+
+
+
+class ErrorListPanel(panels.Panel):
+    """One danger alert listing the strings in a context list, if there are any."""
+
+    template_name = "netbox_dhcp_kea_plugin/panels/error_list.html"
+
+    def __init__(self, context_key, heading):
+        super().__init__()
+        self.context_key = context_key
+        self.heading = heading
+
+    def get_context(self, context):
+        return {**super().get_context(context), "errors": context.get(self.context_key), "heading": self.heading}
+
+    def should_render(self, context):
+        return bool(context["errors"])
+
+
+class TSIGKeyPanel(AttributesPanel):
+    title = _("TSIG Key")
+
+    name = attrs.TextAttr("name", style="font-monospace")
+    description = attrs.TextAttr("description")
+    algorithm = attrs.ChoiceAttr("algorithm")
+    digest_bits = attrs.NumericAttr("digest_bits")
+
+
+class TSIGSecretPanel(AttributesPanel):
+    title = _("Secret")
+
+    secret_backend = attrs.ChoiceAttr("secret_backend", label=_("Backend"))
+    secret = attrs.TemplatedAttr("pk", template_name="netbox_dhcp_kea_plugin/attrs/tsig_secret.html")
+
+
+class D2DaemonPanel(AttributesPanel):
+    title = _("D2 Daemon")
+
+    name = attrs.TextAttr("name")
+    description = attrs.TextAttr("description")
+    listener_mode = attrs.ChoiceAttr("listener_mode")
+    listener_address = attrs.TemplatedAttr("pk", template_name="netbox_dhcp_kea_plugin/attrs/d2_listener.html")
+    port = attrs.NumericAttr("port")
+
+
+class D2NCRPanel(AttributesPanel):
+    title = _("NCR Settings")
+
+    control_socket_path = attrs.TextAttr("control_socket_path", style="font-monospace")
+    ncr_protocol = attrs.ChoiceAttr("ncr_protocol", label=_("NCR Protocol"))
+    ncr_format = attrs.ChoiceAttr("ncr_format", label=_("NCR Format"))
+    dns_server_timeout = DefaultedAttr(
+        "dns_server_timeout", format_string="{} ms", default_label=_("500 ms (KEA default)"), label=_("DNS Server Timeout")
+    )
+    servers = MethodListAttr("servers_using", linkify=True)
+    hook_groups = attrs.RelatedObjectListAttr("hook_groups", linkify=True)

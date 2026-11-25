@@ -1,0 +1,7 @@
+{% if object.is_local %}
+127.0.0.1 <small class="text-muted">— one D2 per host running kea-dhcp4/6</small>
+{% elif object.ip_address %}
+<a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>
+{% else %}
+<span class="text-muted">&mdash;</span>
+{% endif %}
