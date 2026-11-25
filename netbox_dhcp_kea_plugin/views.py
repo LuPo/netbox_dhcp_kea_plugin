@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
 from netbox.ui.actions import AddObject
-from netbox.ui.panels import ContextTablePanel, JSONPanel, ObjectsTablePanel, TemplatePanel
+from netbox.ui.panels import ContextTablePanel, JSONPanel, ObjectsTablePanel, PluginContentPanel, TemplatePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -22,6 +22,10 @@ def _ddns_enabled(_instance=None):
     from netbox.plugins.utils import get_plugin_config
 
     return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
+
+
+def _is_primary(server):
+    return server.is_ha_primary()
 
 
 # Hook Views
@@ -110,7 +114,7 @@ class HookGroupView(generic.ObjectView):
     template_name = "generic/object.html"
     layout = layout.SimpleLayout(
         left_panels=[
-            ui_panels.HookGroupPanel(exclude=[] if _ddns_enabled() else ["d2_daemons"]),
+            ui_panels.HookGroupPanel(),
             TagsPanel(),
         ],
         right_panels=[
@@ -480,6 +484,48 @@ def _pki_dns_integration_active():
 @register_model_view(models.DHCPServer)
 class DHCPServerView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
+    # Extends generic/object.html only to add the HA standby badge.
+    template_name = "netbox_dhcp_kea_plugin/dhcpserver.html"
+    layout = layout.Layout(
+        layout.Row(layout.Column(ui_panels.ContextAlertsPanel("pki_identity_advisories"))),
+        layout.Row(
+            layout.Column(
+                ui_panels.DHCPServerPanel(),
+                ui_panels.DHCPServerProxyPanel(),
+                ui_panels.DHCPServerReservationDefaultsPanel(),
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_summary.html", title=_("Configuration Summary")),
+                TagsPanel(),
+                PluginContentPanel("left_page"),
+            ),
+            layout.Column(
+                # Client-class problems and the HA standby note; each card shows only when it applies.
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_class_warnings.html"),
+                # A standby takes its subnets, classes and options from the primary.
+                ui_panels.ConditionalPanel(ui_panels.DHCPServerLeasePanel(), _is_primary),
+                ui_panels.ConditionalPanel(
+                    ui_panels.DHCPServerDDNSPanel(),
+                    lambda server: ui_panels.ddns_enabled() and server.is_ha_primary(),
+                ),
+                ui_panels.ConditionalPanel(
+                    ObjectsTablePanel(
+                        "netbox_dhcp_kea_plugin.OptionData",
+                        title=_("Global Option Data"),
+                        filters={"server_id": lambda ctx: ctx["object"].pk},
+                    ),
+                    _is_primary,
+                ),
+                ui_panels.ConditionalPanel(
+                    TemplatePanel(
+                        "netbox_dhcp_kea_plugin/panels/server_client_classes.html", title=_("Global Client Classes")
+                    ),
+                    _is_primary,
+                ),
+                CustomFieldsPanel(),
+                PluginContentPanel("right_page"),
+            ),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
         from netbox.plugins.utils import get_plugin_config
@@ -864,7 +910,7 @@ class SubnetView(generic.ObjectView):
     template_name = "generic/object.html"
     layout = layout.SimpleLayout(
         left_panels=[
-            ui_panels.SubnetPanel(exclude=[] if _ddns_enabled() else ["ddns_policy"]),
+            ui_panels.SubnetPanel(),
             ui_panels.SubnetReservationModePanel(),
             ui_panels.SubnetClientClassesPanel(),
             ui_panels.RedundantEvaluationClassesPanel(),
@@ -965,7 +1011,7 @@ class DHCPHARelationshipView(generic.ObjectView):
             ui_panels.HATimingPanel(),
             ui_panels.HAProxyPanel(),
             ui_panels.HAAuthenticationPanel(),
-            *([ui_panels.HADDNSPanel()] if _ddns_enabled() else []),
+            ui_panels.ConditionalPanel(ui_panels.HADDNSPanel(), ui_panels.ddns_enabled),
             TagsPanel(),
         ],
         right_panels=[
@@ -1143,7 +1189,7 @@ class SubnetPoolView(generic.ObjectView):
     template_name = "generic/object.html"
     layout = layout.SimpleLayout(
         left_panels=[
-            ui_panels.SubnetPoolPanel(exclude=[] if _ddns_enabled() else ["ddns_policy"]),
+            ui_panels.SubnetPoolPanel(),
             ui_panels.RedundantEvaluationClassesPanel(),
             TagsPanel(),
         ],

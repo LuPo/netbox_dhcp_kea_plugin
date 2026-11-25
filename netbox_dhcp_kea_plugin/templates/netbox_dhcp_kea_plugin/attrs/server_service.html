@@ -1,0 +1,6 @@
+{% if object.service %}
+<a href="{{ object.service.get_absolute_url }}">{{ object.service.name }}</a>
+<small class="text-muted">on {{ object.service.parent_object }}</small>
+{% else %}
+<span class="text-muted">Not created (IP not assigned to interface)</span>
+{% endif %}

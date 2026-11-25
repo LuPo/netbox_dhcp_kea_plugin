@@ -1,0 +1,6 @@
+{% for alert in alerts %}
+<div class="alert alert-{{ level }}" role="alert">
+    <i class="mdi mdi-alert"></i>
+    <div>{{ alert }}</div>
+</div>
+{% endfor %}

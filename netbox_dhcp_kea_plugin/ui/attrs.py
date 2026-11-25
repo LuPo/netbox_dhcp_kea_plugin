@@ -76,3 +76,40 @@ class SecretSetAttr(attrs.ObjectAttribute):
     """Whether a secret is set, never the secret itself."""
 
     template_name = "netbox_dhcp_kea_plugin/attrs/secret_set.html"
+
+
+class InheritedFromHAAttr(attrs.ObjectAttribute):
+    """A value that an HA relationship may override, flagged when it does.
+
+    Parameters:
+        inherited (callable): ``inherited(obj)`` is true when the value comes from the relationship
+        is_boolean (bool): render a check mark instead of a link
+    """
+
+    template_name = "netbox_dhcp_kea_plugin/attrs/inherited_from_ha.html"
+
+    def __init__(self, accessor, inherited, is_boolean=False, **kwargs):
+        super().__init__(accessor, **kwargs)
+        self.inherited = inherited
+        self.is_boolean = is_boolean
+
+    def render(self, obj, context):
+        from django.template.loader import render_to_string
+
+        return render_to_string(
+            self.template_name,
+            {"value": self.get_value(obj), "inherited": self.inherited(obj), "is_boolean": self.is_boolean},
+        )
+
+
+class PKIFQDNAttr(attrs.ObjectAttribute):
+    """The PKI name, linked to its DNS record; flagged when it should be bound and is not."""
+
+    template_name = "netbox_dhcp_kea_plugin/attrs/pki_fqdn.html"
+
+    def __init__(self, accessor, dns_integration, **kwargs):
+        super().__init__(accessor, **kwargs)
+        self.dns_integration = dns_integration
+
+    def get_context(self, obj, attr, value, context):
+        return {"record": obj.pki_record(), "dns_integration": self.dns_integration()}
