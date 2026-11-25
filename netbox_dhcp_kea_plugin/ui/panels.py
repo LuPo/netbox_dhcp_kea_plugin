@@ -246,3 +246,44 @@ class RedundantEvaluationClassesPanel(panels.ObjectPanel):
 
     def should_render(self, context):
         return bool(context["redundant_eval_classes"])
+
+
+class SubnetPoolPanel(panels.ObjectAttributesPanel):
+    title = _("Subnet Pool Configuration")
+
+    subnet = attrs.RelatedObjectAttr("subnet", linkify=True)
+    ip_range = attrs.RelatedObjectAttr("ip_range", linkify=True, label=_("IP range"))
+    pool_range = attrs.TextAttr("pool_range", style="font-monospace")
+    client_class = attrs.RelatedObjectAttr(
+        "client_class",
+        linkify=True,
+        label=hinted(_("Client class"), _("Restricts which clients can use this pool.")),
+    )
+    evaluate_additional_classes = attrs.RelatedObjectListAttr(
+        "evaluate_additional_classes",
+        linkify=True,
+        label=hinted(
+            _("Evaluate additional classes"),
+            _("Evaluated additionally for clients in this pool (KEA evaluate-additional-classes)."),
+        ),
+    )
+    ddns_policy = attrs.RelatedObjectAttr("ddns_policy", linkify=True, label=_("DDNS policy"))
+    description = attrs.TextAttr("description")
+
+
+class StaticReservationPanel(panels.ObjectAttributesPanel):
+    title = _("Static Reservation")
+
+    subnet = attrs.RelatedObjectAttr("subnet", linkify=True)
+    ip_address = attrs.RelatedObjectAttr("ip_address", linkify=True, label=_("IP address"))
+    mac_address = attrs.RelatedObjectAttr("mac_address", linkify=True, label=_("MAC address"))
+    hostname = attrs.TextAttr("hostname")
+    description = attrs.TextAttr("description")
+
+
+class StaticReservationSourcePanel(panels.ObjectAttributesPanel):
+    title = _("Source")
+
+    source = attrs.TextAttr("source")
+    external_id = attrs.TextAttr("external_id", label=_("External ID"))
+    last_synced = attrs.DateTimeAttr("last_synced")

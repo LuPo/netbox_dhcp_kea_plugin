@@ -1111,20 +1111,29 @@ class SubnetPoolView(generic.ObjectView):
     queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class", "ddns_policy").prefetch_related(
         "evaluate_additional_classes", "option_data"
     )
-
-    def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
-
-        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
-        # These classes are already evaluated globally by KEA, so listing them in
-        # evaluate-additional-classes is redundant.
-        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
-
-        return {
-            "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
-            "redundant_eval_classes": redundant_eval_classes,
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-        }
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.SubnetPoolPanel(exclude=[] if _ddns_enabled() else ["ddns_policy"]),
+            ui_panels.RedundantEvaluationClassesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda pool, _ctx: pool.to_kea_dict(),
+                title=_("KEA Pool Configuration"),
+                element_id="subnetpool-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                title=_("Pool Option Data"),
+                filters={"pool_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.SubnetPool, "list", path="", detail=False)
@@ -1166,9 +1175,22 @@ class SubnetPoolImportView(generic.BulkImportView):
 @register_model_view(models.StaticReservation)
 class StaticReservationView(generic.ObjectView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
-
-    def get_extra_context(self, request, instance):
-        return {"kea_reservation": json.dumps(instance.to_kea_dict(), indent=2)}
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.StaticReservationPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.StaticReservationSourcePanel(),
+            ui_panels.KeaJSONPanel(
+                lambda reservation, _ctx: reservation.to_kea_dict(),
+                title=_("Kea Reservation"),
+                element_id="staticreservation-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.StaticReservation, "list", path="", detail=False)
