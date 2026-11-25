@@ -32,11 +32,25 @@ This page describes the three patterns the plugin supports for this, when to use
 
 ## When to use which pattern
 
-| Question 1 | Question 2 | Pattern |
-|---|---|---|
-| Does the option value vary across subnets? | — | **No → [Pattern A](#pattern-a-uniform-value-attach-to-the-class)** |
-| ↓ Yes | Within a single subnet, do all matched device classes share the same value? | **Yes → [Pattern B](#pattern-b-per-subnet-value-attach-to-the-subnet)** |
-| ↓ Yes | ↓ No | **Pattern C — [delivery classes](#pattern-c-per-subnet-and-per-class-delivery-classes)** |
+```mermaid
+flowchart TD
+    q1{"Does the option value<br>vary across subnets?"}
+    q2{"Within one subnet, do all matched<br>device classes share the same value?"}
+    a["Pattern A<br>attach to the class"]
+    b["Pattern B<br>attach to the subnet"]
+    c["Pattern C<br>delivery classes"]
+
+    q1 -- No --> a
+    q1 -- Yes --> q2
+    q2 -- Yes --> b
+    q2 -- No --> c
+
+    click a "#pattern-a-uniform-value-attach-to-the-class"
+    click b "#pattern-b-per-subnet-value-attach-to-the-subnet"
+    click c "#pattern-c-per-subnet-and-per-class-delivery-classes"
+```
+
+Each pattern box links to its section: [Pattern A](#pattern-a-uniform-value-attach-to-the-class), [Pattern B](#pattern-b-per-subnet-value-attach-to-the-subnet), [Pattern C](#pattern-c-per-subnet-and-per-class-delivery-classes).
 
 ---
 

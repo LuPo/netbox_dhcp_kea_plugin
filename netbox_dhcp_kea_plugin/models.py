@@ -2758,6 +2758,34 @@ class Subnet(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:subnet", args=[self.pk])
 
+    PREFIX_TAKEN_MESSAGE = (
+        "{prefix} is already a DHCP subnet on {server} (subnet ID {pk}). A prefix can belong to one DHCP "
+        "subnet only. Edit that subnet to move it to another server, or delete it first."
+    )
+
+    def subnet_holding_prefix(self, prefix):
+        """The other Subnet already serving ``prefix``, or None."""
+        return Subnet.objects.filter(prefix=prefix).exclude(pk=self.pk).select_related("server").first()
+
+    def unique_error_message(self, model_class, unique_check):
+        """Name the server holding the prefix instead of Django's generic message.
+
+        Reached through the REST API and CSV import. The edit form checks first
+        in SubnetForm.clean_prefix() and links the existing subnet.
+        """
+        if model_class is Subnet and tuple(unique_check) == ("prefix",) and self.prefix_id:
+            existing = self.subnet_holding_prefix(self.prefix_id)
+            if existing is not None:
+                return ValidationError(
+                    self.PREFIX_TAKEN_MESSAGE.format(
+                        prefix=existing.prefix,
+                        server=existing.server.name if existing.server_id else "no server",
+                        pk=existing.pk,
+                    ),
+                    code="unique",
+                )
+        return super().unique_error_message(model_class, unique_check)
+
     def get_effective_reservation_flag(self, field_name):
         """Return the effective value of a reservation flag.
 

@@ -424,10 +424,13 @@ rendered config — and means there is no token, credential or renewal to manage
 !!! warning "A vault-backed config is a template, not a deployable file"
 
     The emitted `secret` is a placeholder such as `${BAO:kea/tsig/mykey#secret}`. The file
-    is still valid JSON and `kea-dhcp-ddns -t` will parse it, but D2 will fail TSIG
-    authentication if it is deployed unsubstituted. The daemon exposes
-    `requires_secret_substitution` so a deployment can assert on it rather than discover
-    this at runtime, and the Configuration tab shows a banner.
+    is valid JSON, but **not** a configuration Kea will load: D2 builds each TSIG key from
+    its base64 secret while parsing, so expect `kea-dhcp-ddns -t` to reject the placeholder.
+    Substitute first, then validate the substituted file.
+
+    The D2 daemon's REST representation carries `requires_secret_substitution`, so a
+    deployment can check it before fetching the config, and the Configuration tab shows a
+    banner.
 
 ### Validation worth knowing about
 

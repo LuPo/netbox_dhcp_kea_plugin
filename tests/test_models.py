@@ -1098,3 +1098,21 @@ class TestModelDefaults:
         form.cleaned_data = {"prefix": subnet.prefix}
 
         assert form.clean_prefix() == subnet.prefix
+
+    def test_subnet_model_names_the_server_holding_the_prefix(self, subnet_factory, dhcp_server_factory):
+        """The REST API and CSV import get the same message through validate_unique(), without markup."""
+        import pytest
+        from django.core.exceptions import ValidationError
+
+        from netbox_dhcp_kea_plugin.models import Subnet
+
+        existing = subnet_factory()
+        duplicate = Subnet(prefix=existing.prefix, server=dhcp_server_factory())
+
+        with pytest.raises(ValidationError) as exc:
+            duplicate.validate_unique()
+
+        message = exc.value.message_dict["prefix"][0]
+        assert existing.server.name in message
+        assert f"subnet ID {existing.pk}" in message
+        assert "<a" not in message

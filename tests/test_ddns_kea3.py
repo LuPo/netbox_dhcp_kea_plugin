@@ -420,3 +420,19 @@ class TestMultiZoneCreate:
 
         contexts = list(DDNSDomain.objects.filter(d2_daemon=d2_daemon).values_list("user_context", flat=True))
         assert contexts == [{"site": "lab"}, {"site": "lab"}]
+
+
+@ddns_routes
+def test_the_d2_api_reports_outstanding_substitution(d2_daemon, forward_zone, name_server):
+    from netbox_dhcp_kea_plugin.models import DDNSDomain
+
+    forward_zone.nameservers.add(name_server)
+    DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=_vault_key())
+    user = get_user_model().objects.create_superuser(username="d2-admin", password="x")
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-detail", args=[d2_daemon.pk])
+    resp = client.get(url)
+
+    assert resp.data["requires_secret_substitution"] is True

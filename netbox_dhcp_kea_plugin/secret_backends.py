@@ -33,8 +33,9 @@ def _vault_backend(tsig_key):
     of NetBox's database, its API responses, and every archived copy of the
     rendered configuration — and removes any token lifecycle from NetBox.
 
-    The rendered configuration is therefore a *template*: still valid JSON, so
-    ``kea-dhcp-ddns -t`` parses it, but not deployable until substituted.
+    The rendered configuration is therefore a *template*: valid JSON, but D2
+    builds each TSIG key from its base64 secret while parsing, so it will not
+    load — nor pass ``kea-dhcp-ddns -t`` — until substituted.
     """
     from netbox.plugins.utils import get_plugin_config
 

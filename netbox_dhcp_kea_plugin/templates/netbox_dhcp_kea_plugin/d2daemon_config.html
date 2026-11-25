@@ -16,8 +16,8 @@
             <i class="mdi mdi-alert"></i>
             This configuration is a <strong>template</strong>. At least one TSIG key uses the
             vault backend, so its secret is rendered as a reference rather than the secret
-            itself. Substitute it on the target before deploying — KEA will load this file,
-            but DDNS updates will fail TSIG authentication against a literal reference.
+            itself. Substitute it on the target before deploying, and validate the substituted
+            file: KEA reads each TSIG secret as base64 and will not load the reference.
         </div>
     </div>
 </div>

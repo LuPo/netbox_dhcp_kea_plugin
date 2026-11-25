@@ -759,6 +759,8 @@ class D2DaemonSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-detail")
     ip_address = IPAddressSerializer(nested=True, read_only=True)
     domains_count = serializers.SerializerMethodField()
+    # Lets a deployment see that kea-config is a template before fetching it.
+    requires_secret_substitution = serializers.SerializerMethodField()
 
     class Meta:
         model = D2Daemon
@@ -776,6 +778,7 @@ class D2DaemonSerializer(NetBoxModelSerializer):
             "ncr_format",
             "dns_server_timeout",
             "domains_count",
+            "requires_secret_substitution",
             "tags",
             "custom_fields",
             "created",
@@ -784,6 +787,9 @@ class D2DaemonSerializer(NetBoxModelSerializer):
 
     def get_domains_count(self, obj):
         return obj.domains.count()
+
+    def get_requires_secret_substitution(self, obj):
+        return obj.requires_secret_substitution()
 
 
 class DDNSDomainSerializer(NetBoxModelSerializer):

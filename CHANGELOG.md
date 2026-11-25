@@ -38,9 +38,16 @@ A domain's DNS servers come from its zone's nameservers, so each was sent update
 ### Added — hooks for kea-dhcp-ddns
 `HookGroup.d2_daemons` attaches a group to D2 daemons, which render its `kea-dhcp-ddns` hooks as `hooks-libraries`. The GSS-TSIG hook was in the catalogue with nowhere to load it.
 
+### Fixed — a vault-backed D2 config was said to pass `kea-dhcp-ddns -t`
+The docs, the vault backend and the *Configuration* tab said Kea would load a config whose TSIG secret is still a `${BAO:…}` reference. D2 builds each key from its base64 secret while parsing, so it won't: substitute first, then validate. `D2DaemonSerializer` now carries `requires_secret_substitution`, which the docs already told deployments to check but the API did not expose.
+
+### Changed — a taken subnet prefix names its server
+A prefix carries one DHCP subnet, and saving a second one only said "Subnet with this Prefix already exists". The message now names the server that has it and the existing subnet's ID. On the form, the ID links to that subnet; the REST API and CSV import get the same text without the link.
+
 ### Changed
 - The `vault` secret backend is labelled *OpenBao / Vault (by reference)*, matching its `${BAO:…}` default.
 - `D2DaemonImportForm` accepts `dns_server_timeout`.
+- The *When to use which pattern* table in the class-conditional option delivery guide is now a flowchart.
 
 ### Migration
 `0015_remove_clientclass_ddns_policy_hookgroup_d2_daemons_and_more` adds `SubnetPool.ddns_policy`, `HookGroup.d2_daemons` and the `DDNSServerOverride` model, and removes `ClientClass.ddns_policy`. The choice changes need no migration.

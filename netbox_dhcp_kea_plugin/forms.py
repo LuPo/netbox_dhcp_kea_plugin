@@ -1470,26 +1470,24 @@ class SubnetForm(NetBoxModelForm):
     def clean_prefix(self):
         """Say which server already serves the prefix.
 
-        A prefix carries one Subnet, so Django's own message ("Subnet with this
-        Prefix already exists") is all the uniqueness check would give, without
-        saying where that subnet is or what to do instead.
+        Same text as Subnet.unique_error_message(), which the API and CSV import
+        reach, but with the existing subnet linked.
         """
         prefix = self.cleaned_data.get("prefix")
         if prefix is None:
             return prefix
-        existing = Subnet.objects.filter(prefix=prefix).exclude(pk=self.instance.pk).select_related("server").first()
+        existing = self.instance.subnet_holding_prefix(prefix)
         if existing is not None:
-            server = existing.server.name if existing.server_id else "no server"
+            linked = Subnet.PREFIX_TAKEN_MESSAGE.replace("subnet ID {pk}", '<a href="{url}">subnet ID {pk}</a>')
             # format_html escapes the values and marks the result safe, so the
             # field's error renders the link instead of its markup.
             raise ValidationError(
                 format_html(
-                    '{} is already a DHCP subnet on {} (<a href="{}">subnet ID {}</a>). A prefix can belong to '
-                    "one DHCP subnet only. Edit that subnet to move it to another server, or delete it first.",
-                    prefix,
-                    server,
-                    existing.get_absolute_url(),
-                    existing.pk,
+                    linked,
+                    prefix=prefix,
+                    server=existing.server.name if existing.server_id else "no server",
+                    url=existing.get_absolute_url(),
+                    pk=existing.pk,
                 )
             )
         return prefix
