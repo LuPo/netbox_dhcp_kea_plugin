@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 (2026-11-25)
 
 ### Added — the HA basic-auth password can come from OpenBao
 An HA relationship's password was stored in NetBox and printed in clear on every member's *KEA Configuration* tab, and in its `kea-config/` response, to anyone who could view the server.
