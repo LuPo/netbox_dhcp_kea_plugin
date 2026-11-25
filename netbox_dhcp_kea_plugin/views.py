@@ -4,7 +4,6 @@ from django.contrib import messages
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import redirect
-from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
@@ -702,9 +701,6 @@ class DHCPServerKeaConfigView(generic.ObjectView):
                 ui_panels.KeaJSONPanel(
                     lambda server, _ctx: server.to_kea_dict(),
                     title=_("kea-dhcp4.conf"),
-                    intro=lambda server: format_html(
-                        "Served by /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{}/kea-config/", server.pk
-                    ),
                     element_id="kea-config",
                     actions=[ui_panels.ExportAction("kea-config")],
                 ),
@@ -1401,9 +1397,6 @@ class StorkServerConfigView(generic.ObjectView):
                     lambda server, _ctx: server.to_env_content(),
                     as_text=True,
                     title=_("stork-server.env"),
-                    intro=lambda server: format_html(
-                        "Served by /api/plugins/netbox_dhcp_kea_plugin/stork-servers/{}/config/", server.pk
-                    ),
                     element_id="stork-server-env",
                     actions=[ui_panels.ExportAction("stork-server-config")],
                 ),
@@ -1515,11 +1508,10 @@ class StorkAgentGroupConfigView(generic.ObjectView):
                 ui_panels.KeaJSONPanel(
                     lambda group, _ctx: group.to_env_content(),
                     as_text=True,
-                    title=_("stork-agent.env"),
-                    intro=lambda group: format_html(
-                        "Served by /api/plugins/netbox_dhcp_kea_plugin/stork-agent-groups/{}/config/. Add "
-                        "?server=&lt;id&gt; to replace &lt;AGENT_HOST_IP&gt; with that KEA server's address.",
-                        group.pk,
+                    # The per-server variant is an API option, so it is a hint rather than body text.
+                    title=hinted(
+                        _("stork-agent.env"),
+                        _("Add ?server=<id> to the config URL to replace <AGENT_HOST_IP> with that server's address."),
                     ),
                     element_id="stork-agent-env",
                 ),
