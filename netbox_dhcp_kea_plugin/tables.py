@@ -911,3 +911,18 @@ class DDNSPolicyTable(NetBoxTable):
             "pools_count",
         )
         exclude = ("id",)
+
+
+class HAMemberTable(NetBoxTable):
+    """A relationship's member servers, with their role in it."""
+
+    name = tables.Column(linkify=True, verbose_name="Server")
+    ha_role = tables.Column(verbose_name="Role")
+    ha_url = tables.Column(verbose_name="URL", orderable=False)
+    ha_auto_failover = BooleanColumn(verbose_name="Auto Failover")
+
+    class Meta(NetBoxTable.Meta):
+        model = DHCPServer
+        fields = ("name", "ha_role", "ha_url", "ha_auto_failover")
+        default_columns = ("name", "ha_role", "ha_url", "ha_auto_failover")
+        exclude = ("id", "actions", "pk")

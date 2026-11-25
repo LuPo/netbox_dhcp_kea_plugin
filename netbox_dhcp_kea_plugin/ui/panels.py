@@ -4,7 +4,14 @@ from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs, panels
 from netbox.ui.actions import CopyContent
 
-from netbox_dhcp_kea_plugin.ui.attrs import InheritedBooleanAttr, JSONAttr, SecondsAttr, hinted
+from netbox_dhcp_kea_plugin.ui.attrs import (
+    InheritedBooleanAttr,
+    JSONAttr,
+    SecondsAttr,
+    SecretSetAttr,
+    ValidityAttr,
+    hinted,
+)
 
 
 class ConditionalTemplatePanel(panels.TemplatePanel):
@@ -287,3 +294,67 @@ class StaticReservationSourcePanel(panels.ObjectAttributesPanel):
     source = attrs.TextAttr("source")
     external_id = attrs.TextAttr("external_id", label=_("External ID"))
     last_synced = attrs.DateTimeAttr("last_synced")
+
+
+class HARelationshipPanel(panels.ObjectAttributesPanel):
+    title = _("HA Relationship")
+
+    name = attrs.TextAttr("name")
+    mode = attrs.ChoiceAttr("mode")
+    description = attrs.TextAttr("description")
+    valid = ValidityAttr(label=_("Valid configuration"))
+
+
+class HATimingPanel(panels.ObjectAttributesPanel):
+    title = _("Timing Parameters")
+
+    heartbeat_delay = attrs.TextAttr("heartbeat_delay", format_string="{} ms")
+    max_response_delay = attrs.TextAttr("max_response_delay", format_string="{} ms")
+    max_ack_delay = attrs.TextAttr("max_ack_delay", format_string="{} ms", label=_("Max ACK delay"))
+    max_unacked_clients = attrs.NumericAttr("max_unacked_clients")
+    max_rejected_lease_updates = attrs.NumericAttr("max_rejected_lease_updates")
+
+
+class HAProxyPanel(panels.ObjectAttributesPanel):
+    title = _("Reverse Proxy")
+
+    ha_proxy_enabled = attrs.BooleanAttr(
+        "ha_proxy_enabled",
+        label=hinted(
+            _("HA reverse proxy"),
+            _(
+                "All or nothing for the relationship: every member routes HA traffic through its own local "
+                "proxy, and KEA speaks plain HTTP over loopback in both directions."
+            ),
+        ),
+    )
+
+
+class HAAuthenticationPanel(panels.ObjectAttributesPanel):
+    title = hinted(
+        _("HA Authentication"),
+        _(
+            "Shared by every member: each one's HA listener requires these credentials and presents them "
+            "to its peers."
+        ),
+    )
+
+    ha_basic_auth_user = attrs.TextAttr("ha_basic_auth_user", label=_("Basic auth user"))
+    ha_basic_auth_password = SecretSetAttr("ha_basic_auth_password", label=_("Basic auth password"))
+
+
+class HADDNSPanel(panels.ObjectAttributesPanel):
+    title = _("DDNS")
+
+    d2_daemon = attrs.RelatedObjectAttr("d2_daemon", linkify=True, label=_("D2 daemon"))
+    ddns_enable_updates = attrs.BooleanAttr("ddns_enable_updates", label=_("Updates enabled"))
+    ddns_policy = attrs.RelatedObjectAttr("ddns_policy", linkify=True, label=_("DDNS policy"))
+
+
+class HAMultiThreadingPanel(panels.ObjectAttributesPanel):
+    title = _("Multi-Threading Settings")
+
+    enable_multi_threading = attrs.BooleanAttr("enable_multi_threading")
+    http_dedicated_listener = attrs.BooleanAttr("http_dedicated_listener", label=_("HTTP dedicated listener"))
+    http_listener_threads = attrs.NumericAttr("http_listener_threads", label=_("HTTP listener threads"))
+    http_client_threads = attrs.NumericAttr("http_client_threads", label=_("HTTP client threads"))

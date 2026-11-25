@@ -8,13 +8,14 @@ from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
 from netbox.ui.actions import AddObject
-from netbox.ui.panels import JSONPanel, ObjectsTablePanel, TemplatePanel
+from netbox.ui.panels import ContextTablePanel, JSONPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
 from .models import SubnetPool
 from .ui import panels as ui_panels
+from .ui.attrs import hinted
 
 
 def _ddns_enabled(_instance=None):
@@ -957,13 +958,41 @@ class SubnetImportView(generic.BulkImportView):
 @register_model_view(models.DHCPHARelationship)
 class DHCPHARelationshipView(generic.ObjectView):
     queryset = models.DHCPHARelationship.objects.prefetch_related("servers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HARelationshipPanel(),
+            ui_panels.HATimingPanel(),
+            ui_panels.HAProxyPanel(),
+            ui_panels.HAAuthenticationPanel(),
+            *([ui_panels.HADDNSPanel()] if _ddns_enabled() else []),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.HAMultiThreadingPanel(),
+            ContextTablePanel(
+                "servers_table",
+                title=hinted(
+                    _("HA Servers"),
+                    _("To add an existing server, edit the server and set its HA Relationship field."),
+                ),
+                actions=[
+                    AddObject(
+                        "netbox_dhcp_kea_plugin.DHCPServer",
+                        url_params={"ha_relationship": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
     def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
-
+        servers_table = tables.HAMemberTable(instance.servers.restrict(request.user, "view"), orderable=False)
+        servers_table.configure(request)
         return {
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-            # Why the badge says Invalid. Empty when the configuration is fine.
+            "servers_table": servers_table,
+            # Why the badge says Invalid; empty when the configuration is fine.
             "configuration_errors": instance.configuration_errors(),
         }
 
