@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
@@ -668,63 +669,58 @@ class DHCPServerImportView(generic.BulkImportView):
 
 
 @register_model_view(models.DHCPServer, name="prefixes", path="prefixes")
-class DHCPServerPrefixesView(generic.ObjectView):
+class DHCPServerPrefixesView(generic.ObjectChildrenView):
     queryset = models.DHCPServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_prefixes.html"
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
+    # Adds an Assign Prefix button to the standard child table page.
+    template_name = "netbox_dhcp_kea_plugin/dhcpserver_subnets.html"
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=lambda obj: obj.subnet_items.count(),
         visible=lambda obj: obj.is_ha_primary(),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
 
-    def get(self, request, pk):
-        server = self.get_object(pk=pk)
-        subnet_items = server.subnet_items.select_related("prefix").all()
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "subnet_items": subnet_items,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.subnet_items.restrict(request.user, "view").select_related("prefix", "server")
 
 
 @register_model_view(models.DHCPServer, name="kea_config", path="kea-config")
 class DHCPServerKeaConfigView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_kea_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="KEA Configuration",
+        label=_("KEA Configuration"),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda server, _ctx: server.to_kea_dict(),
+                    title=_("kea-dhcp4.conf"),
+                    intro=lambda server: format_html(
+                        "Served by /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{}/kea-config/", server.pk
+                    ),
+                    element_id="kea-config",
+                    actions=[ui_panels.ExportAction("kea-config")],
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        server = self.get_object(pk=pk)
-        kea_config = server.to_kea_dict()
-        kea_config_json = json.dumps(kea_config, indent=4)
-
-        # Handle export/download request
+    def get(self, request, **kwargs):
         if request.GET.get("export") == "kea-config":
-            response = HttpResponse(kea_config_json, content_type="application/json")
-            filename = f"{server.name}_kea-config.json"
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return response
+            from django.http import HttpResponse
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "tab": self.tab,
-                "kea_config": kea_config,
-                "kea_config_json": kea_config_json,
-            },
-        )
+            server = self.get_object(**kwargs)
+            response = HttpResponse(json.dumps(server.to_kea_dict(), indent=4), content_type="application/json")
+            response["Content-Disposition"] = f'attachment; filename="{server.name}_kea-config.json"'
+            return response
+        return super().get(request, **kwargs)
 
 
 # ClientClass Views
@@ -1661,7 +1657,7 @@ def _d2_config_context(request, render_config, contains_secrets, requires_substi
     return {
         "requires_secret_substitution": requires_substitution,
         "secrets_redacted": secrets_redacted,
-        "config_json": json.dumps(config, indent=2) if config is not None else None,
+        "d2_config": config,
     }
 
 
@@ -1695,37 +1691,57 @@ class DHCPServerD2ConfigView(generic.ObjectView):
     """This host's derived D2 domains and its kea-dhcp-ddns configuration."""
 
     queryset = models.DHCPServer.objects.select_related("ha_relationship", "d2_daemon")
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_d2config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="D2 Configuration",
+        label=_("D2 Configuration"),
         visible=_ddns_enabled,
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
         weight=1600,
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_daemon.html", title=_("D2 Daemon")),
+                width=4,
+            ),
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/derived_domains.html", title=_("DDNS Domains")),
+                width=8,
+            ),
+        ),
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_note.html"),
+                ui_panels.kea_config_panel(
+                    "d2-config", condition=lambda _server, ctx: ctx.get("runs_local_d2")
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
+    def get(self, request, **kwargs):
         # Routed with every server view, so refuse it here when DDNS is off.
         if not _ddns_enabled():
             raise Http404
-        server = self.get_object(pk=pk)
-        derived = server.derived_ddns()
+        return super().get(request, **kwargs)
+
+    def get_extra_context(self, request, instance):
+        derived = instance.derived_ddns()
         context = {
-            "object": server,
-            "tab": self.tab,
-            "daemon": server.effective_d2_daemon,
-            "runs_local_d2": server.runs_local_d2(),
+            "daemon": instance.effective_d2_daemon,
+            "runs_local_d2": instance.runs_local_d2(),
             "derived": derived,
         }
-        if server.runs_local_d2():
+        if context["runs_local_d2"]:
             context.update(
                 _d2_config_context(
                     request,
-                    lambda redact: server.d2_kea_dict(redact_secrets=redact, derived=derived),
-                    server.d2_contains_secrets(derived),
-                    server.d2_requires_secret_substitution(derived),
+                    lambda redact: instance.d2_kea_dict(redact_secrets=redact, derived=derived),
+                    instance.d2_contains_secrets(derived),
+                    instance.d2_requires_secret_substitution(derived),
                 )
             )
-        return render(request, self.template_name, context)
+        return context
 
 
 # --- DDNSDomain Views ---

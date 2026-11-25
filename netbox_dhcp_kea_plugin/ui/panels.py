@@ -1,8 +1,10 @@
 """Object detail panels, one per model, in the style of NetBox's own ``<app>/ui/panels.py``."""
 
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs, panels
-from netbox.ui.actions import CopyContent
+from netbox.ui.actions import CopyContent, PanelAction
 
 from netbox_dhcp_kea_plugin.ui.attrs import (
     InheritedBooleanAttr,
@@ -84,25 +86,54 @@ class KeaJSONPanel(panels.ObjectPanel):
 
     template_name = "netbox_dhcp_kea_plugin/panels/kea_json.html"
 
-    def __init__(self, data, intro=None, empty_message="", element_id="kea-json", **kwargs):
+    def __init__(
+        self, data, intro=None, empty_message="", element_id="kea-json", title_icons=None, condition=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.data = data
         self.intro = intro
         self.empty_message = empty_message
         self.element_id = element_id
+        # ``title_icons(context)`` returns HTML placed after the title, e.g. tooltip icons.
+        self.title_icons = title_icons
+        # ``condition(object, context)``: render only when true.
+        self.condition = condition
         self.actions.append(CopyContent(element_id))
 
     def get_context(self, context):
         ctx = super().get_context(context)
         obj = ctx["object"]
         intro = self.intro(obj) if callable(self.intro) else self.intro
+        title = ctx["title"]
+        if self.title_icons is not None:
+            title = format_html("{} {}", title, self.title_icons(context))
         return {
             **ctx,
+            "title": title,
+            "show": self.condition is None or self.condition(obj, context),
             "data": self.data(obj, context),
             "intro": intro,
             "empty_message": self.empty_message,
             "element_id": self.element_id,
         }
+
+    def should_render(self, context):
+        return context["show"]
+
+
+class ExportAction(PanelAction):
+    """A Download button for the view's ``?export=<name>`` response."""
+
+    template_name = "ui/actions/link.html"
+
+    def __init__(self, export_name, **kwargs):
+        kwargs.setdefault("label", _("Download"))
+        kwargs.setdefault("button_icon", "download")
+        super().__init__(**kwargs)
+        self.export_name = export_name
+
+    def get_context(self, context):
+        return {**super().get_context(context), "url": f"?export={self.export_name}"}
 
 
 class HookPanel(AttributesPanel):
@@ -590,3 +621,44 @@ class DHCPServerDDNSPanel(AttributesPanel):
         label=_("DDNS Policy"),
     )
     sender = attrs.TemplatedAttr("pk", template_name="netbox_dhcp_kea_plugin/attrs/ddns_sender.html")
+
+
+def d2_config_title_icons(context):
+    """Info icons after a D2 config's title: a template awaiting substitution, hidden secrets."""
+    icons = []
+    if context.get("requires_secret_substitution"):
+        icons.append(
+            format_html(
+                '<i class="mdi mdi-information-outline text-muted ms-1" data-bs-toggle="tooltip" '
+                'data-bs-placement="right" title="{}"></i>',
+                _(
+                    "This configuration is a template: at least one TSIG key uses the vault backend, so its "
+                    "secret is rendered as a reference, not the secret itself. Substitute it on the target "
+                    "before deploying, then validate the result. KEA reads each TSIG secret as base64 and "
+                    "will not load the reference."
+                ),
+            )
+        )
+    if context.get("secrets_redacted"):
+        icons.append(
+            format_html(
+                '<i class="mdi mdi-lock text-info ms-1" data-bs-toggle="tooltip" data-bs-placement="right" '
+                'title="{}"></i>',
+                _(
+                    "TSIG secrets are hidden: revealing them requires the view_secret_tsigkey permission, so "
+                    "this copy cannot be deployed as shown."
+                ),
+            )
+        )
+    return format_html("{}", mark_safe("".join(str(icon) for icon in icons)))
+
+
+def kea_config_panel(element_id, title=_("kea-dhcp-ddns.conf"), **kwargs):
+    """A D2 configuration rendered by the view as ``d2_config``, with its info icons."""
+    return KeaJSONPanel(
+        lambda _obj, ctx: ctx.get("d2_config"),
+        title=title,
+        element_id=element_id,
+        title_icons=d2_config_title_icons,
+        **kwargs,
+    )

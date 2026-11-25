@@ -1,0 +1,23 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<table class="table table-hover attr-table">
+    <tr>
+        <th scope="row">Daemon</th>
+        <td>{% if daemon %}<a href="{{ daemon.get_absolute_url }}">{{ daemon }}</a>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
+    </tr>
+    <tr>
+        <th scope="row">Listener</th>
+        <td>
+            {% if daemon %}
+            {{ daemon.listener_ip|placeholder }}:{{ daemon.port }}
+            <span class="badge text-bg-secondary">{% if daemon.is_local %}local{% else %}remote{% endif %}</span>
+            {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th scope="row">Runs on This Host</th>
+        <td>{% checkmark runs_local_d2 %}</td>
+    </tr>
+</table>
+{% endblock panel_content %}
