@@ -408,3 +408,70 @@ class TestSecretReference:
         self._set_pattern(monkeypatch, "")
 
         self._key("anything at all").full_clean()
+
+
+# ---------------------------------------------------------------------------
+# Servers & Domains tab: one group per HA relationship
+# ---------------------------------------------------------------------------
+
+
+class TestGrouping:
+    @pytest.fixture
+    def pair(self, server, subnet, domain):
+        from netbox_dhcp_kea_plugin.models import DHCPHARelationship
+
+        ha = DHCPHARelationship.objects.create(name="pair", mode="hot-standby")
+        primary = server(name="pair-1", ha_relationship=ha, ha_role="primary", ha_address="192.168.1.80")
+        standby = server(name="pair-2", ha_relationship=ha, ha_role="standby", ha_address="192.168.1.81")
+        subnet(primary, "10.1.0.0/24", _policy("a", ddns_qualifying_suffix="lab.example.org"))
+        domain("lab.example.org", ha_relationship=ha)
+        return ha, primary, standby
+
+    @staticmethod
+    def _groups(d2_daemon):
+        from netbox_dhcp_kea_plugin.ddns import group_by_relationship
+
+        return group_by_relationship([(s, s.derived_ddns()) for s in d2_daemon.servers_using()])
+
+    def test_ha_peers_with_the_same_domains_are_shown_once(self, pair, server, d2_daemon):
+        ha, primary, standby = pair
+        server(name="standalone")
+
+        groups = self._groups(d2_daemon)
+
+        assert [(g.ha_relationship, [s.name for s in g.servers]) for g in groups] == [
+            (ha, ["pair-1", "pair-2"]),
+            (None, ["standalone"]),
+        ]
+        ((servers, _derived),) = groups[0].variants
+        assert servers == [primary, standby]
+        assert groups[0].domain_count == 1
+
+    def test_peers_that_differ_are_shown_apart(self, pair, zone, d2_daemon):
+        from netbox_dhcp_kea_plugin.models import DDNSDomain
+
+        _ha, primary, standby = pair
+        DDNSDomain.objects.create(zone=zone("extra.example.org"), dhcp_server=standby, always_include=True)
+
+        (group,) = self._groups(d2_daemon)
+
+        assert [servers for servers, _derived in group.variants] == [[primary], [standby]]
+        assert group.domain_count == 2
+
+    @pytest.mark.skipif(
+        not __import__("netbox.plugins.utils", fromlist=["get_plugin_config"]).get_plugin_config(
+            "netbox_dhcp_kea_plugin", "enable_ddns"
+        ),
+        reason="enable_ddns plugin flag is off — DDNS routes not registered",
+    )
+    def test_the_tab_renders(self, pair, d2_daemon, client):
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        client.force_login(get_user_model().objects.create_superuser(username="d2-tab", password="x"))
+
+        resp = client.get(reverse("plugins:netbox_dhcp_kea_plugin:d2daemon_domains", args=[d2_daemon.pk]))
+
+        assert resp.status_code == 200
+        # One table for the pair, not one per peer.
+        assert resp.content.decode().count("(subnet 10.1.0.0/24)") == 1

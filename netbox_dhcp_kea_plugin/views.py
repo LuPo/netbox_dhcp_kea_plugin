@@ -1342,12 +1342,14 @@ class D2DaemonDomainsView(generic.ObjectView):
     )
 
     def get(self, request, pk):
+        from .ddns import group_by_relationship
+
         daemon = self.get_object(pk=pk)
         derived_by_server = [(server, server.derived_ddns()) for server in daemon.servers_using()]
         return render(
             request,
             self.template_name,
-            {"object": daemon, "derived_by_server": derived_by_server, "tab": self.tab},
+            {"object": daemon, "groups": group_by_relationship(derived_by_server), "tab": self.tab},
         )
 
 

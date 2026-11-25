@@ -14,10 +14,11 @@
     <div class="col col-md-12">
         <div class="alert alert-info" role="alert">
             <i class="mdi mdi-information"></i>
-            This D2 daemon is local: every DHCP host that uses it runs its own D2, configured with only
-            that server's domains and keys. There is no single configuration. Each server's is on its
-            <em>D2 Configuration</em> tab, and is served beside its Dhcp4 configuration as DhcpDdns by
-            /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/&lt;id&gt;/kea-config/.
+            <div>
+                This D2 daemon is local: every DHCP host that uses it runs its own D2, configured with
+                only that server's domains and keys, so there is no single configuration. Each server's
+                is on its <em>D2 Configuration</em> tab, linked below.
+            </div>
         </div>
         <div class="card">
             <h5 class="card-header">Servers</h5>
@@ -34,35 +35,19 @@
     </div>
 </div>
 {% else %}
-{% if requires_secret_substitution %}
-<div class="row">
-    <div class="col">
-        <div class="alert alert-warning" role="alert">
-            <i class="mdi mdi-alert"></i>
-            This configuration is a <strong>template</strong>. At least one TSIG key uses the
-            vault backend, so its secret is rendered as a reference rather than the secret
-            itself. Substitute it on the target before deploying, and validate the substituted
-            file: KEA reads each TSIG secret as base64 and will not load the reference.
-        </div>
-    </div>
-</div>
-{% endif %}
-{% if secrets_redacted %}
-<div class="row">
-    <div class="col">
-        <div class="alert alert-info" role="alert">
-            <i class="mdi mdi-lock"></i>
-            TSIG secrets are hidden. Revealing them requires the <em>view_secret_tsigkey</em>
-            permission, so this copy cannot be deployed as shown.
-        </div>
-    </div>
-</div>
-{% endif %}
 <div class="row">
     <div class="col col-md-12">
         <div class="card mb-3">
             <h2 class="card-header d-flex justify-content-between">
-                <span>/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{{ object.pk }}/kea-config/</span>
+                <span>
+                    kea-dhcp-ddns.conf
+                    {% if requires_secret_substitution %}
+                    <i class="mdi mdi-information-outline text-muted ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="This configuration is a template: at least one TSIG key uses the vault backend, so its secret is rendered as a reference, not the secret itself. Substitute it on the target before deploying, then validate the result. KEA reads each TSIG secret as base64 and will not load the reference."></i>
+                    {% endif %}
+                    {% if secrets_redacted %}
+                    <i class="mdi mdi-lock text-info ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="TSIG secrets are hidden: revealing them requires the view_secret_tsigkey permission, so this copy cannot be deployed as shown."></i>
+                    {% endif %}
+                </span>
                 <div>
                     {% copy_content "d2-config" %}
                 </div>

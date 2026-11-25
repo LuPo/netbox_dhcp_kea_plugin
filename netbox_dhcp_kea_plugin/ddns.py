@@ -234,3 +234,62 @@ def merge_for_daemon(daemon, derived_by_server):
     if not daemon.is_local:
         errors.extend(_duplicate_name_errors(ordered, context="Shared D2: "))
     return ordered, errors
+
+
+@dataclasses.dataclass
+class DerivedGroup:
+    """Servers shown together: an HA relationship's members, or one server.
+
+    HA peers serve the same subnets, so they normally derive the same domains
+    and ``variants`` holds one entry for all of them. An entry limited to one
+    peer makes the peers differ, and then each distinct result is its own
+    variant, listing the servers that share it.
+    """
+
+    ha_relationship: object
+    servers: list
+    variants: list  # [(servers, DerivedDDNS)]
+
+    @property
+    def domain_count(self):
+        return len({domain.pk for _servers, derived in self.variants for domain in derived.domain_list})
+
+    @property
+    def warning_count(self):
+        return sum(len(derived.warnings) for _servers, derived in self.variants)
+
+    @property
+    def error_count(self):
+        return sum(len(derived.errors) for _servers, derived in self.variants)
+
+
+def _signature(derived):
+    """What makes two servers' results the same for display."""
+    return (
+        tuple((entry.domain.pk, tuple(entry.reasons)) for entry in derived.domains),
+        tuple(derived.warnings),
+        tuple(derived.errors),
+    )
+
+
+def group_by_relationship(derived_by_server):
+    """Fold ``(server, DerivedDDNS)`` pairs into ``DerivedGroup``s.
+
+    Servers in one HA relationship share a group; a server outside any has a
+    group of its own. Groups keep the order their first server came in.
+    """
+    groups = {}
+    for server, derived in derived_by_server:
+        key = ("ha", server.ha_relationship_id) if server.ha_relationship_id else ("server", server.pk)
+        group = groups.get(key)
+        if group is None:
+            group = groups[key] = DerivedGroup(server.ha_relationship if server.ha_relationship_id else None, [], [])
+        group.servers.append(server)
+        signature = _signature(derived)
+        for servers, existing in group.variants:
+            if _signature(existing) == signature:
+                servers.append(server)
+                break
+        else:
+            group.variants.append(([server], derived))
+    return list(groups.values())

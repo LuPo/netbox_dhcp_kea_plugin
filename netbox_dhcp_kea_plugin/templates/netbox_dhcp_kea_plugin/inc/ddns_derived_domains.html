@@ -3,12 +3,14 @@ One server's derived D2 domains. Expects ``derived`` (ddns.DerivedDDNS).
 {% endcomment %}
 {% for error in derived.errors %}
 <div class="alert alert-danger" role="alert">
-    <i class="mdi mdi-alert-octagon"></i> {{ error }}
+    <i class="mdi mdi-alert-octagon"></i>
+    <div>{{ error }}</div>
 </div>
 {% endfor %}
 {% for warning in derived.warnings %}
 <div class="alert alert-warning" role="alert">
-    <i class="mdi mdi-alert"></i> {{ warning }}
+    <i class="mdi mdi-alert"></i>
+    <div>{{ warning }}</div>
 </div>
 {% endfor %}
 {% if derived.domains %}
