@@ -2,6 +2,7 @@ import json
 
 from django.contrib import messages
 from django.db.models import Count, Q
+from django.http import Http404
 from django.shortcuts import redirect, render
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
@@ -11,10 +12,12 @@ from .models import SubnetPool
 
 
 # Hook Views
+@register_model_view(models.Hook)
 class HookView(generic.ObjectView):
     queryset = models.Hook.objects.prefetch_related("hook_groups")
 
 
+@register_model_view(models.Hook, "list", path="", detail=False)
 class HookListView(generic.ObjectListView):
     queryset = models.Hook.objects.annotate(hook_groups_count=Count("hook_groups"))
     table = tables.HookTable
@@ -22,21 +25,26 @@ class HookListView(generic.ObjectListView):
     filterset_form = forms.HookFilterForm
 
 
+@register_model_view(models.Hook, "add", detail=False)
+@register_model_view(models.Hook, "edit")
 class HookEditView(generic.ObjectEditView):
     queryset = models.Hook.objects.all()
     form = forms.HookForm
 
 
+@register_model_view(models.Hook, "delete")
 class HookDeleteView(generic.ObjectDeleteView):
     queryset = models.Hook.objects.all()
 
 
+@register_model_view(models.Hook, "bulk_delete", path="delete", detail=False)
 class HookBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Hook.objects.all()
     filterset = filtersets.HookFilterSet
     table = tables.HookTable
 
 
+@register_model_view(models.Hook, "bulk_import", path="import", detail=False)
 class HookImportView(generic.BulkImportView):
     queryset = models.Hook.objects.all()
     model_form = forms.HookImportForm
@@ -73,6 +81,7 @@ class HookHookGroupsView(generic.ObjectView):
 
 
 # HookGroup Views
+@register_model_view(models.HookGroup)
 class HookGroupView(generic.ObjectView):
     queryset = models.HookGroup.objects.prefetch_related("hooks", "servers", "d2_daemons")
 
@@ -82,6 +91,7 @@ class HookGroupView(generic.ObjectView):
         return {"enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns")}
 
 
+@register_model_view(models.HookGroup, "list", path="", detail=False)
 class HookGroupListView(generic.ObjectListView):
     queryset = models.HookGroup.objects.annotate(
         hooks_count=Count("hooks", distinct=True),
@@ -92,21 +102,26 @@ class HookGroupListView(generic.ObjectListView):
     filterset_form = forms.HookGroupFilterForm
 
 
+@register_model_view(models.HookGroup, "add", detail=False)
+@register_model_view(models.HookGroup, "edit")
 class HookGroupEditView(generic.ObjectEditView):
     queryset = models.HookGroup.objects.all()
     form = forms.HookGroupForm
 
 
+@register_model_view(models.HookGroup, "delete")
 class HookGroupDeleteView(generic.ObjectDeleteView):
     queryset = models.HookGroup.objects.all()
 
 
+@register_model_view(models.HookGroup, "bulk_delete", path="delete", detail=False)
 class HookGroupBulkDeleteView(generic.BulkDeleteView):
     queryset = models.HookGroup.objects.all()
     filterset = filtersets.HookGroupFilterSet
     table = tables.HookGroupTable
 
 
+@register_model_view(models.HookGroup, "bulk_import", path="import", detail=False)
 class HookGroupImportView(generic.BulkImportView):
     queryset = models.HookGroup.objects.all()
     model_form = forms.HookGroupImportForm
@@ -173,10 +188,12 @@ class HookGroupServersView(generic.ObjectView):
 
 
 # VendorOptionSpace Views
+@register_model_view(models.VendorOptionSpace)
 class VendorOptionSpaceView(generic.ObjectView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
 
 
+@register_model_view(models.VendorOptionSpace, "list", path="", detail=False)
 class VendorOptionSpaceListView(generic.ObjectListView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
     table = tables.VendorOptionSpaceTable
@@ -184,31 +201,38 @@ class VendorOptionSpaceListView(generic.ObjectListView):
     filterset_form = forms.VendorOptionSpaceFilterForm
 
 
+@register_model_view(models.VendorOptionSpace, "add", detail=False)
+@register_model_view(models.VendorOptionSpace, "edit")
 class VendorOptionSpaceEditView(generic.ObjectEditView):
     queryset = models.VendorOptionSpace.objects.all()
     form = forms.VendorOptionSpaceForm
 
 
+@register_model_view(models.VendorOptionSpace, "delete")
 class VendorOptionSpaceDeleteView(generic.ObjectDeleteView):
     queryset = models.VendorOptionSpace.objects.all()
 
 
+@register_model_view(models.VendorOptionSpace, "bulk_delete", path="delete", detail=False)
 class VendorOptionSpaceBulkDeleteView(generic.BulkDeleteView):
     queryset = models.VendorOptionSpace.objects.all()
     filterset = filtersets.VendorOptionSpaceFilterSet
     table = tables.VendorOptionSpaceTable
 
 
+@register_model_view(models.VendorOptionSpace, "bulk_import", path="import", detail=False)
 class VendorOptionSpaceImportView(generic.BulkImportView):
     queryset = models.VendorOptionSpace.objects.all()
     model_form = forms.VendorOptionSpaceImportForm
 
 
 # OptionDefinition Views
+@register_model_view(models.OptionDefinition)
 class OptionDefinitionView(generic.ObjectView):
     queryset = models.OptionDefinition.objects.select_related("vendor_option_space")
 
 
+@register_model_view(models.OptionDefinition, "list", path="", detail=False)
 class OptionDefinitionListView(generic.ObjectListView):
     queryset = models.OptionDefinition.objects.select_related("vendor_option_space")
     table = tables.OptionDefinitionTable
@@ -224,6 +248,8 @@ class OptionDefinitionListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.OptionDefinition, "add", detail=False)
+@register_model_view(models.OptionDefinition, "edit")
 class OptionDefinitionEditView(generic.ObjectEditView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
     form = forms.OptionDefinitionForm
@@ -241,6 +267,7 @@ class OptionDefinitionEditView(generic.ObjectEditView):
         return super().dispatch(request, *args, **kwargs)
 
 
+@register_model_view(models.OptionDefinition, "delete")
 class OptionDefinitionDeleteView(generic.ObjectDeleteView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
 
@@ -257,18 +284,21 @@ class OptionDefinitionDeleteView(generic.ObjectDeleteView):
         return super().dispatch(request, *args, **kwargs)
 
 
+@register_model_view(models.OptionDefinition, "bulk_delete", path="delete", detail=False)
 class OptionDefinitionBulkDeleteView(generic.BulkDeleteView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
     filterset = filtersets.OptionDefinitionFilterSet
     table = tables.OptionDefinitionTable
 
 
+@register_model_view(models.OptionDefinition, "bulk_import", path="import", detail=False)
 class OptionDefinitionImportView(generic.BulkImportView):
     queryset = models.OptionDefinition.objects.all()
     model_form = forms.OptionDefinitionImportForm
 
 
 # OptionData Views
+@register_model_view(models.OptionData)
 class OptionDataView(generic.ObjectView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
 
@@ -284,6 +314,7 @@ class OptionDataView(generic.ObjectView):
         }
 
 
+@register_model_view(models.OptionData, "list", path="", detail=False)
 class OptionDataListView(generic.ObjectListView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
     table = tables.OptionDataTable
@@ -298,21 +329,26 @@ class OptionDataListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.OptionData, "add", detail=False)
+@register_model_view(models.OptionData, "edit")
 class OptionDataEditView(generic.ObjectEditView):
     queryset = models.OptionData.objects.all()
     form = forms.OptionDataForm
 
 
+@register_model_view(models.OptionData, "delete")
 class OptionDataDeleteView(generic.ObjectDeleteView):
     queryset = models.OptionData.objects.all()
 
 
+@register_model_view(models.OptionData, "bulk_delete", path="delete", detail=False)
 class OptionDataBulkDeleteView(generic.BulkDeleteView):
     queryset = models.OptionData.objects.all()
     filterset = filtersets.OptionDataFilterSet
     table = tables.OptionDataTable
 
 
+@register_model_view(models.OptionData, "bulk_import", path="import", detail=False)
 class OptionDataImportView(generic.BulkImportView):
     queryset = models.OptionData.objects.all()
     model_form = forms.OptionDataImportForm
@@ -354,6 +390,7 @@ def _pki_dns_integration_active():
     return True
 
 
+@register_model_view(models.DHCPServer)
 class DHCPServerView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
 
@@ -406,6 +443,7 @@ class DHCPServerView(generic.ObjectView):
         }
 
 
+@register_model_view(models.DHCPServer, "list", path="", detail=False)
 class DHCPServerListView(generic.ObjectListView):
     queryset = models.DHCPServer.objects.all()
     table = tables.DHCPServerTable
@@ -413,6 +451,8 @@ class DHCPServerListView(generic.ObjectListView):
     filterset_form = forms.DHCPServerFilterForm
 
 
+@register_model_view(models.DHCPServer, "add", detail=False)
+@register_model_view(models.DHCPServer, "edit")
 class DHCPServerEditView(generic.ObjectEditView):
     queryset = models.DHCPServer.objects.all()
     form = forms.DHCPServerForm
@@ -468,10 +508,12 @@ class DHCPServerEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.DHCPServer, "delete")
 class DHCPServerDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPServer.objects.all()
 
 
+@register_model_view(models.DHCPServer, "bulk_edit", path="edit", detail=False)
 class DHCPServerBulkEditView(generic.BulkEditView):
     queryset = models.DHCPServer.objects.all()
     filterset = filtersets.DHCPServerFilterSet
@@ -479,12 +521,14 @@ class DHCPServerBulkEditView(generic.BulkEditView):
     form = forms.DHCPServerBulkEditForm
 
 
+@register_model_view(models.DHCPServer, "bulk_delete", path="delete", detail=False)
 class DHCPServerBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DHCPServer.objects.all()
     filterset = filtersets.DHCPServerFilterSet
     table = tables.DHCPServerTable
 
 
+@register_model_view(models.DHCPServer, "bulk_import", path="import", detail=False)
 class DHCPServerImportView(generic.BulkImportView):
     queryset = models.DHCPServer.objects.all()
     model_form = forms.DHCPServerImportForm
@@ -551,6 +595,7 @@ class DHCPServerKeaConfigView(generic.ObjectView):
 
 
 # ClientClass Views
+@register_model_view(models.ClientClass)
 class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
 
@@ -561,6 +606,7 @@ class ClientClassView(generic.ObjectView):
         }
 
 
+@register_model_view(models.ClientClass, "list", path="", detail=False)
 class ClientClassListView(generic.ObjectListView):
     queryset = models.ClientClass.objects.annotate(option_data_count=Count("option_data"))
     table = tables.ClientClassTable
@@ -568,6 +614,8 @@ class ClientClassListView(generic.ObjectListView):
     filterset_form = forms.ClientClassFilterForm
 
 
+@register_model_view(models.ClientClass, "add", detail=False)
+@register_model_view(models.ClientClass, "edit")
 class ClientClassEditView(generic.ObjectEditView):
     queryset = models.ClientClass.objects.all()
     form = forms.ClientClassForm
@@ -642,16 +690,19 @@ class ClientClassEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.ClientClass, "delete")
 class ClientClassDeleteView(generic.ObjectDeleteView):
     queryset = models.ClientClass.objects.all()
 
 
+@register_model_view(models.ClientClass, "bulk_delete", path="delete", detail=False)
 class ClientClassBulkDeleteView(generic.BulkDeleteView):
     queryset = models.ClientClass.objects.all()
     filterset = filtersets.ClientClassFilterSet
     table = tables.ClientClassTable
 
 
+@register_model_view(models.ClientClass, "bulk_import", path="import", detail=False)
 class ClientClassImportView(generic.BulkImportView):
     queryset = models.ClientClass.objects.all()
     model_form = forms.ClientClassImportForm
@@ -726,6 +777,7 @@ class ClientClassPrefixesView(generic.ObjectView):
 
 
 # Subnet Views
+@register_model_view(models.Subnet)
 class SubnetView(generic.ObjectView):
     queryset = models.Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
         "option_data", "evaluate_additional_classes"
@@ -749,6 +801,7 @@ class SubnetView(generic.ObjectView):
         }
 
 
+@register_model_view(models.Subnet, "list", path="", detail=False)
 class SubnetListView(generic.ObjectListView):
     queryset = models.Subnet.objects.select_related("prefix", "server").annotate(
         pool_count=Count("subnet_pools"),
@@ -764,6 +817,8 @@ class SubnetListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.Subnet, "add", detail=False)
+@register_model_view(models.Subnet, "edit")
 class SubnetEditView(generic.ObjectEditView):
     queryset = models.Subnet.objects.all()
     form = forms.SubnetForm
@@ -795,22 +850,26 @@ class SubnetEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.Subnet, "delete")
 class SubnetDeleteView(generic.ObjectDeleteView):
     queryset = models.Subnet.objects.all()
 
 
+@register_model_view(models.Subnet, "bulk_delete", path="delete", detail=False)
 class SubnetBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Subnet.objects.all()
     filterset = filtersets.SubnetFilterSet
     table = tables.SubnetTable
 
 
+@register_model_view(models.Subnet, "bulk_import", path="import", detail=False)
 class SubnetImportView(generic.BulkImportView):
     queryset = models.Subnet.objects.all()
     model_form = forms.SubnetImportForm
 
 
 # DHCPHARelationship Views
+@register_model_view(models.DHCPHARelationship)
 class DHCPHARelationshipView(generic.ObjectView):
     queryset = models.DHCPHARelationship.objects.prefetch_related("servers")
 
@@ -824,6 +883,7 @@ class DHCPHARelationshipView(generic.ObjectView):
         }
 
 
+@register_model_view(models.DHCPHARelationship, "list", path="", detail=False)
 class DHCPHARelationshipListView(generic.ObjectListView):
     queryset = models.DHCPHARelationship.objects.annotate(servers_count=Count("servers"))
     table = tables.DHCPHARelationshipTable
@@ -831,21 +891,26 @@ class DHCPHARelationshipListView(generic.ObjectListView):
     filterset_form = forms.DHCPHARelationshipFilterForm
 
 
+@register_model_view(models.DHCPHARelationship, "add", detail=False)
+@register_model_view(models.DHCPHARelationship, "edit")
 class DHCPHARelationshipEditView(generic.ObjectEditView):
     queryset = models.DHCPHARelationship.objects.all()
     form = forms.DHCPHARelationshipForm
 
 
+@register_model_view(models.DHCPHARelationship, "delete")
 class DHCPHARelationshipDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPHARelationship.objects.all()
 
 
+@register_model_view(models.DHCPHARelationship, "bulk_delete", path="delete", detail=False)
 class DHCPHARelationshipBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DHCPHARelationship.objects.all()
     filterset = filtersets.DHCPHARelationshipFilterSet
     table = tables.DHCPHARelationshipTable
 
 
+@register_model_view(models.DHCPHARelationship, "bulk_import", path="import", detail=False)
 class DHCPHARelationshipImportView(generic.BulkImportView):
     queryset = models.DHCPHARelationship.objects.all()
     model_form = forms.DHCPHARelationshipImportForm
@@ -948,6 +1013,7 @@ class SubnetReservationsView(generic.ObjectView):
 
 
 # SubnetPool Views
+@register_model_view(models.SubnetPool)
 class SubnetPoolView(generic.ObjectView):
     queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class", "ddns_policy").prefetch_related(
         "evaluate_additional_classes", "option_data"
@@ -968,6 +1034,7 @@ class SubnetPoolView(generic.ObjectView):
         }
 
 
+@register_model_view(models.SubnetPool, "list", path="", detail=False)
 class SubnetPoolListView(generic.ObjectListView):
     queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class")
     table = tables.SubnetPoolTable
@@ -975,21 +1042,26 @@ class SubnetPoolListView(generic.ObjectListView):
     filterset_form = forms.SubnetPoolFilterForm
 
 
+@register_model_view(models.SubnetPool, "add", detail=False)
+@register_model_view(models.SubnetPool, "edit")
 class SubnetPoolEditView(generic.ObjectEditView):
     queryset = SubnetPool.objects.all()
     form = forms.SubnetPoolForm
 
 
+@register_model_view(models.SubnetPool, "delete")
 class SubnetPoolDeleteView(generic.ObjectDeleteView):
     queryset = SubnetPool.objects.all()
 
 
+@register_model_view(models.SubnetPool, "bulk_delete", path="delete", detail=False)
 class SubnetPoolBulkDeleteView(generic.BulkDeleteView):
     queryset = SubnetPool.objects.all()
     filterset = filtersets.SubnetPoolFilterSet
     table = tables.SubnetPoolTable
 
 
+@register_model_view(models.SubnetPool, "bulk_import", path="import", detail=False)
 class SubnetPoolImportView(generic.BulkImportView):
     queryset = SubnetPool.objects.all()
     model_form = forms.SubnetPoolImportForm
@@ -998,6 +1070,7 @@ class SubnetPoolImportView(generic.BulkImportView):
 # --- Static Reservation Views ---
 
 
+@register_model_view(models.StaticReservation)
 class StaticReservationView(generic.ObjectView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
 
@@ -1005,6 +1078,7 @@ class StaticReservationView(generic.ObjectView):
         return {"kea_reservation": json.dumps(instance.to_kea_dict(), indent=2)}
 
 
+@register_model_view(models.StaticReservation, "list", path="", detail=False)
 class StaticReservationListView(generic.ObjectListView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     table = tables.StaticReservationTable
@@ -1012,21 +1086,26 @@ class StaticReservationListView(generic.ObjectListView):
     filterset_form = forms.StaticReservationFilterForm
 
 
+@register_model_view(models.StaticReservation, "add", detail=False)
+@register_model_view(models.StaticReservation, "edit")
 class StaticReservationEditView(generic.ObjectEditView):
     queryset = models.StaticReservation.objects.all()
     form = forms.StaticReservationForm
 
 
+@register_model_view(models.StaticReservation, "delete")
 class StaticReservationDeleteView(generic.ObjectDeleteView):
     queryset = models.StaticReservation.objects.all()
 
 
+@register_model_view(models.StaticReservation, "bulk_delete", path="delete", detail=False)
 class StaticReservationBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     filterset = filtersets.StaticReservationFilterSet
     table = tables.StaticReservationTable
 
 
+@register_model_view(models.StaticReservation, "bulk_import", path="import", detail=False)
 class StaticReservationImportView(generic.BulkImportView):
     queryset = models.StaticReservation.objects.all()
     model_form = forms.StaticReservationImportForm
@@ -1035,6 +1114,7 @@ class StaticReservationImportView(generic.BulkImportView):
 # --- Stork Server Views ---
 
 
+@register_model_view(models.StorkServer)
 class StorkServerView(generic.ObjectView):
     queryset = models.StorkServer.objects.prefetch_related("agent_groups")
 
@@ -1047,6 +1127,7 @@ class StorkServerView(generic.ObjectView):
         }
 
 
+@register_model_view(models.StorkServer, "list", path="", detail=False)
 class StorkServerListView(generic.ObjectListView):
     queryset = models.StorkServer.objects.annotate(
         agent_groups_count=Count("agent_groups", distinct=True),
@@ -1056,21 +1137,26 @@ class StorkServerListView(generic.ObjectListView):
     filterset_form = forms.StorkServerFilterForm
 
 
+@register_model_view(models.StorkServer, "add", detail=False)
+@register_model_view(models.StorkServer, "edit")
 class StorkServerEditView(generic.ObjectEditView):
     queryset = models.StorkServer.objects.all()
     form = forms.StorkServerForm
 
 
+@register_model_view(models.StorkServer, "delete")
 class StorkServerDeleteView(generic.ObjectDeleteView):
     queryset = models.StorkServer.objects.all()
 
 
+@register_model_view(models.StorkServer, "bulk_delete", path="delete", detail=False)
 class StorkServerBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StorkServer.objects.all()
     filterset = filtersets.StorkServerFilterSet
     table = tables.StorkServerTable
 
 
+@register_model_view(models.StorkServer, "bulk_import", path="import", detail=False)
 class StorkServerImportView(generic.BulkImportView):
     queryset = models.StorkServer.objects.all()
     model_form = forms.StorkServerImportForm
@@ -1141,10 +1227,12 @@ class StorkServerConfigView(generic.ObjectView):
 # --- Stork Agent Group Views ---
 
 
+@register_model_view(models.StorkAgentGroup)
 class StorkAgentGroupView(generic.ObjectView):
     queryset = models.StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
 
 
+@register_model_view(models.StorkAgentGroup, "list", path="", detail=False)
 class StorkAgentGroupListView(generic.ObjectListView):
     queryset = models.StorkAgentGroup.objects.annotate(
         servers_count=Count("servers", distinct=True),
@@ -1154,21 +1242,26 @@ class StorkAgentGroupListView(generic.ObjectListView):
     filterset_form = forms.StorkAgentGroupFilterForm
 
 
+@register_model_view(models.StorkAgentGroup, "add", detail=False)
+@register_model_view(models.StorkAgentGroup, "edit")
 class StorkAgentGroupEditView(generic.ObjectEditView):
     queryset = models.StorkAgentGroup.objects.all()
     form = forms.StorkAgentGroupForm
 
 
+@register_model_view(models.StorkAgentGroup, "delete")
 class StorkAgentGroupDeleteView(generic.ObjectDeleteView):
     queryset = models.StorkAgentGroup.objects.all()
 
 
+@register_model_view(models.StorkAgentGroup, "bulk_delete", path="delete", detail=False)
 class StorkAgentGroupBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StorkAgentGroup.objects.all()
     filterset = filtersets.StorkAgentGroupFilterSet
     table = tables.StorkAgentGroupTable
 
 
+@register_model_view(models.StorkAgentGroup, "bulk_import", path="import", detail=False)
 class StorkAgentGroupImportView(generic.BulkImportView):
     queryset = models.StorkAgentGroup.objects.all()
     model_form = forms.StorkAgentGroupImportForm
@@ -1248,6 +1341,7 @@ class StorkAgentGroupConfigView(generic.ObjectView):
 # --- TSIGKey Views ---
 
 
+@register_model_view(models.TSIGKey)
 class TSIGKeyView(generic.ObjectView):
     queryset = models.TSIGKey.objects.all()
 
@@ -1257,6 +1351,7 @@ class TSIGKeyView(generic.ObjectView):
         }
 
 
+@register_model_view(models.TSIGKey, "list", path="", detail=False)
 class TSIGKeyListView(generic.ObjectListView):
     queryset = models.TSIGKey.objects.all()
     table = tables.TSIGKeyTable
@@ -1264,21 +1359,26 @@ class TSIGKeyListView(generic.ObjectListView):
     filterset_form = forms.TSIGKeyFilterForm
 
 
+@register_model_view(models.TSIGKey, "add", detail=False)
+@register_model_view(models.TSIGKey, "edit")
 class TSIGKeyEditView(generic.ObjectEditView):
     queryset = models.TSIGKey.objects.all()
     form = forms.TSIGKeyForm
 
 
+@register_model_view(models.TSIGKey, "delete")
 class TSIGKeyDeleteView(generic.ObjectDeleteView):
     queryset = models.TSIGKey.objects.all()
 
 
+@register_model_view(models.TSIGKey, "bulk_delete", path="delete", detail=False)
 class TSIGKeyBulkDeleteView(generic.BulkDeleteView):
     queryset = models.TSIGKey.objects.all()
     filterset = filtersets.TSIGKeyFilterSet
     table = tables.TSIGKeyTable
 
 
+@register_model_view(models.TSIGKey, "bulk_import", path="import", detail=False)
 class TSIGKeyImportView(generic.BulkImportView):
     queryset = models.TSIGKey.objects.all()
     model_form = forms.TSIGKeyImportForm
@@ -1287,6 +1387,7 @@ class TSIGKeyImportView(generic.BulkImportView):
 # --- D2Daemon Views ---
 
 
+@register_model_view(models.D2Daemon)
 class D2DaemonView(generic.ObjectView):
     queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("hook_groups")
 
@@ -1298,6 +1399,7 @@ class D2DaemonView(generic.ObjectView):
         }
 
 
+@register_model_view(models.D2Daemon, "list", path="", detail=False)
 class D2DaemonListView(generic.ObjectListView):
     queryset = models.D2Daemon.objects.all()
     table = tables.D2DaemonTable
@@ -1305,21 +1407,26 @@ class D2DaemonListView(generic.ObjectListView):
     filterset_form = forms.D2DaemonFilterForm
 
 
+@register_model_view(models.D2Daemon, "add", detail=False)
+@register_model_view(models.D2Daemon, "edit")
 class D2DaemonEditView(generic.ObjectEditView):
     queryset = models.D2Daemon.objects.all()
     form = forms.D2DaemonForm
 
 
+@register_model_view(models.D2Daemon, "delete")
 class D2DaemonDeleteView(generic.ObjectDeleteView):
     queryset = models.D2Daemon.objects.all()
 
 
+@register_model_view(models.D2Daemon, "bulk_delete", path="delete", detail=False)
 class D2DaemonBulkDeleteView(generic.BulkDeleteView):
     queryset = models.D2Daemon.objects.all()
     filterset = filtersets.D2DaemonFilterSet
     table = tables.D2DaemonTable
 
 
+@register_model_view(models.D2Daemon, "bulk_import", path="import", detail=False)
 class D2DaemonImportView(generic.BulkImportView):
     queryset = models.D2Daemon.objects.all()
     model_form = forms.D2DaemonImportForm
@@ -1413,6 +1520,9 @@ class DHCPServerD2ConfigView(generic.ObjectView):
     )
 
     def get(self, request, pk):
+        # Routed with every server view, so refuse it here when DDNS is off.
+        if not _ddns_enabled():
+            raise Http404
         server = self.get_object(pk=pk)
         derived = server.derived_ddns()
         context = {
@@ -1437,6 +1547,7 @@ class DHCPServerD2ConfigView(generic.ObjectView):
 # --- DDNSDomain Views ---
 
 
+@register_model_view(models.DDNSDomain)
 class DDNSDomainView(generic.ObjectView):
     queryset = models.DDNSDomain.objects.select_related(
         "dhcp_server", "ha_relationship", "zone", "tsig_key"
@@ -1447,6 +1558,7 @@ class DDNSDomainView(generic.ObjectView):
         return {"nameserver_entries": instance.nameserver_entries()}
 
 
+@register_model_view(models.DDNSDomain, "list", path="", detail=False)
 class DDNSDomainListView(generic.ObjectListView):
     queryset = models.DDNSDomain.objects.all()
     table = tables.DDNSDomainTable
@@ -1454,15 +1566,19 @@ class DDNSDomainListView(generic.ObjectListView):
     filterset_form = forms.DDNSDomainFilterForm
 
 
+@register_model_view(models.DDNSDomain, "add", detail=False)
+@register_model_view(models.DDNSDomain, "edit")
 class DDNSDomainEditView(generic.ObjectEditView):
     queryset = models.DDNSDomain.objects.all()
     form = forms.DDNSDomainForm
 
 
+@register_model_view(models.DDNSDomain, "delete")
 class DDNSDomainDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSDomain.objects.all()
 
 
+@register_model_view(models.DDNSDomain, "bulk_edit", path="edit", detail=False)
 class DDNSDomainBulkEditView(generic.BulkEditView):
     queryset = models.DDNSDomain.objects.all()
     filterset = filtersets.DDNSDomainFilterSet
@@ -1470,12 +1586,14 @@ class DDNSDomainBulkEditView(generic.BulkEditView):
     form = forms.DDNSDomainBulkEditForm
 
 
+@register_model_view(models.DDNSDomain, "bulk_delete", path="delete", detail=False)
 class DDNSDomainBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSDomain.objects.all()
     filterset = filtersets.DDNSDomainFilterSet
     table = tables.DDNSDomainTable
 
 
+@register_model_view(models.DDNSDomain, "bulk_import", path="import", detail=False)
 class DDNSDomainImportView(generic.BulkImportView):
     queryset = models.DDNSDomain.objects.all()
     model_form = forms.DDNSDomainImportForm
@@ -1484,10 +1602,12 @@ class DDNSDomainImportView(generic.BulkImportView):
 # --- DDNSServerOverride Views ---
 
 
+@register_model_view(models.DDNSServerOverride)
 class DDNSServerOverrideView(generic.ObjectView):
     queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "ddns_domain__zone", "tsig_key")
 
 
+@register_model_view(models.DDNSServerOverride, "list", path="", detail=False)
 class DDNSServerOverrideListView(generic.ObjectListView):
     queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "tsig_key")
     table = tables.DDNSServerOverrideTable
@@ -1495,15 +1615,19 @@ class DDNSServerOverrideListView(generic.ObjectListView):
     filterset_form = forms.DDNSServerOverrideFilterForm
 
 
+@register_model_view(models.DDNSServerOverride, "add", detail=False)
+@register_model_view(models.DDNSServerOverride, "edit")
 class DDNSServerOverrideEditView(generic.ObjectEditView):
     queryset = models.DDNSServerOverride.objects.all()
     form = forms.DDNSServerOverrideForm
 
 
+@register_model_view(models.DDNSServerOverride, "delete")
 class DDNSServerOverrideDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSServerOverride.objects.all()
 
 
+@register_model_view(models.DDNSServerOverride, "bulk_delete", path="delete", detail=False)
 class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSServerOverride.objects.all()
     filterset = filtersets.DDNSServerOverrideFilterSet
@@ -1513,10 +1637,12 @@ class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
 # --- DDNSPolicy Views ---
 
 
+@register_model_view(models.DDNSPolicy)
 class DDNSPolicyView(generic.ObjectView):
     queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "pools")
 
 
+@register_model_view(models.DDNSPolicy, "list", path="", detail=False)
 class DDNSPolicyListView(generic.ObjectListView):
     queryset = models.DDNSPolicy.objects.annotate(
         servers_count=Count("servers", distinct=True),
@@ -1528,21 +1654,26 @@ class DDNSPolicyListView(generic.ObjectListView):
     filterset_form = forms.DDNSPolicyFilterForm
 
 
+@register_model_view(models.DDNSPolicy, "add", detail=False)
+@register_model_view(models.DDNSPolicy, "edit")
 class DDNSPolicyEditView(generic.ObjectEditView):
     queryset = models.DDNSPolicy.objects.all()
     form = forms.DDNSPolicyForm
 
 
+@register_model_view(models.DDNSPolicy, "delete")
 class DDNSPolicyDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSPolicy.objects.all()
 
 
+@register_model_view(models.DDNSPolicy, "bulk_delete", path="delete", detail=False)
 class DDNSPolicyBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSPolicy.objects.all()
     filterset = filtersets.DDNSPolicyFilterSet
     table = tables.DDNSPolicyTable
 
 
+@register_model_view(models.DDNSPolicy, "bulk_import", path="import", detail=False)
 class DDNSPolicyImportView(generic.BulkImportView):
     queryset = models.DDNSPolicy.objects.all()
     model_form = forms.DDNSPolicyImportForm
