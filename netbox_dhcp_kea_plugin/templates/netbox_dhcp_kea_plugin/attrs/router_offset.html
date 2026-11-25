@@ -1,0 +1,5 @@
+{% if value %}
+{{ value }} <small class="text-muted">(router IP {{ object.get_router_ip }})</small>
+{% else %}
+<span class="text-muted">Disabled (0)</span>
+{% endif %}

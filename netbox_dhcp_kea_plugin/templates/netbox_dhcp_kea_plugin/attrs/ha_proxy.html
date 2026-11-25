@@ -1,0 +1,4 @@
+{% checkmark value %}
+{% if value and object.ha_relationship %}
+<a href="{{ object.ha_relationship.get_absolute_url }}" class="badge text-bg-info ms-1">from relationship</a>
+{% endif %}

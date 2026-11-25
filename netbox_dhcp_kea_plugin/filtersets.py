@@ -151,6 +151,19 @@ class OptionDataFilterSet(NetBoxModelFilterSet):
     )
     delivery_type = django_filters.ChoiceFilter(choices=OptionData.DELIVERY_TYPE_CHOICES, label="Delivery Type")
     always_send = django_filters.BooleanFilter(label="Always Send")
+    # Reverse relations, so a page can list the option data attached to one object.
+    client_class_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="client_classes", queryset=ClientClass.objects.all(), label="Client Class (ID)"
+    )
+    server_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="dhcp_servers", queryset=DHCPServer.objects.all(), label="DHCP Server (ID)"
+    )
+    subnet_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="subnet_items", queryset=Subnet.objects.all(), label="Subnet (ID)"
+    )
+    pool_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="pool_configs", queryset=SubnetPool.objects.all(), label="Subnet Pool (ID)"
+    )
 
     class Meta:
         model = OptionData

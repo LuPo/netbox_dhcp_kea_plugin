@@ -2,19 +2,57 @@ import json
 
 from django.contrib import messages
 from django.db.models import Count, Q
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import redirect
+from django.utils.translation import gettext_lazy as _
+from extras.ui.panels import CustomFieldsPanel, TagsPanel
+from netbox.ui import layout
+from netbox.ui.actions import AddObject
+from netbox.ui.panels import ContextTablePanel, JSONPanel, ObjectsTablePanel, PluginContentPanel, TemplatePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
 from .models import SubnetPool
+from .ui import panels as ui_panels
+from .ui.attrs import hinted
+
+
+def _ddns_enabled(_instance=None):
+    from netbox.plugins.utils import get_plugin_config
+
+    return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
+
+
+def _is_primary(server):
+    return server.is_ha_primary()
 
 
 # Hook Views
+@register_model_view(models.Hook)
 class HookView(generic.ObjectView):
     queryset = models.Hook.objects.prefetch_related("hook_groups")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HookPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            JSONPanel("parameters", title=_("Parameters")),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.HookGroup",
+                title=_("Hook Groups"),
+                filters={"hooks": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
+@register_model_view(models.Hook, "list", path="", detail=False)
 class HookListView(generic.ObjectListView):
     queryset = models.Hook.objects.annotate(hook_groups_count=Count("hook_groups"))
     table = tables.HookTable
@@ -22,21 +60,26 @@ class HookListView(generic.ObjectListView):
     filterset_form = forms.HookFilterForm
 
 
+@register_model_view(models.Hook, "add", detail=False)
+@register_model_view(models.Hook, "edit")
 class HookEditView(generic.ObjectEditView):
     queryset = models.Hook.objects.all()
     form = forms.HookForm
 
 
+@register_model_view(models.Hook, "delete")
 class HookDeleteView(generic.ObjectDeleteView):
     queryset = models.Hook.objects.all()
 
 
+@register_model_view(models.Hook, "bulk_delete", path="delete", detail=False)
 class HookBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Hook.objects.all()
     filterset = filtersets.HookFilterSet
     table = tables.HookTable
 
 
+@register_model_view(models.Hook, "bulk_import", path="import", detail=False)
 class HookImportView(generic.BulkImportView):
     queryset = models.Hook.objects.all()
     model_form = forms.HookImportForm
@@ -48,40 +91,39 @@ def get_hook_group_count(obj):
 
 
 @register_model_view(models.Hook, name="hook_groups", path="hook-groups")
-class HookHookGroupsView(generic.ObjectView):
+class HookHookGroupsView(generic.ObjectChildrenView):
     queryset = models.Hook.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hook_hookgroups.html"
+    child_model = models.HookGroup
+    table = tables.HookGroupTable
+    filterset = filtersets.HookGroupFilterSet
+    filterset_form = forms.HookGroupFilterForm
     tab = ViewTab(
-        label="Hook Groups",
+        label=_("Hook Groups"),
         badge=get_hook_group_count,
         permission="netbox_dhcp_kea_plugin.view_hook",
     )
 
-    def get(self, request, pk):
-        hook = self.get_object(pk=pk)
-        hook_groups = hook.hook_groups.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook,
-                "hook_groups": hook_groups,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.hook_groups.restrict(request.user, "view")
 
 
 # HookGroup Views
+@register_model_view(models.HookGroup)
 class HookGroupView(generic.ObjectView):
     queryset = models.HookGroup.objects.prefetch_related("hooks", "servers", "d2_daemons")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HookGroupPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            CustomFieldsPanel(),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
 
-        return {"enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns")}
-
-
+@register_model_view(models.HookGroup, "list", path="", detail=False)
 class HookGroupListView(generic.ObjectListView):
     queryset = models.HookGroup.objects.annotate(
         hooks_count=Count("hooks", distinct=True),
@@ -92,21 +134,26 @@ class HookGroupListView(generic.ObjectListView):
     filterset_form = forms.HookGroupFilterForm
 
 
+@register_model_view(models.HookGroup, "add", detail=False)
+@register_model_view(models.HookGroup, "edit")
 class HookGroupEditView(generic.ObjectEditView):
     queryset = models.HookGroup.objects.all()
     form = forms.HookGroupForm
 
 
+@register_model_view(models.HookGroup, "delete")
 class HookGroupDeleteView(generic.ObjectDeleteView):
     queryset = models.HookGroup.objects.all()
 
 
+@register_model_view(models.HookGroup, "bulk_delete", path="delete", detail=False)
 class HookGroupBulkDeleteView(generic.BulkDeleteView):
     queryset = models.HookGroup.objects.all()
     filterset = filtersets.HookGroupFilterSet
     table = tables.HookGroupTable
 
 
+@register_model_view(models.HookGroup, "bulk_import", path="import", detail=False)
 class HookGroupImportView(generic.BulkImportView):
     queryset = models.HookGroup.objects.all()
     model_form = forms.HookGroupImportForm
@@ -118,28 +165,20 @@ def get_hookgroup_hooks_count(obj):
 
 
 @register_model_view(models.HookGroup, name="hooks", path="hooks")
-class HookGroupHooksView(generic.ObjectView):
+class HookGroupHooksView(generic.ObjectChildrenView):
     queryset = models.HookGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hookgroup_hooks.html"
+    child_model = models.Hook
+    table = tables.HookTable
+    filterset = filtersets.HookFilterSet
+    filterset_form = forms.HookFilterForm
     tab = ViewTab(
-        label="Hooks",
+        label=_("Hooks"),
         badge=get_hookgroup_hooks_count,
         permission="netbox_dhcp_kea_plugin.view_hookgroup",
     )
 
-    def get(self, request, pk):
-        hook_group = self.get_object(pk=pk)
-        hooks = hook_group.hooks.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook_group,
-                "hooks": hooks,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.hooks.restrict(request.user, "view")
 
 
 def get_hookgroup_servers_count(obj):
@@ -148,35 +187,63 @@ def get_hookgroup_servers_count(obj):
 
 
 @register_model_view(models.HookGroup, name="servers", path="servers")
-class HookGroupServersView(generic.ObjectView):
+class HookGroupServersView(generic.ObjectChildrenView):
     queryset = models.HookGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hookgroup_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_hookgroup_servers_count,
         permission="netbox_dhcp_kea_plugin.view_hookgroup",
     )
 
-    def get(self, request, pk):
-        hook_group = self.get_object(pk=pk)
-        servers = hook_group.servers.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook_group,
-                "servers": servers,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 # VendorOptionSpace Views
+@register_model_view(models.VendorOptionSpace)
 class VendorOptionSpaceView(generic.ObjectView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.VendorOptionSpacePanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            TemplatePanel(
+                "netbox_dhcp_kea_plugin/panels/vendor_option43.html", title=_("KEA Option 43 Configuration")
+            ),
+            ui_panels.ConditionalTemplatePanel(
+                "netbox_dhcp_kea_plugin/panels/vendor_vivso.html",
+                condition=lambda space: space.enterprise_id,
+                title=_("KEA VIVSO (Option 125) Configuration"),
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionDefinition",
+                filters={"vendor_option_space_id": lambda ctx: ctx["object"].pk},
+                actions=[
+                    AddObject(
+                        "netbox_dhcp_kea_plugin.OptionDefinition",
+                        url_params={"vendor_option_space": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
+            ),
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"vendor_option_space": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
+@register_model_view(models.VendorOptionSpace, "list", path="", detail=False)
 class VendorOptionSpaceListView(generic.ObjectListView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
     table = tables.VendorOptionSpaceTable
@@ -184,31 +251,70 @@ class VendorOptionSpaceListView(generic.ObjectListView):
     filterset_form = forms.VendorOptionSpaceFilterForm
 
 
+@register_model_view(models.VendorOptionSpace, "add", detail=False)
+@register_model_view(models.VendorOptionSpace, "edit")
 class VendorOptionSpaceEditView(generic.ObjectEditView):
     queryset = models.VendorOptionSpace.objects.all()
     form = forms.VendorOptionSpaceForm
 
 
+@register_model_view(models.VendorOptionSpace, "delete")
 class VendorOptionSpaceDeleteView(generic.ObjectDeleteView):
     queryset = models.VendorOptionSpace.objects.all()
 
 
+@register_model_view(models.VendorOptionSpace, "bulk_delete", path="delete", detail=False)
 class VendorOptionSpaceBulkDeleteView(generic.BulkDeleteView):
     queryset = models.VendorOptionSpace.objects.all()
     filterset = filtersets.VendorOptionSpaceFilterSet
     table = tables.VendorOptionSpaceTable
 
 
+@register_model_view(models.VendorOptionSpace, "bulk_import", path="import", detail=False)
 class VendorOptionSpaceImportView(generic.BulkImportView):
     queryset = models.VendorOptionSpace.objects.all()
     model_form = forms.VendorOptionSpaceImportForm
 
 
 # OptionDefinition Views
+@register_model_view(models.OptionDefinition)
 class OptionDefinitionView(generic.ObjectView):
     queryset = models.OptionDefinition.objects.select_related("vendor_option_space")
+    # Extends generic/object.html only to make standard options read-only.
+    template_name = "netbox_dhcp_kea_plugin/optiondefinition.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.OptionDefinitionPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda definition, _ctx: None if definition.is_standard else definition.to_kea_dict(),
+                title=_("KEA Configuration"),
+                intro=lambda definition: (
+                    ""
+                    if definition.is_standard
+                    else _("This option definition generates the following KEA option-def entry:")
+                ),
+                empty_message=_(
+                    "Standard DHCP options are built into KEA and need no option-def entry. Use this option "
+                    "directly in option-data by name or code."
+                ),
+                element_id="optiondefinition-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                title=_("Option Data Using This Definition"),
+                filters={"definition": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
+@register_model_view(models.OptionDefinition, "list", path="", detail=False)
 class OptionDefinitionListView(generic.ObjectListView):
     queryset = models.OptionDefinition.objects.select_related("vendor_option_space")
     table = tables.OptionDefinitionTable
@@ -224,6 +330,8 @@ class OptionDefinitionListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.OptionDefinition, "add", detail=False)
+@register_model_view(models.OptionDefinition, "edit")
 class OptionDefinitionEditView(generic.ObjectEditView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
     form = forms.OptionDefinitionForm
@@ -241,6 +349,7 @@ class OptionDefinitionEditView(generic.ObjectEditView):
         return super().dispatch(request, *args, **kwargs)
 
 
+@register_model_view(models.OptionDefinition, "delete")
 class OptionDefinitionDeleteView(generic.ObjectDeleteView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
 
@@ -257,33 +366,51 @@ class OptionDefinitionDeleteView(generic.ObjectDeleteView):
         return super().dispatch(request, *args, **kwargs)
 
 
+@register_model_view(models.OptionDefinition, "bulk_delete", path="delete", detail=False)
 class OptionDefinitionBulkDeleteView(generic.BulkDeleteView):
     queryset = models.OptionDefinition.objects.filter(is_standard=False)
     filterset = filtersets.OptionDefinitionFilterSet
     table = tables.OptionDefinitionTable
 
 
+@register_model_view(models.OptionDefinition, "bulk_import", path="import", detail=False)
 class OptionDefinitionImportView(generic.BulkImportView):
     queryset = models.OptionDefinition.objects.all()
     model_form = forms.OptionDefinitionImportForm
 
 
 # OptionData Views
+def _option_data_intro(option):
+    if option.delivery_type == "option43":
+        return _("Delivered via Option 43 (Vendor-Encapsulated-Options) in this KEA option-data entry:")
+    if option.delivery_type == "vivso":
+        return _("Delivered via Option 125 (VIVSO) in this KEA option-data entry:")
+    return _("This option data generates the following KEA option-data entry:")
+
+
+@register_model_view(models.OptionData)
 class OptionDataView(generic.ObjectView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.OptionDataPanel(),
+            ui_panels.OptionIPSourcesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda option, _ctx: option.to_kea_dict(),
+                title=_("KEA Configuration"),
+                intro=_option_data_intro,
+                element_id="optiondata-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        ip_sources = list(instance.ip_sources.order_by("ordinal"))
-        for source in ip_sources:
-            source.resolved_ip = models.OptionData._resolve_ip(source.ip_source)
-        # Resolve effective data for KEA config preview (IP sources override manual data)
-        kea_dict = instance.to_kea_dict()
-        return {
-            "ip_sources": ip_sources,
-            "kea_data": kea_dict.get("data", instance.data),
-        }
 
-
+@register_model_view(models.OptionData, "list", path="", detail=False)
 class OptionDataListView(generic.ObjectListView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
     table = tables.OptionDataTable
@@ -298,46 +425,46 @@ class OptionDataListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.OptionData, "add", detail=False)
+@register_model_view(models.OptionData, "edit")
 class OptionDataEditView(generic.ObjectEditView):
     queryset = models.OptionData.objects.all()
     form = forms.OptionDataForm
 
 
+@register_model_view(models.OptionData, "delete")
 class OptionDataDeleteView(generic.ObjectDeleteView):
     queryset = models.OptionData.objects.all()
 
 
+@register_model_view(models.OptionData, "bulk_delete", path="delete", detail=False)
 class OptionDataBulkDeleteView(generic.BulkDeleteView):
     queryset = models.OptionData.objects.all()
     filterset = filtersets.OptionDataFilterSet
     table = tables.OptionDataTable
 
 
+@register_model_view(models.OptionData, "bulk_import", path="import", detail=False)
 class OptionDataImportView(generic.BulkImportView):
     queryset = models.OptionData.objects.all()
     model_form = forms.OptionDataImportForm
 
 
 @register_model_view(models.OptionData, name="client_classes", path="client-classes")
-class OptionDataClientClassesView(generic.ObjectView):
-    queryset = models.OptionData.objects.prefetch_related("client_classes")
-    template_name = "netbox_dhcp_kea_plugin/optiondata_clientclasses.html"
+class OptionDataClientClassesView(generic.ObjectChildrenView):
+    queryset = models.OptionData.objects.all()
+    child_model = models.ClientClass
+    table = tables.ClientClassTable
+    filterset = filtersets.ClientClassFilterSet
+    filterset_form = forms.ClientClassFilterForm
     tab = ViewTab(
-        label="Client Classes",
-        badge=lambda obj: obj.client_classes.count(),
+        label=_("Client Classes"),
+        badge=lambda option: option.client_classes.count(),
         permission="netbox_dhcp_kea_plugin.view_optiondata",
     )
 
-    def get(self, request, pk):
-        option_data = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": option_data,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.client_classes.restrict(request.user, "view")
 
 
 # DHCPServer Views
@@ -354,8 +481,51 @@ def _pki_dns_integration_active():
     return True
 
 
+@register_model_view(models.DHCPServer)
 class DHCPServerView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
+    # Extends generic/object.html only to add the HA standby badge.
+    template_name = "netbox_dhcp_kea_plugin/dhcpserver.html"
+    layout = layout.Layout(
+        layout.Row(layout.Column(ui_panels.ContextAlertsPanel("pki_identity_advisories"))),
+        layout.Row(
+            layout.Column(
+                ui_panels.DHCPServerPanel(),
+                ui_panels.DHCPServerProxyPanel(),
+                ui_panels.DHCPServerReservationDefaultsPanel(),
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_summary.html", title=_("Configuration Summary")),
+                TagsPanel(),
+                PluginContentPanel("left_page"),
+            ),
+            layout.Column(
+                # Client-class problems and the HA standby note; each card shows only when it applies.
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_class_warnings.html"),
+                # A standby takes its subnets, classes and options from the primary.
+                ui_panels.ConditionalPanel(ui_panels.DHCPServerLeasePanel(), _is_primary),
+                ui_panels.ConditionalPanel(
+                    ui_panels.DHCPServerDDNSPanel(),
+                    lambda server: ui_panels.ddns_enabled() and server.is_ha_primary(),
+                ),
+                ui_panels.ConditionalPanel(
+                    ObjectsTablePanel(
+                        "netbox_dhcp_kea_plugin.OptionData",
+                        title=_("Global Option Data"),
+                        filters={"server_id": lambda ctx: ctx["object"].pk},
+                    ),
+                    _is_primary,
+                ),
+                ui_panels.ConditionalPanel(
+                    TemplatePanel(
+                        "netbox_dhcp_kea_plugin/panels/server_client_classes.html", title=_("Global Client Classes")
+                    ),
+                    _is_primary,
+                ),
+                CustomFieldsPanel(),
+                PluginContentPanel("right_page"),
+            ),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
         from netbox.plugins.utils import get_plugin_config
@@ -406,6 +576,7 @@ class DHCPServerView(generic.ObjectView):
         }
 
 
+@register_model_view(models.DHCPServer, "list", path="", detail=False)
 class DHCPServerListView(generic.ObjectListView):
     queryset = models.DHCPServer.objects.all()
     table = tables.DHCPServerTable
@@ -413,6 +584,8 @@ class DHCPServerListView(generic.ObjectListView):
     filterset_form = forms.DHCPServerFilterForm
 
 
+@register_model_view(models.DHCPServer, "add", detail=False)
+@register_model_view(models.DHCPServer, "edit")
 class DHCPServerEditView(generic.ObjectEditView):
     queryset = models.DHCPServer.objects.all()
     form = forms.DHCPServerForm
@@ -468,10 +641,12 @@ class DHCPServerEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.DHCPServer, "delete")
 class DHCPServerDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPServer.objects.all()
 
 
+@register_model_view(models.DHCPServer, "bulk_edit", path="edit", detail=False)
 class DHCPServerBulkEditView(generic.BulkEditView):
     queryset = models.DHCPServer.objects.all()
     filterset = filtersets.DHCPServerFilterSet
@@ -479,88 +654,95 @@ class DHCPServerBulkEditView(generic.BulkEditView):
     form = forms.DHCPServerBulkEditForm
 
 
+@register_model_view(models.DHCPServer, "bulk_delete", path="delete", detail=False)
 class DHCPServerBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DHCPServer.objects.all()
     filterset = filtersets.DHCPServerFilterSet
     table = tables.DHCPServerTable
 
 
+@register_model_view(models.DHCPServer, "bulk_import", path="import", detail=False)
 class DHCPServerImportView(generic.BulkImportView):
     queryset = models.DHCPServer.objects.all()
     model_form = forms.DHCPServerImportForm
 
 
 @register_model_view(models.DHCPServer, name="prefixes", path="prefixes")
-class DHCPServerPrefixesView(generic.ObjectView):
+class DHCPServerPrefixesView(generic.ObjectChildrenView):
     queryset = models.DHCPServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_prefixes.html"
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
+    # Adds an Assign Prefix button to the standard child table page.
+    template_name = "netbox_dhcp_kea_plugin/dhcpserver_subnets.html"
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=lambda obj: obj.subnet_items.count(),
         visible=lambda obj: obj.is_ha_primary(),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
 
-    def get(self, request, pk):
-        server = self.get_object(pk=pk)
-        subnet_items = server.subnet_items.select_related("prefix").all()
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "subnet_items": subnet_items,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.subnet_items.restrict(request.user, "view").select_related("prefix", "server")
 
 
 @register_model_view(models.DHCPServer, name="kea_config", path="kea-config")
 class DHCPServerKeaConfigView(generic.ObjectView):
     queryset = models.DHCPServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_kea_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="KEA Configuration",
+        label=_("KEA Configuration"),
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda server, _ctx: server.to_kea_dict(),
+                    title=_("kea-dhcp4.conf"),
+                    element_id="kea-config",
+                    actions=[ui_panels.ExportAction("kea-config")],
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        server = self.get_object(pk=pk)
-        kea_config = server.to_kea_dict()
-        kea_config_json = json.dumps(kea_config, indent=4)
-
-        # Handle export/download request
+    def get(self, request, **kwargs):
         if request.GET.get("export") == "kea-config":
-            response = HttpResponse(kea_config_json, content_type="application/json")
-            filename = f"{server.name}_kea-config.json"
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return response
+            from django.http import HttpResponse
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "tab": self.tab,
-                "kea_config": kea_config,
-                "kea_config_json": kea_config_json,
-            },
-        )
+            server = self.get_object(**kwargs)
+            response = HttpResponse(json.dumps(server.to_kea_dict(), indent=4), content_type="application/json")
+            response["Content-Disposition"] = f'attachment; filename="{server.name}_kea-config.json"'
+            return response
+        return super().get(request, **kwargs)
 
 
 # ClientClass Views
+@register_model_view(models.ClientClass)
 class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.ClientClassPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.ClientClassKeaPanel(),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"client_class_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        return {
-            "kea_config_hex": instance.to_kea_json(ascii_format=False, indent=4),
-            "kea_config_ascii": instance.to_kea_json(ascii_format=True, indent=4),
-        }
 
-
+@register_model_view(models.ClientClass, "list", path="", detail=False)
 class ClientClassListView(generic.ObjectListView):
     queryset = models.ClientClass.objects.annotate(option_data_count=Count("option_data"))
     table = tables.ClientClassTable
@@ -568,6 +750,8 @@ class ClientClassListView(generic.ObjectListView):
     filterset_form = forms.ClientClassFilterForm
 
 
+@register_model_view(models.ClientClass, "add", detail=False)
+@register_model_view(models.ClientClass, "edit")
 class ClientClassEditView(generic.ObjectEditView):
     queryset = models.ClientClass.objects.all()
     form = forms.ClientClassForm
@@ -642,41 +826,39 @@ class ClientClassEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.ClientClass, "delete")
 class ClientClassDeleteView(generic.ObjectDeleteView):
     queryset = models.ClientClass.objects.all()
 
 
+@register_model_view(models.ClientClass, "bulk_delete", path="delete", detail=False)
 class ClientClassBulkDeleteView(generic.BulkDeleteView):
     queryset = models.ClientClass.objects.all()
     filterset = filtersets.ClientClassFilterSet
     table = tables.ClientClassTable
 
 
+@register_model_view(models.ClientClass, "bulk_import", path="import", detail=False)
 class ClientClassImportView(generic.BulkImportView):
     queryset = models.ClientClass.objects.all()
     model_form = forms.ClientClassImportForm
 
 
 @register_model_view(models.ClientClass, name="servers", path="servers")
-class ClientClassServersView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related("servers")
-    template_name = "netbox_dhcp_kea_plugin/clientclass_servers.html"
+class ClientClassServersView(generic.ObjectChildrenView):
+    queryset = models.ClientClass.objects.all()
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="DHCP Servers",
+        label=_("DHCP Servers"),
         badge=lambda obj: obj.servers.count(),
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
-    def get(self, request, pk):
-        client_class = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": client_class,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 def _get_subnet_count_for_class(obj):
@@ -687,68 +869,63 @@ def _get_subnet_count_for_class(obj):
 
 
 @register_model_view(models.ClientClass, name="prefixes", path="prefixes")
-class ClientClassPrefixesView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related(
-        "subnet_restrictions__prefix",
-        "subnet_restrictions__server",
-        "subnet_evaluations__prefix",
-        "subnet_evaluations__server",
-    )
-    template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
+class ClientClassPrefixesView(generic.ObjectChildrenView):
+    """Subnets that restrict to this class or evaluate it as an additional class."""
+
+    queryset = models.ClientClass.objects.all()
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=lambda obj: _get_subnet_count_for_class(obj),
         visible=lambda obj: obj.only_in_additional_list,
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
-    def get(self, request, pk):
-        client_class = self.get_object(pk=pk)
-        # Subnets where this class is the restricting client_class
-        restricting_subnets = client_class.subnet_restrictions.select_related("prefix", "server").all()
-        # Subnets where this class is in evaluate_additional_classes
-        evaluation_subnets = client_class.subnet_evaluations.select_related("prefix", "server").all()
-        # Combine and deduplicate
-        all_subnet_ids = set(restricting_subnets.values_list("pk", flat=True)) | set(
-            evaluation_subnets.values_list("pk", flat=True)
-        )
-        subnet_items = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": client_class,
-                "subnet_items": subnet_items,
-                "tab": self.tab,
-            },
+    def get_children(self, request, parent):
+        return (
+            models.Subnet.objects.restrict(request.user, "view")
+            .filter(Q(client_class=parent) | Q(evaluate_additional_classes=parent))
+            .distinct()
+            .select_related("prefix", "server")
         )
 
 
 # Subnet Views
+@register_model_view(models.Subnet)
 class SubnetView(generic.ObjectView):
     queryset = models.Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
         "option_data", "evaluate_additional_classes"
     )
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.SubnetPanel(),
+            ui_panels.SubnetReservationModePanel(),
+            ui_panels.SubnetClientClassesPanel(),
+            ui_panels.RedundantEvaluationClassesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda subnet, _ctx: subnet.to_kea_dict(),
+                title=_("KEA Subnet Configuration"),
+                element_id="subnet-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"subnet_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        import json
 
-        from netbox.plugins.utils import get_plugin_config
-
-        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
-        # These classes are already evaluated globally by KEA, so listing them in
-        # evaluate-additional-classes is redundant.
-        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
-
-        return {
-            "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
-            "pool_count": instance.subnet_pools.count(),
-            "redundant_eval_classes": redundant_eval_classes,
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-        }
-
-
+@register_model_view(models.Subnet, "list", path="", detail=False)
 class SubnetListView(generic.ObjectListView):
     queryset = models.Subnet.objects.select_related("prefix", "server").annotate(
         pool_count=Count("subnet_pools"),
@@ -764,6 +941,8 @@ class SubnetListView(generic.ObjectListView):
         return super().get_table(data, request, bulk_actions)
 
 
+@register_model_view(models.Subnet, "add", detail=False)
+@register_model_view(models.Subnet, "edit")
 class SubnetEditView(generic.ObjectEditView):
     queryset = models.Subnet.objects.all()
     form = forms.SubnetForm
@@ -795,35 +974,68 @@ class SubnetEditView(generic.ObjectEditView):
         return response
 
 
+@register_model_view(models.Subnet, "delete")
 class SubnetDeleteView(generic.ObjectDeleteView):
     queryset = models.Subnet.objects.all()
 
 
+@register_model_view(models.Subnet, "bulk_delete", path="delete", detail=False)
 class SubnetBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Subnet.objects.all()
     filterset = filtersets.SubnetFilterSet
     table = tables.SubnetTable
 
 
+@register_model_view(models.Subnet, "bulk_import", path="import", detail=False)
 class SubnetImportView(generic.BulkImportView):
     queryset = models.Subnet.objects.all()
     model_form = forms.SubnetImportForm
 
 
 # DHCPHARelationship Views
+@register_model_view(models.DHCPHARelationship)
 class DHCPHARelationshipView(generic.ObjectView):
     queryset = models.DHCPHARelationship.objects.prefetch_related("servers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HARelationshipPanel(),
+            ui_panels.HATimingPanel(),
+            ui_panels.HAProxyPanel(),
+            ui_panels.HAAuthenticationPanel(),
+            ui_panels.ConditionalPanel(ui_panels.HADDNSPanel(), ui_panels.ddns_enabled),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.HAMultiThreadingPanel(),
+            ContextTablePanel(
+                "servers_table",
+                title=hinted(
+                    _("HA Servers"),
+                    _("To add an existing server, edit the server and set its HA Relationship field."),
+                ),
+                actions=[
+                    AddObject(
+                        "netbox_dhcp_kea_plugin.DHCPServer",
+                        url_params={"ha_relationship": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
     def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
-
+        servers_table = tables.HAMemberTable(instance.servers.restrict(request.user, "view"), orderable=False)
+        servers_table.configure(request)
         return {
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-            # Why the badge says Invalid. Empty when the configuration is fine.
+            "servers_table": servers_table,
+            # Why the badge says Invalid; empty when the configuration is fine.
             "configuration_errors": instance.configuration_errors(),
         }
 
 
+@register_model_view(models.DHCPHARelationship, "list", path="", detail=False)
 class DHCPHARelationshipListView(generic.ObjectListView):
     queryset = models.DHCPHARelationship.objects.annotate(servers_count=Count("servers"))
     table = tables.DHCPHARelationshipTable
@@ -831,21 +1043,26 @@ class DHCPHARelationshipListView(generic.ObjectListView):
     filterset_form = forms.DHCPHARelationshipFilterForm
 
 
+@register_model_view(models.DHCPHARelationship, "add", detail=False)
+@register_model_view(models.DHCPHARelationship, "edit")
 class DHCPHARelationshipEditView(generic.ObjectEditView):
     queryset = models.DHCPHARelationship.objects.all()
     form = forms.DHCPHARelationshipForm
 
 
+@register_model_view(models.DHCPHARelationship, "delete")
 class DHCPHARelationshipDeleteView(generic.ObjectDeleteView):
     queryset = models.DHCPHARelationship.objects.all()
 
 
+@register_model_view(models.DHCPHARelationship, "bulk_delete", path="delete", detail=False)
 class DHCPHARelationshipBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DHCPHARelationship.objects.all()
     filterset = filtersets.DHCPHARelationshipFilterSet
     table = tables.DHCPHARelationshipTable
 
 
+@register_model_view(models.DHCPHARelationship, "bulk_import", path="import", detail=False)
 class DHCPHARelationshipImportView(generic.BulkImportView):
     queryset = models.DHCPHARelationship.objects.all()
     model_form = forms.DHCPHARelationshipImportForm
@@ -863,16 +1080,21 @@ def get_pool_count(obj):
 
 @register_model_view(models.Subnet, name="pools", path="pools")
 class SubnetPoolsView(generic.ObjectView):
+    """The prefix's child IP ranges as pools, each with its optional pool settings."""
+
     queryset = models.Subnet.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/subnet_pools.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Pools",
+        label=_("Pools"),
         badge=get_pool_count,
         permission="netbox_dhcp_kea_plugin.view_subnetpool",
     )
+    layout = layout.Layout(
+        layout.Row(layout.Column(TemplatePanel("netbox_dhcp_kea_plugin/panels/subnet_pools.html"))),
+    )
 
-    def get(self, request, pk):
-        subnet = self.get_object(pk=pk)
+    def get_extra_context(self, request, instance):
+        subnet = instance
         pools = subnet.get_pools()
 
         # Get IP ranges and their SubnetPool configs
@@ -904,70 +1126,84 @@ class SubnetPoolsView(generic.ObjectView):
         # Also include computed pools (from available IPs) that don't have IP ranges
         has_ip_ranges = ip_ranges.exists()
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": subnet,
-                "pool_data": pool_data,
-                "pools": pools,
-                "has_ip_ranges": has_ip_ranges,
-                "pool_config_count": len(pool_configs),
-                "tab": self.tab,
-            },
-        )
+        return {
+            "pool_data": pool_data,
+            "pools": pools,
+            "has_ip_ranges": has_ip_ranges,
+            "pool_config_count": len(pool_configs),
+        }
 
 
 @register_model_view(models.Subnet, name="reservations", path="reservations")
 class SubnetReservationsView(generic.ObjectView):
+    """Reservations derived from devices and VMs, plus static ones, and their KEA entries."""
+
     queryset = models.Subnet.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/subnet_reservations.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Reservations",
+        label=_("Reservations"),
         badge=get_reservation_count,
         permission="netbox_dhcp_kea_plugin.view_subnet",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/subnet_reservations.html", title=_("DHCP Reservations")),
+                width=8,
+            ),
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda _subnet, ctx: ctx["kea_reservations"],
+                    title=_("KEA Reservations Configuration"),
+                    element_id="subnet-reservations-kea",
+                ),
+                width=4,
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        config = self.get_object(pk=pk)
-        reservations = config.get_reservations()
-        skipped_count = sum(1 for _, meta in reservations if not meta["has_hw_address"])
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": config,
-                "reservations": reservations,
-                "reservation_count": len(reservations),
-                "skipped_count": skipped_count,
-                "kea_reservations": config.get_kea_reservations(),
-                "tab": self.tab,
-            },
-        )
+    def get_extra_context(self, request, instance):
+        reservations = instance.get_reservations()
+        return {
+            "reservations": reservations,
+            "reservation_count": len(reservations),
+            "skipped_count": sum(1 for _, meta in reservations if not meta["has_hw_address"]),
+            "kea_reservations": instance.get_kea_reservations(),
+        }
 
 
 # SubnetPool Views
+@register_model_view(models.SubnetPool)
 class SubnetPoolView(generic.ObjectView):
     queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class", "ddns_policy").prefetch_related(
         "evaluate_additional_classes", "option_data"
     )
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.SubnetPoolPanel(),
+            ui_panels.RedundantEvaluationClassesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda pool, _ctx: pool.to_kea_dict(),
+                title=_("KEA Pool Configuration"),
+                element_id="subnetpool-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                title=_("Pool Option Data"),
+                filters={"pool_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
 
-        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
-        # These classes are already evaluated globally by KEA, so listing them in
-        # evaluate-additional-classes is redundant.
-        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
-
-        return {
-            "kea_pool_config": json.dumps(instance.to_kea_dict(), indent=2),
-            "redundant_eval_classes": redundant_eval_classes,
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-        }
-
-
+@register_model_view(models.SubnetPool, "list", path="", detail=False)
 class SubnetPoolListView(generic.ObjectListView):
     queryset = SubnetPool.objects.select_related("subnet", "ip_range", "client_class")
     table = tables.SubnetPoolTable
@@ -975,21 +1211,26 @@ class SubnetPoolListView(generic.ObjectListView):
     filterset_form = forms.SubnetPoolFilterForm
 
 
+@register_model_view(models.SubnetPool, "add", detail=False)
+@register_model_view(models.SubnetPool, "edit")
 class SubnetPoolEditView(generic.ObjectEditView):
     queryset = SubnetPool.objects.all()
     form = forms.SubnetPoolForm
 
 
+@register_model_view(models.SubnetPool, "delete")
 class SubnetPoolDeleteView(generic.ObjectDeleteView):
     queryset = SubnetPool.objects.all()
 
 
+@register_model_view(models.SubnetPool, "bulk_delete", path="delete", detail=False)
 class SubnetPoolBulkDeleteView(generic.BulkDeleteView):
     queryset = SubnetPool.objects.all()
     filterset = filtersets.SubnetPoolFilterSet
     table = tables.SubnetPoolTable
 
 
+@register_model_view(models.SubnetPool, "bulk_import", path="import", detail=False)
 class SubnetPoolImportView(generic.BulkImportView):
     queryset = SubnetPool.objects.all()
     model_form = forms.SubnetPoolImportForm
@@ -998,13 +1239,28 @@ class SubnetPoolImportView(generic.BulkImportView):
 # --- Static Reservation Views ---
 
 
+@register_model_view(models.StaticReservation)
 class StaticReservationView(generic.ObjectView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.StaticReservationPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.StaticReservationSourcePanel(),
+            ui_panels.KeaJSONPanel(
+                lambda reservation, _ctx: reservation.to_kea_dict(),
+                title=_("Kea Reservation"),
+                element_id="staticreservation-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        return {"kea_reservation": json.dumps(instance.to_kea_dict(), indent=2)}
 
-
+@register_model_view(models.StaticReservation, "list", path="", detail=False)
 class StaticReservationListView(generic.ObjectListView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     table = tables.StaticReservationTable
@@ -1012,21 +1268,26 @@ class StaticReservationListView(generic.ObjectListView):
     filterset_form = forms.StaticReservationFilterForm
 
 
+@register_model_view(models.StaticReservation, "add", detail=False)
+@register_model_view(models.StaticReservation, "edit")
 class StaticReservationEditView(generic.ObjectEditView):
     queryset = models.StaticReservation.objects.all()
     form = forms.StaticReservationForm
 
 
+@register_model_view(models.StaticReservation, "delete")
 class StaticReservationDeleteView(generic.ObjectDeleteView):
     queryset = models.StaticReservation.objects.all()
 
 
+@register_model_view(models.StaticReservation, "bulk_delete", path="delete", detail=False)
 class StaticReservationBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StaticReservation.objects.select_related("subnet", "ip_address", "mac_address")
     filterset = filtersets.StaticReservationFilterSet
     table = tables.StaticReservationTable
 
 
+@register_model_view(models.StaticReservation, "bulk_import", path="import", detail=False)
 class StaticReservationImportView(generic.BulkImportView):
     queryset = models.StaticReservation.objects.all()
     model_form = forms.StaticReservationImportForm
@@ -1035,18 +1296,36 @@ class StaticReservationImportView(generic.BulkImportView):
 # --- Stork Server Views ---
 
 
+@register_model_view(models.StorkServer)
 class StorkServerView(generic.ObjectView):
     queryset = models.StorkServer.objects.prefetch_related("agent_groups")
+    template_name = "generic/object.html"
+    layout = layout.Layout(
+        # Dialling an address over TLS is unusual but not impossible, so this
+        # is shown rather than enforced at save time.
+        layout.Row(layout.Column(ui_panels.ContextAlertsPanel("tls_verification_warnings"))),
+        layout.Row(
+            layout.Column(
+                ui_panels.StorkServerPanel(),
+                ui_panels.StorkRESTPanel(),
+                TagsPanel(),
+                PluginContentPanel("left_page"),
+            ),
+            layout.Column(
+                ui_panels.StorkDatabasePanel(),
+                ui_panels.StorkIntegrationPanel(),
+                CustomFieldsPanel(),
+                PluginContentPanel("right_page"),
+            ),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
-        return {
-            # Dialling an address over TLS is unusual but not impossible, so
-            # this is shown rather than enforced at save time.
-            "tls_verification_warnings": instance.tls_verification_warnings(),
-            "endpoint_record": instance.endpoint_record(),
-        }
+        return {"tls_verification_warnings": instance.tls_verification_warnings()}
 
 
+@register_model_view(models.StorkServer, "list", path="", detail=False)
 class StorkServerListView(generic.ObjectListView):
     queryset = models.StorkServer.objects.annotate(
         agent_groups_count=Count("agent_groups", distinct=True),
@@ -1056,21 +1335,26 @@ class StorkServerListView(generic.ObjectListView):
     filterset_form = forms.StorkServerFilterForm
 
 
+@register_model_view(models.StorkServer, "add", detail=False)
+@register_model_view(models.StorkServer, "edit")
 class StorkServerEditView(generic.ObjectEditView):
     queryset = models.StorkServer.objects.all()
     form = forms.StorkServerForm
 
 
+@register_model_view(models.StorkServer, "delete")
 class StorkServerDeleteView(generic.ObjectDeleteView):
     queryset = models.StorkServer.objects.all()
 
 
+@register_model_view(models.StorkServer, "bulk_delete", path="delete", detail=False)
 class StorkServerBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StorkServer.objects.all()
     filterset = filtersets.StorkServerFilterSet
     table = tables.StorkServerTable
 
 
+@register_model_view(models.StorkServer, "bulk_import", path="import", detail=False)
 class StorkServerImportView(generic.BulkImportView):
     queryset = models.StorkServer.objects.all()
     model_form = forms.StorkServerImportForm
@@ -1082,69 +1366,78 @@ def get_storkserver_agent_groups_count(obj):
 
 
 @register_model_view(models.StorkServer, name="agent_groups", path="agent-groups")
-class StorkServerAgentGroupsView(generic.ObjectView):
+class StorkServerAgentGroupsView(generic.ObjectChildrenView):
     queryset = models.StorkServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkserver_agent_groups.html"
+    child_model = models.StorkAgentGroup
+    table = tables.StorkAgentGroupTable
+    filterset = filtersets.StorkAgentGroupFilterSet
+    filterset_form = forms.StorkAgentGroupFilterForm
     tab = ViewTab(
-        label="Agent Groups",
+        label=_("Agent Groups"),
         badge=get_storkserver_agent_groups_count,
         permission="netbox_dhcp_kea_plugin.view_storkserver",
     )
 
-    def get(self, request, pk):
-        stork_server = self.get_object(pk=pk)
-        agent_groups = stork_server.agent_groups.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": stork_server,
-                "agent_groups": agent_groups,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.agent_groups.restrict(request.user, "view")
 
 
 @register_model_view(models.StorkServer, name="config", path="config")
 class StorkServerConfigView(generic.ObjectView):
     queryset = models.StorkServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkserver_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_storkserver",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda server, _ctx: server.to_env_content(),
+                    as_text=True,
+                    title=_("stork-server.env"),
+                    element_id="stork-server-env",
+                    actions=[ui_panels.ExportAction("stork-server-config")],
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        server = self.get_object(pk=pk)
-        env_content = server.to_env_content()
-
+    def get(self, request, **kwargs):
         if request.GET.get("export") == "stork-server-config":
-            response = HttpResponse(env_content, content_type="text/plain")
-            filename = f"{server.name}_stork-server.env"
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return response
+            from django.http import HttpResponse
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "tab": self.tab,
-                "env_content": env_content,
-            },
-        )
+            server = self.get_object(**kwargs)
+            response = HttpResponse(server.to_env_content(), content_type="text/plain")
+            response["Content-Disposition"] = f'attachment; filename="{server.name}_stork-server.env"'
+            return response
+        return super().get(request, **kwargs)
 
 
 # --- Stork Agent Group Views ---
 
 
+@register_model_view(models.StorkAgentGroup)
 class StorkAgentGroupView(generic.ObjectView):
     queryset = models.StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.StorkAgentGroupPanel(),
+            ui_panels.StorkAgentGRPCPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.ConditionalPanel(
+                ui_panels.StorkPrometheusPanel(), lambda group: group.operating_mode != "stork-only"
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
+@register_model_view(models.StorkAgentGroup, "list", path="", detail=False)
 class StorkAgentGroupListView(generic.ObjectListView):
     queryset = models.StorkAgentGroup.objects.annotate(
         servers_count=Count("servers", distinct=True),
@@ -1154,21 +1447,26 @@ class StorkAgentGroupListView(generic.ObjectListView):
     filterset_form = forms.StorkAgentGroupFilterForm
 
 
+@register_model_view(models.StorkAgentGroup, "add", detail=False)
+@register_model_view(models.StorkAgentGroup, "edit")
 class StorkAgentGroupEditView(generic.ObjectEditView):
     queryset = models.StorkAgentGroup.objects.all()
     form = forms.StorkAgentGroupForm
 
 
+@register_model_view(models.StorkAgentGroup, "delete")
 class StorkAgentGroupDeleteView(generic.ObjectDeleteView):
     queryset = models.StorkAgentGroup.objects.all()
 
 
+@register_model_view(models.StorkAgentGroup, "bulk_delete", path="delete", detail=False)
 class StorkAgentGroupBulkDeleteView(generic.BulkDeleteView):
     queryset = models.StorkAgentGroup.objects.all()
     filterset = filtersets.StorkAgentGroupFilterSet
     table = tables.StorkAgentGroupTable
 
 
+@register_model_view(models.StorkAgentGroup, "bulk_import", path="import", detail=False)
 class StorkAgentGroupImportView(generic.BulkImportView):
     queryset = models.StorkAgentGroup.objects.all()
     model_form = forms.StorkAgentGroupImportForm
@@ -1180,83 +1478,91 @@ def get_storkagentgroup_servers_count(obj):
 
 
 @register_model_view(models.StorkAgentGroup, name="servers", path="servers")
-class StorkAgentGroupServersView(generic.ObjectView):
+class StorkAgentGroupServersView(generic.ObjectChildrenView):
     queryset = models.StorkAgentGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_storkagentgroup_servers_count,
         permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
     )
 
-    def get(self, request, pk):
-        agent_group = self.get_object(pk=pk)
-        servers = agent_group.servers.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": agent_group,
-                "servers": servers,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 @register_model_view(models.StorkAgentGroup, name="config", path="config")
 class StorkAgentGroupConfigView(generic.ObjectView):
     queryset = models.StorkAgentGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda group, _ctx: group.to_env_content(),
+                    as_text=True,
+                    # The per-server variant is an API option, so it is a hint rather than body text.
+                    title=hinted(
+                        _("stork-agent.env"),
+                        _("Add ?server=<id> to the config URL to replace <AGENT_HOST_IP> with that server's address."),
+                    ),
+                    element_id="stork-agent-env",
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        agent_group = self.get_object(pk=pk)
-
-        # Download env file for a specific server: ?server=<id>
+    def get(self, request, **kwargs):
+        # Download the env file for one server: ?server=<id>
         server_id = request.GET.get("server")
         if server_id:
+            from django.http import HttpResponse
+
+            agent_group = self.get_object(**kwargs)
             try:
                 server = agent_group.servers.select_related("ip_address").get(pk=int(server_id))
-                env_content = agent_group.to_env_content(server=server)
-                response = HttpResponse(env_content, content_type="text/plain")
-                filename = f"{server.name}_stork-agent.env"
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
-                return response
             except (ValueError, models.DHCPServer.DoesNotExist):
                 pass
-
-        # Display generic template with placeholder
-        env_content = agent_group.to_env_content()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": agent_group,
-                "tab": self.tab,
-                "env_content": env_content,
-            },
-        )
+            else:
+                response = HttpResponse(agent_group.to_env_content(server=server), content_type="text/plain")
+                response["Content-Disposition"] = f'attachment; filename="{server.name}_stork-agent.env"'
+                return response
+        return super().get(request, **kwargs)
 
 
 # --- TSIGKey Views ---
 
 
+@register_model_view(models.TSIGKey)
 class TSIGKeyView(generic.ObjectView):
     queryset = models.TSIGKey.objects.all()
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.TSIGKeyPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.TSIGSecretPanel(),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.DDNSDomain",
+                filters={"tsig_key": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
-    def get_extra_context(self, request, instance):
-        return {
-            "can_view_secret": request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"),
-        }
 
-
+@register_model_view(models.TSIGKey, "list", path="", detail=False)
 class TSIGKeyListView(generic.ObjectListView):
     queryset = models.TSIGKey.objects.all()
     table = tables.TSIGKeyTable
@@ -1264,21 +1570,26 @@ class TSIGKeyListView(generic.ObjectListView):
     filterset_form = forms.TSIGKeyFilterForm
 
 
+@register_model_view(models.TSIGKey, "add", detail=False)
+@register_model_view(models.TSIGKey, "edit")
 class TSIGKeyEditView(generic.ObjectEditView):
     queryset = models.TSIGKey.objects.all()
     form = forms.TSIGKeyForm
 
 
+@register_model_view(models.TSIGKey, "delete")
 class TSIGKeyDeleteView(generic.ObjectDeleteView):
     queryset = models.TSIGKey.objects.all()
 
 
+@register_model_view(models.TSIGKey, "bulk_delete", path="delete", detail=False)
 class TSIGKeyBulkDeleteView(generic.BulkDeleteView):
     queryset = models.TSIGKey.objects.all()
     filterset = filtersets.TSIGKeyFilterSet
     table = tables.TSIGKeyTable
 
 
+@register_model_view(models.TSIGKey, "bulk_import", path="import", detail=False)
 class TSIGKeyImportView(generic.BulkImportView):
     queryset = models.TSIGKey.objects.all()
     model_form = forms.TSIGKeyImportForm
@@ -1287,17 +1598,31 @@ class TSIGKeyImportView(generic.BulkImportView):
 # --- D2Daemon Views ---
 
 
+@register_model_view(models.D2Daemon)
 class D2DaemonView(generic.ObjectView):
     queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("hook_groups")
+    template_name = "generic/object.html"
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.ErrorListPanel(
+                    "configuration_errors", _("KEA would refuse to load this daemon's configuration:")
+                )
+            )
+        ),
+        layout.Row(
+            layout.Column(ui_panels.D2DaemonPanel(), TagsPanel(), PluginContentPanel("left_page")),
+            layout.Column(ui_panels.D2NCRPanel(), CustomFieldsPanel(), PluginContentPanel("right_page")),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
         # Rows saved before a check existed are never re-validated.
-        return {
-            "configuration_errors": instance.configuration_errors(),
-            "servers": instance.servers_using(),
-        }
+        return {"configuration_errors": instance.configuration_errors()}
 
 
+@register_model_view(models.D2Daemon, "list", path="", detail=False)
 class D2DaemonListView(generic.ObjectListView):
     queryset = models.D2Daemon.objects.all()
     table = tables.D2DaemonTable
@@ -1305,21 +1630,26 @@ class D2DaemonListView(generic.ObjectListView):
     filterset_form = forms.D2DaemonFilterForm
 
 
+@register_model_view(models.D2Daemon, "add", detail=False)
+@register_model_view(models.D2Daemon, "edit")
 class D2DaemonEditView(generic.ObjectEditView):
     queryset = models.D2Daemon.objects.all()
     form = forms.D2DaemonForm
 
 
+@register_model_view(models.D2Daemon, "delete")
 class D2DaemonDeleteView(generic.ObjectDeleteView):
     queryset = models.D2Daemon.objects.all()
 
 
+@register_model_view(models.D2Daemon, "bulk_delete", path="delete", detail=False)
 class D2DaemonBulkDeleteView(generic.BulkDeleteView):
     queryset = models.D2Daemon.objects.all()
     filterset = filtersets.D2DaemonFilterSet
     table = tables.D2DaemonTable
 
 
+@register_model_view(models.D2Daemon, "bulk_import", path="import", detail=False)
 class D2DaemonImportView(generic.BulkImportView):
     queryset = models.D2Daemon.objects.all()
     model_form = forms.D2DaemonImportForm
@@ -1334,23 +1664,21 @@ class D2DaemonDomainsView(generic.ObjectView):
     """The domains each server using the daemon derives, and why."""
 
     queryset = models.D2Daemon.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/d2daemon_domains.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Servers & Domains",
+        label=_("Servers & Domains"),
         badge=get_d2daemon_servers_count,
         permission="netbox_dhcp_kea_plugin.view_d2daemon",
     )
+    layout = layout.Layout(
+        layout.Row(layout.Column(TemplatePanel("netbox_dhcp_kea_plugin/panels/d2_groups.html"))),
+    )
 
-    def get(self, request, pk):
+    def get_extra_context(self, request, instance):
         from .ddns import group_by_relationship
 
-        daemon = self.get_object(pk=pk)
-        derived_by_server = [(server, server.derived_ddns()) for server in daemon.servers_using()]
-        return render(
-            request,
-            self.template_name,
-            {"object": daemon, "groups": group_by_relationship(derived_by_server), "tab": self.tab},
-        )
+        derived_by_server = [(server, server.derived_ddns()) for server in instance.servers_using()]
+        return {"groups": group_by_relationship(derived_by_server)}
 
 
 def _d2_config_context(request, render_config, contains_secrets, requires_substitution):
@@ -1364,39 +1692,40 @@ def _d2_config_context(request, render_config, contains_secrets, requires_substi
     return {
         "requires_secret_substitution": requires_substitution,
         "secrets_redacted": secrets_redacted,
-        "config_json": json.dumps(config, indent=2) if config is not None else None,
+        "d2_config": config,
     }
 
 
 @register_model_view(models.D2Daemon, name="config", path="config")
 class D2DaemonConfigView(generic.ObjectView):
     queryset = models.D2Daemon.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/d2daemon_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_d2daemon",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/d2_local_note.html"),
+                ui_panels.kea_config_panel("d2-config", condition=lambda daemon, _ctx: not daemon.is_local),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        daemon = self.get_object(pk=pk)
-        context = {"object": daemon, "tab": self.tab, "servers": daemon.servers_using()}
-        if not daemon.is_local:
-            domains, _errors = daemon.derived_domains()
+    def get_extra_context(self, request, instance):
+        context = {"servers": instance.servers_using()}
+        if not instance.is_local:
+            domains, _errors = instance.derived_domains()
             context.update(
                 _d2_config_context(
                     request,
-                    lambda redact: daemon.render(domains, redact_secrets=redact),
-                    daemon.contains_secrets(domains),
-                    daemon.requires_secret_substitution(domains),
+                    lambda redact: instance.render(domains, redact_secrets=redact),
+                    instance.contains_secrets(domains),
+                    instance.requires_secret_substitution(domains),
                 )
             )
-        return render(request, self.template_name, context)
-
-
-def _ddns_enabled(_instance=None):
-    from netbox.plugins.utils import get_plugin_config
-
-    return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
+        return context
 
 
 @register_model_view(models.DHCPServer, name="d2config", path="d2-config")
@@ -1404,49 +1733,80 @@ class DHCPServerD2ConfigView(generic.ObjectView):
     """This host's derived D2 domains and its kea-dhcp-ddns configuration."""
 
     queryset = models.DHCPServer.objects.select_related("ha_relationship", "d2_daemon")
-    template_name = "netbox_dhcp_kea_plugin/dhcpserver_d2config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="D2 Configuration",
+        label=_("D2 Configuration"),
         visible=_ddns_enabled,
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
         weight=1600,
     )
+    # What the host gets on the left, the file it becomes on the right.
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_daemon.html", title=_("D2 Daemon")),
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/derived_domains.html", title=_("DDNS Domains")),
+            ),
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_note.html"),
+                ui_panels.kea_config_panel(
+                    "d2-config", condition=lambda _server, ctx: ctx.get("runs_local_d2")
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        server = self.get_object(pk=pk)
-        derived = server.derived_ddns()
+    def get(self, request, **kwargs):
+        # Routed with every server view, so refuse it here when DDNS is off.
+        if not _ddns_enabled():
+            raise Http404
+        return super().get(request, **kwargs)
+
+    def get_extra_context(self, request, instance):
+        derived = instance.derived_ddns()
         context = {
-            "object": server,
-            "tab": self.tab,
-            "daemon": server.effective_d2_daemon,
-            "runs_local_d2": server.runs_local_d2(),
+            "daemon": instance.effective_d2_daemon,
+            "runs_local_d2": instance.runs_local_d2(),
             "derived": derived,
         }
-        if server.runs_local_d2():
+        if context["runs_local_d2"]:
             context.update(
                 _d2_config_context(
                     request,
-                    lambda redact: server.d2_kea_dict(redact_secrets=redact, derived=derived),
-                    server.d2_contains_secrets(derived),
-                    server.d2_requires_secret_substitution(derived),
+                    lambda redact: instance.d2_kea_dict(redact_secrets=redact, derived=derived),
+                    instance.d2_contains_secrets(derived),
+                    instance.d2_requires_secret_substitution(derived),
                 )
             )
-        return render(request, self.template_name, context)
+        return context
 
 
 # --- DDNSDomain Views ---
 
 
+@register_model_view(models.DDNSDomain)
 class DDNSDomainView(generic.ObjectView):
     queryset = models.DDNSDomain.objects.select_related(
         "dhcp_server", "ha_relationship", "zone", "tsig_key"
     ).prefetch_related("zone__nameservers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSDomainPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            TemplatePanel("netbox_dhcp_kea_plugin/panels/ddns_dns_servers.html", title=_("DNS Servers")),
+            CustomFieldsPanel(),
+        ],
+    )
 
     def get_extra_context(self, request, instance):
         # What each nameserver renders as, with the override (if any) that shapes it.
         return {"nameserver_entries": instance.nameserver_entries()}
 
 
+@register_model_view(models.DDNSDomain, "list", path="", detail=False)
 class DDNSDomainListView(generic.ObjectListView):
     queryset = models.DDNSDomain.objects.all()
     table = tables.DDNSDomainTable
@@ -1454,15 +1814,19 @@ class DDNSDomainListView(generic.ObjectListView):
     filterset_form = forms.DDNSDomainFilterForm
 
 
+@register_model_view(models.DDNSDomain, "add", detail=False)
+@register_model_view(models.DDNSDomain, "edit")
 class DDNSDomainEditView(generic.ObjectEditView):
     queryset = models.DDNSDomain.objects.all()
     form = forms.DDNSDomainForm
 
 
+@register_model_view(models.DDNSDomain, "delete")
 class DDNSDomainDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSDomain.objects.all()
 
 
+@register_model_view(models.DDNSDomain, "bulk_edit", path="edit", detail=False)
 class DDNSDomainBulkEditView(generic.BulkEditView):
     queryset = models.DDNSDomain.objects.all()
     filterset = filtersets.DDNSDomainFilterSet
@@ -1470,12 +1834,14 @@ class DDNSDomainBulkEditView(generic.BulkEditView):
     form = forms.DDNSDomainBulkEditForm
 
 
+@register_model_view(models.DDNSDomain, "bulk_delete", path="delete", detail=False)
 class DDNSDomainBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSDomain.objects.all()
     filterset = filtersets.DDNSDomainFilterSet
     table = tables.DDNSDomainTable
 
 
+@register_model_view(models.DDNSDomain, "bulk_import", path="import", detail=False)
 class DDNSDomainImportView(generic.BulkImportView):
     queryset = models.DDNSDomain.objects.all()
     model_form = forms.DDNSDomainImportForm
@@ -1484,10 +1850,22 @@ class DDNSDomainImportView(generic.BulkImportView):
 # --- DDNSServerOverride Views ---
 
 
+@register_model_view(models.DDNSServerOverride)
 class DDNSServerOverrideView(generic.ObjectView):
     queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "ddns_domain__zone", "tsig_key")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSServerOverridePanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            CustomFieldsPanel(),
+        ],
+    )
 
 
+@register_model_view(models.DDNSServerOverride, "list", path="", detail=False)
 class DDNSServerOverrideListView(generic.ObjectListView):
     queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "tsig_key")
     table = tables.DDNSServerOverrideTable
@@ -1495,15 +1873,19 @@ class DDNSServerOverrideListView(generic.ObjectListView):
     filterset_form = forms.DDNSServerOverrideFilterForm
 
 
+@register_model_view(models.DDNSServerOverride, "add", detail=False)
+@register_model_view(models.DDNSServerOverride, "edit")
 class DDNSServerOverrideEditView(generic.ObjectEditView):
     queryset = models.DDNSServerOverride.objects.all()
     form = forms.DDNSServerOverrideForm
 
 
+@register_model_view(models.DDNSServerOverride, "delete")
 class DDNSServerOverrideDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSServerOverride.objects.all()
 
 
+@register_model_view(models.DDNSServerOverride, "bulk_delete", path="delete", detail=False)
 class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSServerOverride.objects.all()
     filterset = filtersets.DDNSServerOverrideFilterSet
@@ -1513,10 +1895,26 @@ class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
 # --- DDNSPolicy Views ---
 
 
+@register_model_view(models.DDNSPolicy)
 class DDNSPolicyView(generic.ObjectView):
     queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "pools")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSPolicyPanel(),
+            ui_panels.DDNSPolicyFlagsPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.DDNSPolicyHostnamePanel(),
+            ui_panels.DDNSPolicyConflictPanel(),
+            ui_panels.DDNSPolicyTTLPanel(),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
+@register_model_view(models.DDNSPolicy, "list", path="", detail=False)
 class DDNSPolicyListView(generic.ObjectListView):
     queryset = models.DDNSPolicy.objects.annotate(
         servers_count=Count("servers", distinct=True),
@@ -1528,21 +1926,26 @@ class DDNSPolicyListView(generic.ObjectListView):
     filterset_form = forms.DDNSPolicyFilterForm
 
 
+@register_model_view(models.DDNSPolicy, "add", detail=False)
+@register_model_view(models.DDNSPolicy, "edit")
 class DDNSPolicyEditView(generic.ObjectEditView):
     queryset = models.DDNSPolicy.objects.all()
     form = forms.DDNSPolicyForm
 
 
+@register_model_view(models.DDNSPolicy, "delete")
 class DDNSPolicyDeleteView(generic.ObjectDeleteView):
     queryset = models.DDNSPolicy.objects.all()
 
 
+@register_model_view(models.DDNSPolicy, "bulk_delete", path="delete", detail=False)
 class DDNSPolicyBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DDNSPolicy.objects.all()
     filterset = filtersets.DDNSPolicyFilterSet
     table = tables.DDNSPolicyTable
 
 
+@register_model_view(models.DDNSPolicy, "bulk_import", path="import", detail=False)
 class DDNSPolicyImportView(generic.BulkImportView):
     queryset = models.DDNSPolicy.objects.all()
     model_form = forms.DDNSPolicyImportForm
@@ -1561,58 +1964,51 @@ def get_ddnspolicy_pools_count(obj):
 
 
 @register_model_view(models.DDNSPolicy, name="servers", path="servers")
-class DDNSPolicyServersView(generic.ObjectView):
+class DDNSPolicyServersView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_ddnspolicy_servers_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "servers": policy.servers.all(), "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 @register_model_view(models.DDNSPolicy, name="subnets", path="subnets")
-class DDNSPolicySubnetsView(generic.ObjectView):
+class DDNSPolicySubnetsView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_subnets.html"
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=get_ddnspolicy_subnets_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "subnets": policy.subnets.all(), "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.subnets.restrict(request.user, "view").select_related("prefix", "server")
 
 
 @register_model_view(models.DDNSPolicy, name="pools", path="pools")
-class DDNSPolicyPoolsView(generic.ObjectView):
+class DDNSPolicyPoolsView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_pools.html"
+    child_model = models.SubnetPool
+    table = tables.SubnetPoolTable
+    filterset = filtersets.SubnetPoolFilterSet
+    filterset_form = forms.SubnetPoolFilterForm
     tab = ViewTab(
-        label="Pools",
+        label=_("Pools"),
         badge=get_ddnspolicy_pools_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        pools = policy.pools.select_related("subnet", "subnet__prefix", "ip_range")
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "pools": pools, "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.pools.restrict(request.user, "view").select_related("subnet", "subnet__prefix", "ip_range")

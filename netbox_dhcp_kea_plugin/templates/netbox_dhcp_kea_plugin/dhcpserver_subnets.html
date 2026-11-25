@@ -1,0 +1,13 @@
+{% extends 'generic/object_children.html' %}
+{% comment %}
+The server's subnets as a child table, with a button to assign another
+prefix to this server.
+{% endcomment %}
+
+{% block extra_controls %}
+{% if perms.netbox_dhcp_kea_plugin.add_subnet %}
+<a href="{% url 'plugins:netbox_dhcp_kea_plugin:subnet_add' %}?server={{ object.pk }}&return_url={{ request.path }}" class="btn btn-primary">
+    <i class="mdi mdi-plus-thick"></i> Assign Prefix
+</a>
+{% endif %}
+{% endblock %}

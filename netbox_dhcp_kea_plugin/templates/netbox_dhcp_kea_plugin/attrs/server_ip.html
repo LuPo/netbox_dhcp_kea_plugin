@@ -1,0 +1,6 @@
+<a href="{{ value.get_absolute_url }}">{{ value }}</a>
+{% if value.assigned_object %}
+<br><small class="text-muted">Assigned to
+<a href="{{ value.assigned_object.parent_object.get_absolute_url }}">{{ value.assigned_object.parent_object }}</a>
+({{ value.assigned_object }})</small>
+{% endif %}

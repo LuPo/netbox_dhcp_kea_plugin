@@ -1,0 +1,6 @@
+{% if value is None %}
+<span class="text-muted">Inherit</span>
+<small class="text-muted">(server: {% checkmark effective %})</small>
+{% else %}
+{% checkmark value %}
+{% endif %}

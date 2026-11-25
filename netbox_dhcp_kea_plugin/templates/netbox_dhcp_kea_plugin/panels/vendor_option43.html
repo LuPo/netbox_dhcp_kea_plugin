@@ -1,0 +1,22 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body">
+    <p class="text-muted">To use this vendor space with Option 43:</p>
+    <pre class="mb-0">// In option-def, define option 43 to encapsulate this space:
+{
+    "name": "vendor-encapsulated-options",
+    "code": 43,
+    "type": "empty",
+    "encapsulate": "{{ object.name }}"
+}
+
+// Then set option-data for options in this space:
+{
+    "space": "{{ object.name }}",
+    "name": "your-option-name",
+    "code": 1,
+    "data": "your-value"
+}</pre>
+</div>
+{% endblock panel_content %}

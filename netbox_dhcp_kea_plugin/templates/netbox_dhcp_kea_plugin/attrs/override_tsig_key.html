@@ -1,0 +1,1 @@
+{% if object.tsig_key %}<a href="{{ object.tsig_key.get_absolute_url }}">{{ object.tsig_key.name }}</a>{% elif object.ddns_domain.tsig_key %}<span class="text-muted">Domain key ({{ object.ddns_domain.tsig_key.name }})</span>{% else %}<span class="text-muted">&mdash;</span>{% endif %}

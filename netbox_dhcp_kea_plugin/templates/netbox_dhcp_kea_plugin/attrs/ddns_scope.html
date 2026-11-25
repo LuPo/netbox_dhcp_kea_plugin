@@ -1,0 +1,1 @@
+{% with scope_object=object.scope_object %}{% if scope_object %}<a href="{{ scope_object.get_absolute_url }}">{{ scope_object }}</a>{% else %}All servers{% endif %}{% endwith %}

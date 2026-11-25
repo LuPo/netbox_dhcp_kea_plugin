@@ -1,0 +1,11 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<table class="table table-hover attr-table">
+    <tr><th scope="row">Subnets</th><td>{{ subnet_count }}</td></tr>
+    <tr><th scope="row">Client Classes</th><td>{{ client_class_count }}</td></tr>
+    <tr><th scope="row">Global Options</th><td>{{ global_option_count }}</td></tr>
+    <tr><th scope="row">Option Definitions</th><td>{{ option_def_count }}</td></tr>
+    <tr><th scope="row">Hook Libraries</th><td>{{ hook_count }}</td></tr>
+</table>
+{% endblock panel_content %}

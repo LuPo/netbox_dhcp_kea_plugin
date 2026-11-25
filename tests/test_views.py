@@ -7,6 +7,8 @@ Run with:
     pytest tests/test_views.py -v
 """
 
+import re
+
 import pytest
 from django.urls import reverse
 
@@ -791,6 +793,15 @@ class TestDHCPServerProxyFlagsOnView:
         assert b"Control Socket Proxy" in response.content
 
 
+def _card(content, title):
+    """Where a card titled ``title`` starts on the page, or None.
+
+    NetBox's panels put the title on its own line inside the card header.
+    """
+    match = re.search(rb'class="card-header">\s*' + re.escape(title.encode()) + rb"\s*<", content)
+    return match.start() if match else None
+
+
 @pytest.mark.django_db
 class TestDHCPServerCardOrder:
     """The DDNS card sits in the right column, above Global Option Data."""
@@ -811,9 +822,9 @@ class TestDHCPServerCardOrder:
 
         content = self._content(client, admin_user, server, monkeypatch, settings)
 
-        ddns = content.index(b'card-header">DDNS<')
-        options = content.index(b'card-header">Global Option Data<')
-        summary = content.index(b'card-header">Configuration Summary<')
+        ddns = _card(content, "DDNS")
+        options = _card(content, "Global Option Data")
+        summary = _card(content, "Configuration Summary")
         assert ddns < options, "DDNS should come before Global Option Data"
         # Configuration Summary ends the left column, so DDNS is now past it.
         assert summary < ddns, "DDNS should be in the right-hand column"
@@ -825,5 +836,5 @@ class TestDHCPServerCardOrder:
 
         content = self._content(client, admin_user, server, monkeypatch, settings, ddns=False)
 
-        assert b'card-header">DDNS<' not in content
-        assert b'card-header">Global Option Data<' in content
+        assert _card(content, "DDNS") is None
+        assert _card(content, "Global Option Data") is not None

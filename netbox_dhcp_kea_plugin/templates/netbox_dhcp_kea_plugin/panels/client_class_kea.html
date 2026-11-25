@@ -1,0 +1,22 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body pb-0">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-data-format">Show ASCII</button>
+</div>
+<pre class="card-body mb-0" id="kea-config-hex">{{ kea_config_hex }}</pre>
+<pre class="card-body mb-0 d-none" id="kea-config-ascii">{{ kea_config_ascii }}</pre>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('toggle-data-format');
+    const hex = document.getElementById('kea-config-hex');
+    const ascii = document.getElementById('kea-config-ascii');
+    toggle.addEventListener('click', function() {
+        const showAscii = ascii.classList.contains('d-none');
+        ascii.classList.toggle('d-none', !showAscii);
+        hex.classList.toggle('d-none', showAscii);
+        toggle.textContent = showAscii ? 'Show HEX' : 'Show ASCII';
+    });
+});
+</script>
+{% endblock panel_content %}

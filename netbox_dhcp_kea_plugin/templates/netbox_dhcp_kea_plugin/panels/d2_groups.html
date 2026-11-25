@@ -1,0 +1,68 @@
+{# Servers using a D2 daemon, one collapsible entry per HA relationship or standalone server. #}
+        <div class="alert alert-info" role="alert">
+            <i class="mdi mdi-information"></i>
+            <div>
+                Domains are derived from each server's subnets: the qualifying suffixes of their DDNS
+                policies pick forward domains, their prefixes pick reverse ones.
+                {% if object.is_local %}
+                This daemon is local, so every server runs its own D2 with only its own domains.
+                HA peers serve the same subnets and are shown together.
+                {% else %}
+                This daemon is remote, so one D2 serves the domains of every server below.
+                {% endif %}
+            </div>
+        </div>
+        {% for group in groups %}
+        <div class="card mb-2">
+            <div class="card-header">
+                <a class="d-flex align-items-center gap-2 text-reset text-decoration-none w-100" data-bs-toggle="collapse" href="#d2-group-{{ forloop.counter }}" role="button" aria-expanded="false" aria-controls="d2-group-{{ forloop.counter }}">
+                    <i class="mdi mdi-chevron-right"></i>
+                    <strong>
+                        {% if group.ha_relationship %}{{ group.ha_relationship }}{% else %}{{ group.servers.0 }}{% endif %}
+                    </strong>
+                    <span class="text-muted small">
+                        {% if group.ha_relationship %}
+                        {% for server in group.servers %}{{ server }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                        {% else %}
+                        standalone server
+                        {% endif %}
+                    </span>
+                    <span class="ms-auto d-flex gap-1">
+                        <span class="badge text-bg-secondary">{{ group.domain_count }} domain{{ group.domain_count|pluralize }}</span>
+                        {% if group.error_count %}
+                        <span class="badge text-bg-danger">{{ group.error_count }} error{{ group.error_count|pluralize }}</span>
+                        {% endif %}
+                        {% if group.warning_count %}
+                        <span class="badge text-bg-warning">{{ group.warning_count }} warning{{ group.warning_count|pluralize }}</span>
+                        {% endif %}
+                        {% if group.variants|length > 1 %}
+                        <span class="badge text-bg-info">peers differ</span>
+                        {% endif %}
+                    </span>
+                </a>
+            </div>
+            <div class="collapse" id="d2-group-{{ forloop.counter }}">
+                <div class="card-body">
+                    {% for servers, derived in group.variants %}
+                    {% if group.variants|length > 1 %}
+                    <h6 class="mt-2">
+                        {% for server in servers %}<a href="{{ server.get_absolute_url }}">{{ server }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </h6>
+                    {% endif %}
+                    {% include 'netbox_dhcp_kea_plugin/inc/ddns_derived_domains.html' %}
+                    {% endfor %}
+                    <div class="small text-muted mt-2">
+                        Rendered configuration:
+                        {% for server in group.servers %}<a href="{% url 'plugins:netbox_dhcp_kea_plugin:dhcpserver_d2config' pk=server.pk %}">{{ server }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="alert alert-secondary">
+            <div>
+                No DHCP server uses this D2 daemon. Set it on a server, or on an HA relationship for all
+                its members.
+            </div>
+        </div>
+        {% endfor %}

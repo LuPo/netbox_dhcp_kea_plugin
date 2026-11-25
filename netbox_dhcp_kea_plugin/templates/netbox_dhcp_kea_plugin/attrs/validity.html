@@ -1,0 +1,5 @@
+{% if errors %}
+<span class="badge text-bg-danger">Invalid</span>&nbsp;<i class="mdi mdi-information-outline text-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ errors|join:' ' }}"></i>
+{% else %}
+<span class="badge text-bg-success">Valid</span>
+{% endif %}

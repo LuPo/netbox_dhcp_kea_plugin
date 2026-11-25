@@ -5413,6 +5413,10 @@ class DDNSDomain(NetBoxModel):
         return reverse("plugins:netbox_dhcp_kea_plugin:ddnsdomain", args=[self.pk])
 
     @property
+    def direction(self):
+        return "Reverse" if self.is_reverse else "Forward"
+
+    @property
     def is_reverse(self):
         if self.zone_id is None:
             return False

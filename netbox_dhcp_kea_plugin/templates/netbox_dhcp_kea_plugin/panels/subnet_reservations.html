@@ -1,0 +1,87 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body">
+                {% if reservations %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Hostname</th>
+                            <th>IP Address</th>
+                            <th>MAC Address</th>
+                            <th>Device/VM</th>
+                            <th>Interface</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kea_res, meta in reservations %}
+                        <tr{% if not meta.has_hw_address %} class="table-warning"{% endif %}>
+                            <td>{{ kea_res.hostname }}</td>
+                            <td>
+                                <a href="{{ meta.ip.get_absolute_url }}">{{ meta.ip.address.ip }}</a>
+                            </td>
+                            <td>
+                                {% if meta.has_hw_address %}
+                                {{ meta.mac }}
+                                {% else %}
+                                <span class="text-warning" title="No MAC address on interface — this reservation will be excluded from KEA configuration">
+                                    <i class="mdi mdi-alert-outline"></i> Missing
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if meta.static_reservation %}
+                                <a href="{{ meta.static_reservation.get_absolute_url }}">{{ meta.host_id|default:"Static Reservation" }}</a>
+                                {% else %}
+                                <a href="{{ meta.parent_object.get_absolute_url }}">{{ meta.parent_object.name }}</a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if meta.static_reservation %}
+                                <span class="text-muted">&mdash;</span>
+                                {% else %}
+                                <a href="{{ meta.interface.get_absolute_url }}">{{ meta.interface.name }}</a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if meta.static_reservation %}
+                                <span class="badge text-bg-info">Static</span>
+                                {% elif meta.is_primary %}
+                                Primary
+                                {% elif meta.is_oob %}
+                                OOB
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if skipped_count %}
+                <div class="alert alert-warning mt-3" role="alert">
+                    <h6 class="alert-heading"><i class="mdi mdi-alert-outline"></i> Reservations without MAC address</h6>
+                    <p class="mb-0">
+                        {{ skipped_count }} reservation{{ skipped_count|pluralize }} highlighted in yellow
+                        {{ skipped_count|pluralize:"has,have" }} no MAC address on {{ skipped_count|pluralize:"its,their" }}
+                        interface and will be <strong>excluded</strong> from the KEA configuration output.
+                        KEA requires either <code>hw-address</code> or <code>duid</code> for each reservation &mdash;
+                        without one of these identifiers, <code>kea-dhcp4.service</code> validation will fail.
+                        To include these reservations, assign a MAC address to the corresponding interface in NetBox.
+                    </p>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="text-muted">
+                    <p>No reservations found in this prefix.</p>
+                    <p class="small">
+                        Reservations are automatically discovered from IP addresses that:
+                        <ul>
+                            <li>Are assigned to an interface (device or virtual machine)</li>
+                            <li>Are marked as Primary IP or Out-of-Band IP</li>
+                            <li>Are not FHRP group addresses</li>
+                        </ul>
+                    </p>
+                </div>
+                {% endif %}
+</div>
+{% endblock panel_content %}

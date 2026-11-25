@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed — pages use NetBox 4.7's declarative UI
+Every detail page and tab is now declared with NetBox's own layouts, panels and attributes (`netbox.ui`), as NetBox's core apps are, instead of hand-written templates. Pages look and behave like the rest of NetBox:
+
+- **Tags, custom fields and plugin content** appear on every page; most templates left them out.
+- **A Journal tab** on every object, from NetBox's automatic registration. Views are registered with `register_model_view` and routed with `get_model_urls`; URL names and paths are unchanged.
+- **Related objects are NetBox tables.** Tabs such as a hook group's servers or a policy's subnets are child tables with filtering, column choice and bulk actions. Panels on detail pages, such as a subnet's option data or a vendor space's definitions, load the filtered list view.
+- **Configuration blocks** (Kea JSON, D2, Stork `.env`) are panels with a copy button, and a Download button where there was one. They no longer load highlight.js from a CDN.
+- **Labels are Title Case**, as in NetBox. Rows that only matter in context (HA URL, socket addresses, HA egress port) still show only then, and Stork and DDNS rows follow their settings without a restart.
+- The agent group's *TLS Cert Verification* row always showed a tick because of a typo in its template; it now reflects the setting.
+
+Two tests that asserted the old templates' pinned label column were removed, since NetBox's attribute panels do not pin it. A new test renders every page and tab of every model, and checks the filters of each embedded table.
+
 ## 0.11.0 (2026-11-25)
 
 Every Kea rule below was checked against Kea 3.0's own grammar and parsers (`dhcp4_parser.yy`, `d2_parser.yy`, `d2_client_cfg.cc`, `d2_config.cc`), not against prose.

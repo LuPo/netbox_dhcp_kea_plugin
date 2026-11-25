@@ -1,0 +1,6 @@
+{% if record %}
+<a href="{{ record.get_absolute_url }}">{{ value }}</a>
+{% else %}
+{{ value }}
+{% if dns_integration %}<span class="badge text-bg-warning">unbound</span>{% endif %}
+{% endif %}
