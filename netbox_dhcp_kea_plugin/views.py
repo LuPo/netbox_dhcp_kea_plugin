@@ -4,10 +4,15 @@ from django.contrib import messages
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.utils.translation import gettext_lazy as _
+from extras.ui.panels import CustomFieldsPanel, TagsPanel
+from netbox.ui import layout
+from netbox.ui.panels import JSONPanel, ObjectsTablePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
+from .ui import panels as ui_panels
 from .models import SubnetPool
 
 
@@ -15,6 +20,23 @@ from .models import SubnetPool
 @register_model_view(models.Hook)
 class HookView(generic.ObjectView):
     queryset = models.Hook.objects.prefetch_related("hook_groups")
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HookPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            JSONPanel("parameters", title=_("Parameters")),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.HookGroup",
+                title=_("Hook Groups"),
+                filters={"hooks": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.Hook, "list", path="", detail=False)
@@ -56,28 +78,20 @@ def get_hook_group_count(obj):
 
 
 @register_model_view(models.Hook, name="hook_groups", path="hook-groups")
-class HookHookGroupsView(generic.ObjectView):
+class HookHookGroupsView(generic.ObjectChildrenView):
     queryset = models.Hook.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hook_hookgroups.html"
+    child_model = models.HookGroup
+    table = tables.HookGroupTable
+    filterset = filtersets.HookGroupFilterSet
+    filterset_form = forms.HookGroupFilterForm
     tab = ViewTab(
-        label="Hook Groups",
+        label=_("Hook Groups"),
         badge=get_hook_group_count,
         permission="netbox_dhcp_kea_plugin.view_hook",
     )
 
-    def get(self, request, pk):
-        hook = self.get_object(pk=pk)
-        hook_groups = hook.hook_groups.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook,
-                "hook_groups": hook_groups,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.hook_groups.restrict(request.user, "view")
 
 
 # HookGroup Views
