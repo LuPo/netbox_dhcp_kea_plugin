@@ -451,7 +451,16 @@ class HAAuthenticationPanel(AttributesPanel):
     )
 
     ha_basic_auth_user = attrs.TextAttr("ha_basic_auth_user", label=_("Basic Auth User"))
+    ha_basic_auth_password_backend = attrs.ChoiceAttr("ha_basic_auth_password_backend", label=_("Password Backend"))
     ha_basic_auth_password = SecretSetAttr("ha_basic_auth_password", label=_("Basic Auth Password"))
+    ha_basic_auth_password_ref = attrs.TextAttr(
+        "ha_basic_auth_password_ref", label=_("Password Reference"), style="font-monospace"
+    )
+
+    hide_when = {
+        "ha_basic_auth_password": lambda ha: ha.password_by_reference,
+        "ha_basic_auth_password_ref": lambda ha: not ha.password_by_reference,
+    }
 
 
 class HADDNSPanel(AttributesPanel):
@@ -636,34 +645,59 @@ class DHCPServerDDNSPanel(AttributesPanel):
     sender = attrs.TemplatedAttr("pk", template_name="netbox_dhcp_kea_plugin/attrs/ddns_sender.html")
 
 
-def d2_config_title_icons(context):
-    """Info icons after a D2 config's title: a template awaiting substitution, hidden secrets."""
-    icons = []
-    if context.get("requires_secret_substitution"):
-        icons.append(
-            format_html(
-                '<i class="mdi mdi-information-outline text-muted ms-1" data-bs-toggle="tooltip" '
-                'data-bs-placement="right" title="{}"></i>',
-                _(
-                    "This configuration is a template: at least one TSIG key uses the vault backend, so its "
-                    "secret is rendered as a reference, not the secret itself. Substitute it on the target "
-                    "before deploying, then validate the result. KEA reads each TSIG secret as base64 and "
-                    "will not load the reference."
-                ),
+def secret_title_icons(template_message, redacted_message):
+    """Info icons after a config's title: a template awaiting substitution, hidden secrets.
+
+    Returns ``icons(context)``, reading ``requires_secret_substitution`` and
+    ``secrets_redacted`` from the view's context.
+    """
+
+    def icons(context):
+        parts = []
+        if context.get("requires_secret_substitution"):
+            parts.append(
+                format_html(
+                    '<i class="mdi mdi-information-outline text-muted ms-1" data-bs-toggle="tooltip" '
+                    'data-bs-placement="right" title="{}"></i>',
+                    template_message,
+                )
             )
-        )
-    if context.get("secrets_redacted"):
-        icons.append(
-            format_html(
-                '<i class="mdi mdi-lock text-info ms-1" data-bs-toggle="tooltip" data-bs-placement="right" '
-                'title="{}"></i>',
-                _(
-                    "TSIG secrets are hidden: revealing them requires the view_secret_tsigkey permission, so "
-                    "this copy cannot be deployed as shown."
-                ),
+        if context.get("secrets_redacted"):
+            parts.append(
+                format_html(
+                    '<i class="mdi mdi-lock text-info ms-1" data-bs-toggle="tooltip" data-bs-placement="right" '
+                    'title="{}"></i>',
+                    redacted_message,
+                )
             )
-        )
-    return format_html("{}", mark_safe("".join(str(icon) for icon in icons)))
+        return mark_safe("".join(str(part) for part in parts))
+
+    return icons
+
+
+d2_config_title_icons = secret_title_icons(
+    _(
+        "This configuration is a template: at least one TSIG key uses the vault backend, so its "
+        "secret is rendered as a reference, not the secret itself. Substitute it on the target "
+        "before deploying, then validate the result. KEA reads each TSIG secret as base64 and "
+        "will not load the reference."
+    ),
+    _(
+        "TSIG secrets are hidden: revealing them requires the view_secret_tsigkey permission, so "
+        "this copy cannot be deployed as shown."
+    ),
+)
+
+dhcp4_config_title_icons = secret_title_icons(
+    _(
+        "This configuration is a template: the HA basic-auth password uses the vault backend, so it is "
+        "rendered as a reference. Substitute it on the target before deploying."
+    ),
+    _(
+        "The HA basic-auth password is hidden: revealing it requires the view_secret_dhcpharelationship "
+        "permission, so this copy cannot be deployed as shown."
+    ),
+)
 
 
 def kea_config_panel(element_id, title=None, **kwargs):

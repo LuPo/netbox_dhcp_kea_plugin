@@ -699,20 +699,38 @@ class DHCPServerKeaConfigView(generic.ObjectView):
         layout.Row(
             layout.Column(
                 ui_panels.KeaJSONPanel(
-                    lambda server, _ctx: server.to_kea_dict(),
+                    lambda _server, ctx: ctx["kea_config"],
                     title=_("kea-dhcp4.conf"),
                     element_id="kea-config",
+                    title_icons=ui_panels.dhcp4_config_title_icons,
                     actions=[ui_panels.ExportAction("kea-config")],
                 ),
             ),
         ),
     )
 
+    def get_extra_context(self, request, instance):
+        # Reading the config must not reveal the HA password the relationship page withholds.
+        redacted = instance.contains_secrets() and not request.user.has_perm(
+            "netbox_dhcp_kea_plugin.view_secret_dhcpharelationship"
+        )
+        return {
+            "kea_config": instance.to_kea_dict(redact_secrets=redacted),
+            "secrets_redacted": redacted,
+            "requires_secret_substitution": instance.requires_secret_substitution(),
+        }
+
     def get(self, request, **kwargs):
         if request.GET.get("export") == "kea-config":
+            from django.core.exceptions import PermissionDenied
             from django.http import HttpResponse
 
             server = self.get_object(**kwargs)
+            # A download is for deploying, so it is refused rather than redacted.
+            if server.contains_secrets() and not request.user.has_perm(
+                "netbox_dhcp_kea_plugin.view_secret_dhcpharelationship"
+            ):
+                raise PermissionDenied("Downloading this configuration requires view_secret_dhcpharelationship.")
             response = HttpResponse(json.dumps(server.to_kea_dict(), indent=4), content_type="application/json")
             response["Content-Disposition"] = f'attachment; filename="{server.name}_kea-config.json"'
             return response
