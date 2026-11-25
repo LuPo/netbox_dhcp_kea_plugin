@@ -37,17 +37,25 @@ def _vault_backend(tsig_key):
     builds each TSIG key from its base64 secret while parsing, so it will not
     load — nor pass ``kea-dhcp-ddns -t`` — until substituted.
     """
-    from netbox.plugins.utils import get_plugin_config
 
     if not tsig_key.secret_ref:
         raise TSIGSecretBackendError(
             f"TSIG key '{tsig_key.name}' uses the vault backend but has no secret reference."
         )
 
+    return render_reference(tsig_key.secret_ref)
+
+
+def render_reference(ref):
+    """The placeholder the deployment substitutes for a secret at ``ref``, e.g. ``${BAO:ref}``.
+
+    Shared by every secret the plugin renders by reference: TSIG keys and the HA
+    basic-auth password.
+    """
     template = get_plugin_config("netbox_dhcp_kea_plugin", "ddns_secret_reference_template")
     # str.replace rather than str.format: the default template contains "${BAO:"
     # and format() would read "{BAO:" as a field with a format spec.
-    return template.replace("{ref}", tsig_key.secret_ref)
+    return template.replace("{ref}", ref)
 
 
 TSIG_SECRET_BACKENDS = {

@@ -595,6 +595,8 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
             "ha_proxy_enabled",
             "ha_basic_auth_user",
             "ha_basic_auth_password",
+            "ha_basic_auth_password_backend",
+            "ha_basic_auth_password_ref",
             "description",
             "servers",
             "d2_daemon",
@@ -611,6 +613,12 @@ class DHCPHARelationshipSerializer(NetBoxModelSerializer):
         if not get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
             for f in ("d2_daemon", "ddns_enable_updates", "ddns_policy"):
                 self.fields.pop(f, None)
+        # Like a TSIG key's secret: writable by anyone who may change the relationship,
+        # readable only with the permission.
+        request = self.context.get("request") if self.context else None
+        if request is None or not request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_dhcpharelationship"):
+            if "ha_basic_auth_password" in self.fields:
+                self.fields["ha_basic_auth_password"].write_only = True
 
     def get_d2_daemon(self, obj):
         if obj.d2_daemon is None:

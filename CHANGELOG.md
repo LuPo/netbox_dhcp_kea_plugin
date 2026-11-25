@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added — the HA basic-auth password can come from OpenBao
+An HA relationship's password was stored in NetBox and printed in clear on every member's *KEA Configuration* tab, and in its `kea-config/` response, to anyone who could view the server.
+
+- **OpenBao backend.** `ha_basic_auth_password_backend` chooses `plaintext` (the default, as before) or `vault`. With `vault`, `ha_basic_auth_password_ref` is rendered on every peer as `${BAO:<path>#<field>}`, through the same template and reference check as TSIG keys, and the deployment substitutes it. The form shows the password or the reference, whichever the backend uses; switching to `vault` clears the stored password.
+- **A stored password is gated** by the new `view_secret_dhcpharelationship` permission. Without it the *KEA Configuration* tab redacts it, and its Download and `kea-config/` answer 403; the relationship's REST representation no longer returns it.
+- **Breaking for deployments:** a token that fetches `kea-config/` for a server whose relationship stores its password now needs `view_secret_dhcpharelationship`, or the relationship moved to OpenBao.
+
+### Migration
+`0017_alter_dhcpharelationship_options_and_more` adds `DHCPHARelationship.ha_basic_auth_password_backend` and `ha_basic_auth_password_ref`, and the `view_secret_dhcpharelationship` permission. Existing relationships keep the `plaintext` backend.
+
 ### Changed — pages use NetBox 4.7's declarative UI
 Every detail page and tab is now declared with NetBox's own layouts, panels and attributes (`netbox.ui`), as NetBox's core apps are, instead of hand-written templates. Pages look and behave like the rest of NetBox:
 
