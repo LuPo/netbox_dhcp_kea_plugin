@@ -76,7 +76,7 @@ def domain(d2_daemon, forward_zone, name_server, tsig_key):
     from netbox_dhcp_kea_plugin.models import DDNSDomain
 
     forward_zone.nameservers.add(name_server)
-    return DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=tsig_key)
+    return DDNSDomain.objects.create(zone=forward_zone, tsig_key=tsig_key)
 
 
 # ---------------------------------------------------------------------------
@@ -99,66 +99,105 @@ class TestSecretRedaction:
         assert entry["secret"] == "${BAO:kea/tsig/vault-key#secret}"
 
     def test_the_daemon_redacts_every_held_secret(self, d2_daemon, domain, tsig_key):
-        config = d2_daemon.to_kea_dict(redact_secrets=True)
+        config = d2_daemon.render([domain], redact_secrets=True)
 
         assert tsig_key.secret_plaintext not in str(config)
-        assert d2_daemon.contains_secrets() is True
+        assert d2_daemon.contains_secrets([domain]) is True
 
     def test_a_vault_only_daemon_holds_no_secrets(self, d2_daemon, forward_zone, name_server):
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
         forward_zone.nameservers.add(name_server)
-        DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=_vault_key())
+        vault_domain = DDNSDomain.objects.create(zone=forward_zone, tsig_key=_vault_key())
 
-        assert d2_daemon.contains_secrets() is False
-        assert d2_daemon.requires_secret_substitution() is True
+        assert d2_daemon.contains_secrets([vault_domain]) is False
+        assert d2_daemon.requires_secret_substitution([vault_domain]) is True
+
+
+@pytest.fixture
+def ddns_server(dhcp_server, d2_daemon, subnet_factory):
+    """A server on the local D2 daemon whose subnet's names fall in example.com."""
+    from netbox_dhcp_kea_plugin.models import DDNSPolicy
+
+    policy = DDNSPolicy.objects.create(name="lab-names", ddns_qualifying_suffix="host.example.com")
+    subnet = subnet_factory(server=dhcp_server)
+    subnet.ddns_policy = policy
+    subnet.save()
+    dhcp_server.d2_daemon = d2_daemon
+    dhcp_server.save()
+    return dhcp_server
 
 
 @ddns_routes
 class TestSecretPermission:
-    """Viewing a D2 daemon must not reveal what the TSIG key page withholds."""
+    """Viewing a D2 configuration must not reveal what the TSIG key page withholds."""
 
     @pytest.fixture
-    def daemon_viewer(self, db):
-        from netbox_dhcp_kea_plugin.models import D2Daemon
+    def viewer(self, db):
+        from netbox_dhcp_kea_plugin.models import D2Daemon, DHCPServer
 
         user = get_user_model().objects.create_user(username="d2viewer", password="x")
         _grant(user, D2Daemon, "view")
+        _grant(user, DHCPServer, "view")
         return user
 
     @pytest.fixture
-    def secret_viewer(self, daemon_viewer):
+    def secret_viewer(self, viewer):
         from netbox_dhcp_kea_plugin.models import TSIGKey
 
-        _grant(daemon_viewer, TSIGKey, "view", "view_secret")
-        return daemon_viewer
+        _grant(viewer, TSIGKey, "view", "view_secret")
+        return viewer
 
-    def _api_get(self, user, daemon):
+    @staticmethod
+    def _get(user, viewname, pk):
         client = APIClient()
         client.force_authenticate(user=user)
-        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-kea-config", args=[daemon.pk])
-        return client.get(url)
+        return client.get(reverse(f"plugins-api:netbox_dhcp_kea_plugin-api:{viewname}", args=[pk]))
 
-    def test_the_api_refuses_secrets_without_the_permission(self, daemon_viewer, d2_daemon, domain):
-        resp = self._api_get(daemon_viewer, d2_daemon)
+    def test_the_server_config_refuses_secrets_without_the_permission(self, viewer, ddns_server, domain):
+        resp = self._get(viewer, "dhcpserver-kea-config", ddns_server.pk)
 
         assert resp.status_code == 403
         assert "view_secret_tsigkey" in str(resp.data)
 
-    def test_the_api_renders_secrets_with_the_permission(self, secret_viewer, d2_daemon, domain, tsig_key):
-        resp = self._api_get(secret_viewer, d2_daemon)
+    def test_the_server_config_carries_its_d2_with_the_permission(self, secret_viewer, ddns_server, domain, tsig_key):
+        resp = self._get(secret_viewer, "dhcpserver-kea-config", ddns_server.pk)
 
         assert resp.status_code == 200
+        assert "Dhcp4" in resp.data
         assert resp.data["DhcpDdns"]["tsig-keys"][0]["secret"] == tsig_key.secret_plaintext
 
-    def test_the_api_renders_a_daemon_without_secrets(self, daemon_viewer, d2_daemon):
-        assert self._api_get(daemon_viewer, d2_daemon).status_code == 200
+    def test_a_server_without_d2_gets_only_dhcp4(self, viewer, dhcp_server):
+        resp = self._get(viewer, "dhcpserver-kea-config", dhcp_server.pk)
 
-    def test_the_configuration_tab_redacts_without_the_permission(
-        self, client, daemon_viewer, d2_daemon, domain, tsig_key
-    ):
-        client.force_login(daemon_viewer)
-        url = reverse("plugins:netbox_dhcp_kea_plugin:d2daemon_config", args=[d2_daemon.pk])
+        assert resp.status_code == 200
+        assert "DhcpDdns" not in resp.data
+
+    def test_a_local_daemon_has_no_config_of_its_own(self, secret_viewer, d2_daemon):
+        resp = self._get(secret_viewer, "d2daemon-kea-config", d2_daemon.pk)
+
+        assert resp.status_code == 409
+        assert "dhcp-servers/<id>/kea-config/" in str(resp.data)
+
+    def test_a_remote_daemon_refuses_secrets_without_the_permission(self, viewer, ddns_server, d2_daemon, domain):
+        d2_daemon.listener_mode = "remote"
+        d2_daemon.save()
+
+        assert self._get(viewer, "d2daemon-kea-config", d2_daemon.pk).status_code == 403
+
+    def test_a_remote_daemon_renders_its_servers_domains(self, secret_viewer, ddns_server, d2_daemon, domain):
+        d2_daemon.listener_mode = "remote"
+        d2_daemon.save()
+
+        resp = self._get(secret_viewer, "d2daemon-kea-config", d2_daemon.pk)
+
+        assert resp.status_code == 200
+        names = [d["name"] for d in resp.data["DhcpDdns"]["forward-ddns"]["ddns-domains"]]
+        assert names == ["example.com."]
+
+    def test_the_server_tab_redacts_without_the_permission(self, client, viewer, ddns_server, domain, tsig_key):
+        client.force_login(viewer)
+        url = reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_d2config", args=[ddns_server.pk])
 
         resp = client.get(url)
 
@@ -166,11 +205,9 @@ class TestSecretPermission:
         assert tsig_key.secret_plaintext not in resp.content.decode()
         assert resp.context["secrets_redacted"] is True
 
-    def test_the_configuration_tab_shows_secrets_with_the_permission(
-        self, client, secret_viewer, d2_daemon, domain, tsig_key
-    ):
+    def test_the_server_tab_shows_secrets_with_the_permission(self, client, secret_viewer, ddns_server, domain, tsig_key):
         client.force_login(secret_viewer)
-        url = reverse("plugins:netbox_dhcp_kea_plugin:d2daemon_config", args=[d2_daemon.pk])
+        url = reverse("plugins:netbox_dhcp_kea_plugin:dhcpserver_d2config", args=[ddns_server.pk])
 
         resp = client.get(url)
 
@@ -319,10 +356,10 @@ class TestServerOverride:
         forward_zone.nameservers.add(second_name_server)
         self._override(domain, second_name_server, tsig_key=_vault_key("ns2-key"))
 
-        names = [key["name"] for key in d2_daemon.to_kea_dict()["DhcpDdns"]["tsig-keys"]]
+        names = [key["name"] for key in d2_daemon.render([domain])["DhcpDdns"]["tsig-keys"]]
 
         assert names == [tsig_key.name, "ns2-key"]
-        assert d2_daemon.requires_secret_substitution() is True
+        assert d2_daemon.requires_secret_substitution([domain]) is True
 
     def test_a_nameserver_outside_the_zone_is_rejected(self, domain, second_name_server):
         from netbox_dhcp_kea_plugin.models import DDNSServerOverride
@@ -373,7 +410,7 @@ class TestD2Hooks:
         group.hooks.add(gss, dhcp_only)
         group.d2_daemons.add(d2_daemon)
 
-        libraries = d2_daemon.to_kea_dict()["DhcpDdns"]["hooks-libraries"]
+        libraries = d2_daemon.render([])["DhcpDdns"]["hooks-libraries"]
 
         assert libraries == [
             {
@@ -383,7 +420,7 @@ class TestD2Hooks:
         ]
 
     def test_no_hooks_key_without_a_group(self, d2_daemon):
-        assert "hooks-libraries" not in d2_daemon.to_kea_dict()["DhcpDdns"]
+        assert "hooks-libraries" not in d2_daemon.render([])["DhcpDdns"]
 
 
 # ---------------------------------------------------------------------------
@@ -393,41 +430,62 @@ class TestD2Hooks:
 
 @ddns_routes
 class TestMultiZoneCreate:
-    def _form(self, d2_daemon, zones, **data):
+    def _form(self, zones, **data):
         from netbox_dhcp_kea_plugin.forms import DDNSDomainForm
 
-        return DDNSDomainForm(data={"d2_daemon": d2_daemon.pk, "zone": [z.pk for z in zones], **data})
+        return DDNSDomainForm(data={"zone": [z.pk for z in zones], **data})
 
-    def test_every_zone_is_validated(self, d2_daemon, forward_zone, name_server):
+    def test_every_zone_is_validated(self, forward_zone, name_server):
         forward_zone.nameservers.add(name_server)
         unresolvable = _make_zone("nothing-resolves.example.com")
 
-        form = self._form(d2_daemon, [forward_zone, unresolvable])
+        form = self._form([forward_zone, unresolvable])
 
         assert not form.is_valid()
         assert "nothing-resolves.example.com" in str(form.errors["zone"])
 
-    def test_user_context_reaches_every_row(self, d2_daemon, forward_zone, name_server):
+    def test_user_context_reaches_every_row(self, forward_zone, name_server):
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
         second = _make_zone("second.example.com")
         for zone in (forward_zone, second):
             zone.nameservers.add(name_server)
 
-        form = self._form(d2_daemon, [forward_zone, second], user_context='{"site": "lab"}')
+        form = self._form([forward_zone, second], user_context='{"site": "lab"}')
         assert form.is_valid(), form.errors
         form.save()
 
-        contexts = list(DDNSDomain.objects.filter(d2_daemon=d2_daemon).values_list("user_context", flat=True))
+        contexts = list(DDNSDomain.objects.values_list("user_context", flat=True))
         assert contexts == [{"site": "lab"}, {"site": "lab"}]
+
+    def test_every_row_gets_the_scope(self, forward_zone, name_server, dhcp_server):
+        from netbox_dhcp_kea_plugin.models import DDNSDomain
+
+        second = _make_zone("second.example.com")
+        for zone in (forward_zone, second):
+            zone.nameservers.add(name_server)
+
+        form = self._form([forward_zone, second], dhcp_server=dhcp_server.pk, always_include=True)
+        assert form.is_valid(), form.errors
+        form.save()
+
+        assert set(DDNSDomain.objects.values_list("dhcp_server", "always_include")) == {(dhcp_server.pk, True)}
+
+    def test_always_include_needs_a_scope(self, forward_zone, name_server):
+        forward_zone.nameservers.add(name_server)
+
+        form = self._form([forward_zone], always_include=True)
+
+        assert not form.is_valid()
+        assert "always_include" in form.errors
 
 
 @ddns_routes
-def test_the_d2_api_reports_outstanding_substitution(d2_daemon, forward_zone, name_server):
+def test_the_d2_api_reports_outstanding_substitution(ddns_server, d2_daemon, forward_zone, name_server):
     from netbox_dhcp_kea_plugin.models import DDNSDomain
 
     forward_zone.nameservers.add(name_server)
-    DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=_vault_key())
+    DDNSDomain.objects.create(zone=forward_zone, tsig_key=_vault_key())
     user = get_user_model().objects.create_superuser(username="d2-admin", password="x")
     client = APIClient()
     client.force_authenticate(user=user)
@@ -453,26 +511,39 @@ def admin_api(db):
 
 @ddns_routes
 class TestWritableAPI:
-    def test_a_domain_can_be_created(self, admin_api, d2_daemon, forward_zone, name_server, tsig_key):
+    def test_a_domain_can_be_created(self, admin_api, forward_zone, name_server, tsig_key):
         forward_zone.nameservers.add(name_server)
         url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
 
-        resp = admin_api.post(
-            url,
-            {"d2_daemon": d2_daemon.pk, "zone": forward_zone.pk, "tsig_key": tsig_key.pk},
-            format="json",
-        )
+        resp = admin_api.post(url, {"zone": forward_zone.pk, "tsig_key": tsig_key.pk}, format="json")
 
         assert resp.status_code == 201, resp.data
         assert resp.data["zone"] == {"id": forward_zone.pk, "name": forward_zone.name}
-        assert resp.data["d2_daemon"]["id"] == d2_daemon.pk
+        assert resp.data["scope"] == "global"
         assert resp.data["tsig_key"]["id"] == tsig_key.pk
 
-    def test_a_domain_without_a_resolvable_nameserver_is_refused(self, admin_api, d2_daemon):
+    def test_a_domain_can_be_limited_to_a_server(self, admin_api, forward_zone, name_server, dhcp_server):
+        forward_zone.nameservers.add(name_server)
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
+
+        resp = admin_api.post(url, {"zone": forward_zone.pk, "dhcp_server": dhcp_server.pk}, format="json")
+
+        assert resp.status_code == 201, resp.data
+        assert resp.data["scope"] == "server"
+        assert resp.data["dhcp_server"]["id"] == dhcp_server.pk
+
+    def test_a_second_global_entry_for_a_zone_is_refused(self, admin_api, domain, forward_zone):
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
+
+        resp = admin_api.post(url, {"zone": forward_zone.pk}, format="json")
+
+        assert resp.status_code == 400
+
+    def test_a_domain_without_a_resolvable_nameserver_is_refused(self, admin_api):
         zone = _make_zone("unresolvable.example.com")
         url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
 
-        resp = admin_api.post(url, {"d2_daemon": d2_daemon.pk, "zone": zone.pk}, format="json")
+        resp = admin_api.post(url, {"zone": zone.pk}, format="json")
 
         assert resp.status_code == 400
         assert "zone" in resp.data
@@ -513,16 +584,18 @@ class TestGraphQL:
     def admin(self, db):
         return get_user_model().objects.create_superuser(username="ddns-gql-admin", password="x")
 
-    def test_a_domain_traverses_to_its_daemon_zone_and_key(self, admin, domain, d2_daemon, tsig_key):
+    def test_a_domain_traverses_to_its_zone_key_and_scope(self, admin, domain, tsig_key):
         payload = _gql(
             admin,
             """
             {
               netbox_dhcp_kea_ddns_domain_list {
                 is_reverse
+                scope
+                always_include
+                dhcp_server { name }
                 zone { name }
                 tsig_key { name algorithm secret_backend }
-                d2_daemon { name requires_secret_substitution }
               }
             }
             """,
@@ -532,8 +605,23 @@ class TestGraphQL:
         (row,) = payload["data"]["netbox_dhcp_kea_ddns_domain_list"]
         assert row["zone"]["name"] == domain.zone.name
         assert row["tsig_key"]["name"] == tsig_key.name
-        assert row["d2_daemon"] == {"name": d2_daemon.name, "requires_secret_substitution": False}
+        assert row["scope"] == "global"
+        assert row["dhcp_server"] is None
         assert row["is_reverse"] is False
+
+    def test_a_daemon_lists_its_servers(self, admin, ddns_server, d2_daemon, domain):
+        payload = _gql(
+            admin,
+            "{ netbox_dhcp_kea_d2_daemon_list { name servers { name } requires_secret_substitution } }",
+        )
+
+        assert "errors" not in payload, payload.get("errors")
+        (row,) = payload["data"]["netbox_dhcp_kea_d2_daemon_list"]
+        assert row == {
+            "name": d2_daemon.name,
+            "servers": [{"name": ddns_server.name}],
+            "requires_secret_substitution": False,
+        }
 
     def test_the_tsig_key_type_has_no_secret(self, admin, tsig_key):
         payload = _gql(admin, "{ netbox_dhcp_kea_tsig_key_list { name secret_plaintext } }")

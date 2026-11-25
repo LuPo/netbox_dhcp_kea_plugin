@@ -1288,17 +1288,18 @@ class TSIGKeyImportView(generic.BulkImportView):
 
 
 class D2DaemonView(generic.ObjectView):
-    queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("domains", "hook_groups")
+    queryset = models.D2Daemon.objects.select_related("ip_address").prefetch_related("hook_groups")
 
     def get_extra_context(self, request, instance):
         # Rows saved before a check existed are never re-validated.
-        return {"configuration_errors": instance.configuration_errors()}
+        return {
+            "configuration_errors": instance.configuration_errors(),
+            "servers": instance.servers_using(),
+        }
 
 
 class D2DaemonListView(generic.ObjectListView):
-    queryset = models.D2Daemon.objects.annotate(
-        domains_count=Count("domains", distinct=True),
-    )
+    queryset = models.D2Daemon.objects.all()
     table = tables.D2DaemonTable
     filterset = filtersets.D2DaemonFilterSet
     filterset_form = forms.D2DaemonFilterForm
@@ -1324,28 +1325,47 @@ class D2DaemonImportView(generic.BulkImportView):
     model_form = forms.D2DaemonImportForm
 
 
-def get_d2daemon_domains_count(obj):
-    return obj.domains.count()
+def get_d2daemon_servers_count(obj):
+    return obj.servers_using().count()
 
 
 @register_model_view(models.D2Daemon, name="domains", path="domains")
 class D2DaemonDomainsView(generic.ObjectView):
+    """The domains each server using the daemon derives, and why."""
+
     queryset = models.D2Daemon.objects.all()
     template_name = "netbox_dhcp_kea_plugin/d2daemon_domains.html"
     tab = ViewTab(
-        label="Domains",
-        badge=get_d2daemon_domains_count,
+        label="Servers & Domains",
+        badge=get_d2daemon_servers_count,
         permission="netbox_dhcp_kea_plugin.view_d2daemon",
     )
 
     def get(self, request, pk):
+        from .ddns import group_by_relationship
+
         daemon = self.get_object(pk=pk)
-        domains = daemon.domains.select_related("zone", "tsig_key").prefetch_related("zone__nameservers")
+        derived_by_server = [(server, server.derived_ddns()) for server in daemon.servers_using()]
         return render(
             request,
             self.template_name,
-            {"object": daemon, "domains": domains, "tab": self.tab},
+            {"object": daemon, "groups": group_by_relationship(derived_by_server), "tab": self.tab},
         )
+
+
+def _d2_config_context(request, render_config, contains_secrets, requires_substitution):
+    """Render a D2 configuration for display, hiding secrets the user may not see.
+
+    Viewing a configuration must not reveal what the TSIG key page itself
+    withholds, so secrets NetBox holds are redacted without view_secret_tsigkey.
+    """
+    secrets_redacted = contains_secrets and not request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey")
+    config = render_config(secrets_redacted)
+    return {
+        "requires_secret_substitution": requires_substitution,
+        "secrets_redacted": secrets_redacted,
+        "config_json": json.dumps(config, indent=2) if config is not None else None,
+    }
 
 
 @register_model_view(models.D2Daemon, name="config", path="config")
@@ -1359,31 +1379,68 @@ class D2DaemonConfigView(generic.ObjectView):
 
     def get(self, request, pk):
         daemon = self.get_object(pk=pk)
-        # Viewing a daemon must not reveal what the TSIG key page itself withholds.
-        secrets_redacted = daemon.contains_secrets() and not request.user.has_perm(
-            "netbox_dhcp_kea_plugin.view_secret_tsigkey"
-        )
-        config = daemon.to_kea_dict(redact_secrets=secrets_redacted)
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": daemon,
-                "tab": self.tab,
-                "requires_secret_substitution": daemon.requires_secret_substitution(),
-                "secrets_redacted": secrets_redacted,
-                "config_json": json.dumps(config, indent=2),
-            },
-        )
+        context = {"object": daemon, "tab": self.tab, "servers": daemon.servers_using()}
+        if not daemon.is_local:
+            domains, _errors = daemon.derived_domains()
+            context.update(
+                _d2_config_context(
+                    request,
+                    lambda redact: daemon.render(domains, redact_secrets=redact),
+                    daemon.contains_secrets(domains),
+                    daemon.requires_secret_substitution(domains),
+                )
+            )
+        return render(request, self.template_name, context)
+
+
+def _ddns_enabled(_instance=None):
+    from netbox.plugins.utils import get_plugin_config
+
+    return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
+
+
+@register_model_view(models.DHCPServer, name="d2config", path="d2-config")
+class DHCPServerD2ConfigView(generic.ObjectView):
+    """This host's derived D2 domains and its kea-dhcp-ddns configuration."""
+
+    queryset = models.DHCPServer.objects.select_related("ha_relationship", "d2_daemon")
+    template_name = "netbox_dhcp_kea_plugin/dhcpserver_d2config.html"
+    tab = ViewTab(
+        label="D2 Configuration",
+        visible=_ddns_enabled,
+        permission="netbox_dhcp_kea_plugin.view_dhcpserver",
+        weight=1600,
+    )
+
+    def get(self, request, pk):
+        server = self.get_object(pk=pk)
+        derived = server.derived_ddns()
+        context = {
+            "object": server,
+            "tab": self.tab,
+            "daemon": server.effective_d2_daemon,
+            "runs_local_d2": server.runs_local_d2(),
+            "derived": derived,
+        }
+        if server.runs_local_d2():
+            context.update(
+                _d2_config_context(
+                    request,
+                    lambda redact: server.d2_kea_dict(redact_secrets=redact, derived=derived),
+                    server.d2_contains_secrets(derived),
+                    server.d2_requires_secret_substitution(derived),
+                )
+            )
+        return render(request, self.template_name, context)
 
 
 # --- DDNSDomain Views ---
 
 
 class DDNSDomainView(generic.ObjectView):
-    queryset = models.DDNSDomain.objects.select_related("d2_daemon", "zone", "tsig_key").prefetch_related(
-        "zone__nameservers"
-    )
+    queryset = models.DDNSDomain.objects.select_related(
+        "dhcp_server", "ha_relationship", "zone", "tsig_key"
+    ).prefetch_related("zone__nameservers")
 
     def get_extra_context(self, request, instance):
         # What each nameserver renders as, with the override (if any) that shapes it.

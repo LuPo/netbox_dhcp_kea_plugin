@@ -271,7 +271,10 @@ class TSIGKeyType(NetBoxObjectType):
 class D2DaemonType(NetBoxObjectType):
     name: str
     ip_address: Annotated["IPAddressType", strawberry.lazy("ipam.graphql.types")] | None
-    domains: list[Annotated["DDNSDomainType", strawberry.lazy(_PLUGIN_TYPES)]]
+
+    @strawberry_django.field(description="DHCP servers using this daemon; their subnets decide its domains.")
+    def servers(self) -> list[Annotated["DHCPServerType", strawberry.lazy(_PLUGIN_TYPES)]]:
+        return list(self.servers_using())
 
     @strawberry_django.field(description="Whether kea-config is a template awaiting secret substitution.")
     def requires_secret_substitution(self) -> bool:
@@ -280,12 +283,12 @@ class D2DaemonType(NetBoxObjectType):
 
 @strawberry_django.type(
     DDNSDomain,
-    fields=["id", "user_context"],
+    fields=["id", "always_include", "user_context"],
     filters=DDNSDomainFilter,
     pagination=True,
 )
 class DDNSDomainType(NetBoxObjectType):
-    d2_daemon: Annotated["D2DaemonType", strawberry.lazy(_PLUGIN_TYPES)]
+    dhcp_server: Annotated["DHCPServerType", strawberry.lazy(_PLUGIN_TYPES)] | None
     zone: Annotated["NetBoxDNSZoneType", strawberry.lazy("netbox_dns.graphql.types")]
     tsig_key: Annotated["TSIGKeyType", strawberry.lazy(_PLUGIN_TYPES)] | None
     server_overrides: list[Annotated["DDNSServerOverrideType", strawberry.lazy(_PLUGIN_TYPES)]]
@@ -293,6 +296,14 @@ class DDNSDomainType(NetBoxObjectType):
     @strawberry_django.field(description="Whether the zone is a reverse (in-addr.arpa / ip6.arpa) zone.")
     def is_reverse(self) -> bool:
         return self.is_reverse
+
+    @strawberry_django.field(description="global, ha_relationship or server.")
+    def scope(self) -> str:
+        return self.scope
+
+    @strawberry_django.field(description="ID of the HA relationship this entry is limited to, if any.")
+    def ha_relationship_id(self) -> int | None:
+        return self.ha_relationship_id
 
 
 @strawberry_django.type(

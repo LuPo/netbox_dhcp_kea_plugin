@@ -14,8 +14,8 @@ NetBox becomes the source of truth for *what Kea should be*; deploying the rende
 | NetBox | Plugin           | netbox-plugin-dns |
 |--------|------------------|-------------------|
 | 4.7    | 0.10.3 and later | 1.7               |
-| 4.6    | 0.9.0 and later  | 1.6               |
-| 4.5    | 0.8.x            | 1.5               |
+| 4.6    | 0.9.0 to 0.10.4  | 1.6               |
+| 4.5.4+ | 0.8.x            | 1.5               |
 
 [netbox-plugin-dns](https://github.com/peteeckel/netbox-plugin-dns) is required since 0.8.0. Install the release that matches your NetBox version, and enable it alongside this plugin.
 
@@ -25,7 +25,7 @@ NetBox becomes the source of truth for *what Kea should be*; deploying the rende
 pip install netbox-dhcp-kea-plugin "netbox-plugin-dns~=1.7.0"
 ```
 
-On NetBox 4.6, use `netbox-plugin-dns~=1.6.0`. Add `netbox_dns` and `netbox_dhcp_kea_plugin` to `PLUGINS` in your NetBox configuration, run `python manage.py migrate`, and restart NetBox.
+On NetBox 4.6, install `netbox-dhcp-kea-plugin==0.10.4` with `netbox-plugin-dns~=1.6.0` instead. Add `netbox_dns` and `netbox_dhcp_kea_plugin` to `PLUGINS` in your NetBox configuration, run `python manage.py migrate`, and restart NetBox.
 
 Full installation, configuration, feature reference, usage walkthroughs, and design guides live in the documentation site linked above.
 

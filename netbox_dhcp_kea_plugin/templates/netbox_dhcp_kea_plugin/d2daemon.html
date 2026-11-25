@@ -81,8 +81,14 @@
                         </td>
                     </tr>
                     <tr>
-                        <th>Domains</th>
-                        <td>{{ object.domains.count }}</td>
+                        <th>Servers</th>
+                        <td>
+                            {% for server in servers %}
+                            <a href="{{ server.get_absolute_url }}">{{ server }}</a>{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                            {{ ''|placeholder }}
+                            {% endfor %}
+                        </td>
                     </tr>
                     <tr>
                         <th>Hook Groups</th>

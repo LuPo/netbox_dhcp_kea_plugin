@@ -364,6 +364,11 @@ if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"):
             views.D2DaemonConfigView.as_view(),
             name="d2daemon_config",
         ),
+        path(
+            "dhcp-servers/<int:pk>/d2-config/",
+            views.DHCPServerD2ConfigView.as_view(),
+            name="dhcpserver_d2config",
+        ),
         # DDNSDomain URLs
         path("ddns-domains/", views.DDNSDomainListView.as_view(), name="ddnsdomain_list"),
         path("ddns-domains/add/", views.DDNSDomainEditView.as_view(), name="ddnsdomain_add"),

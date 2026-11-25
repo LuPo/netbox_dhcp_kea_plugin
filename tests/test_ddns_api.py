@@ -78,7 +78,7 @@ def d2_daemon(db):
     from netbox_dhcp_kea_plugin.models import D2Daemon
 
     ip = IPAddress.objects.create(address="10.0.2.50/24")
-    return D2Daemon.objects.create(name="d2-api", ip_address=ip)
+    return D2Daemon.objects.create(name="d2-api", ip_address=ip, listener_mode="remote")
 
 
 def test_tsig_key_serializer_hides_secret_without_perm(tsig_key, viewer_user):

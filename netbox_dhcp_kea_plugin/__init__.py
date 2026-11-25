@@ -2,11 +2,15 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.10.4"
+__version__ = "0.11.0"
 
 
 from netbox.plugins import PluginConfig
 from rest_framework import serializers
+
+# <path>#<field> relative to the KV mount: one or more segments, no leading
+# "kv" mount segment, one field.
+DEFAULT_SECRET_REFERENCE_PATTERN = r"(?!kv[/#])[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*#[A-Za-z0-9._-]+"
 
 
 class DHCPKEAConfig(PluginConfig):
@@ -17,6 +21,8 @@ class DHCPKEAConfig(PluginConfig):
     author = __author__
     author_email = __email__
     base_url = "netbox_dhcp_kea_plugin"
+    # An older NetBox skips the plugin with a warning instead of loading it
+    min_version = "4.7.0"
     default_settings = {
         "top_level_menu": True,
         "menu_name": "DHCP KEA",
@@ -34,6 +40,11 @@ class DHCPKEAConfig(PluginConfig):
         # the deployment substitutes this on the target, so the format only has
         # to match whatever does the substituting.
         "ddns_secret_reference_template": "${BAO:{ref}}",
+        # Regular expression a vault-backend secret_ref must fully match. The
+        # default is <path>#<field>, relative to the KV mount (no "kv/"), in
+        # letters, digits, '.', '_' and '-' — what the deployment can find in
+        # the rendered placeholder. Empty disables the check.
+        "ddns_secret_reference_pattern": DEFAULT_SECRET_REFERENCE_PATTERN,
         # KEA 3.0 accepts control sockets only in its run directory, never /tmp.
         "d2_default_control_socket_path": "/var/run/kea/kea-ddns-ctrl-socket",
         "model_defaults": {

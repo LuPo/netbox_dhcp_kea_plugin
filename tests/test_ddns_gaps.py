@@ -88,12 +88,12 @@ class TestVaultSecretBackend:
     ):
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
-        assert d2_daemon.requires_secret_substitution() is False
+        assert d2_daemon.requires_secret_substitution(DDNSDomain.objects.all()) is False
 
         forward_zone.nameservers.add(name_server)
-        DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=self._key())
+        DDNSDomain.objects.create(zone=forward_zone, tsig_key=self._key())
 
-        assert d2_daemon.requires_secret_substitution() is True
+        assert d2_daemon.requires_secret_substitution(DDNSDomain.objects.all()) is True
 
     def test_a_plaintext_only_daemon_needs_no_substitution(
         self, d2_daemon, forward_zone, name_server, tsig_key  # noqa: F811
@@ -101,9 +101,9 @@ class TestVaultSecretBackend:
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
         forward_zone.nameservers.add(name_server)
-        DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=forward_zone, tsig_key=tsig_key)
+        DDNSDomain.objects.create(zone=forward_zone, tsig_key=tsig_key)
 
-        assert d2_daemon.requires_secret_substitution() is False
+        assert d2_daemon.requires_secret_substitution(DDNSDomain.objects.all()) is False
 
 
 @pytest.mark.django_db
@@ -114,10 +114,10 @@ class TestMissingKeaKeys:
         d2_daemon.dns_server_timeout = 1000
         d2_daemon.save()
 
-        assert d2_daemon.to_kea_dict()["DhcpDdns"]["dns-server-timeout"] == 1000
+        assert d2_daemon.render([])["DhcpDdns"]["dns-server-timeout"] == 1000
 
     def test_it_is_absent_when_unset(self, d2_daemon):  # noqa: F811
-        assert "dns-server-timeout" not in d2_daemon.to_kea_dict()["DhcpDdns"]
+        assert "dns-server-timeout" not in d2_daemon.render([])["DhcpDdns"]
 
     def test_max_queue_size_is_emitted_when_set(self, dhcp_server_factory, d2_daemon):  # noqa: F811
         server = dhcp_server_factory(name="kea-ddns-queue", ip_suffix=221)
@@ -148,8 +148,7 @@ class TestMissingKeaKeys:
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
         forward_zone.nameservers.add(name_server)
-        domain = DDNSDomain.objects.create(
-            d2_daemon=d2_daemon, zone=forward_zone, user_context={"owner": "netops"}
+        domain = DDNSDomain.objects.create(zone=forward_zone, user_context={"owner": "netops"}
         )
 
         assert domain.to_kea_dict()["user-context"] == {"owner": "netops"}
@@ -170,7 +169,7 @@ class TestDomainNeedsAResolvableNameserver:
         from netbox_dhcp_kea_plugin.models import DDNSDomain
 
         forward_zone.nameservers.add(name_server)
-        domain = DDNSDomain(d2_daemon=d2_daemon, zone=forward_zone)
+        domain = DDNSDomain(zone=forward_zone)
 
         domain.clean()
 
@@ -190,7 +189,7 @@ class TestDomainNeedsAResolvableNameserver:
             defaults={"soa_mname": soa, "soa_rname": "hostmaster.example.net"},
         )
 
-        domain = DDNSDomain(d2_daemon=d2_daemon, zone=zone)
+        domain = DDNSDomain(zone=zone)
 
         with pytest.raises(ValidationError) as exc:
             domain.clean()

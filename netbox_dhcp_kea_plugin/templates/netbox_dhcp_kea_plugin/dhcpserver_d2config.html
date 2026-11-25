@@ -1,0 +1,95 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load builtins.tags %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-4">
+        <div class="card mb-3">
+            <h5 class="card-header">D2 Daemon</h5>
+            <table class="table table-hover attr-table">
+                <tr>
+                    <th scope="row">Daemon</th>
+                    <td>
+                        {% if daemon %}
+                        <a href="{{ daemon.get_absolute_url }}">{{ daemon }}</a>
+                        {% else %}
+                        {{ ''|placeholder }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Listener</th>
+                    <td>
+                        {% if daemon %}
+                        {{ daemon.listener_ip|placeholder }}:{{ daemon.port }}
+                        {% if daemon.is_local %}<span class="badge text-bg-secondary">local</span>{% else %}<span class="badge text-bg-secondary">remote</span>{% endif %}
+                        {% else %}
+                        {{ ''|placeholder }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Runs on this host</th>
+                    <td>{% checkmark runs_local_d2 %}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="col col-md-8">
+        <div class="card mb-3">
+            <h5 class="card-header">DDNS Domains</h5>
+            <div class="card-body">
+                {% include 'netbox_dhcp_kea_plugin/inc/ddns_derived_domains.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if runs_local_d2 %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card mb-3">
+            <h2 class="card-header d-flex justify-content-between">
+                <span>
+                    kea-dhcp-ddns.conf
+                    {% if requires_secret_substitution %}
+                    <i class="mdi mdi-information-outline text-muted ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="This configuration is a template: at least one TSIG key uses the vault backend, so its secret is rendered as a reference, not the secret itself. Substitute it on the target before deploying, then validate the result. KEA reads each TSIG secret as base64 and will not load the reference."></i>
+                    {% endif %}
+                    {% if secrets_redacted %}
+                    <i class="mdi mdi-lock text-info ms-1" data-bs-toggle="tooltip" data-bs-placement="right" title="TSIG secrets are hidden: revealing them requires the view_secret_tsigkey permission, so this copy cannot be deployed as shown."></i>
+                    {% endif %}
+                </span>
+                <div>
+                    {% copy_content "d2-config" %}
+                </div>
+            </h2>
+            <pre class="card-body mb-0 language-json" id="d2-config">{{ config_json }}</pre>
+        </div>
+    </div>
+</div>
+{% elif daemon %}
+<div class="alert alert-secondary" role="alert">
+    <div>
+        {% if daemon.is_local %}
+        DDNS updates are off for this server, so it runs no D2.
+        {% else %}
+        D2 daemon {{ daemon }} is remote: one shared D2 serves every server using it. Its configuration
+        is on the daemon's <a href="{% url 'plugins:netbox_dhcp_kea_plugin:d2daemon_config' pk=daemon.pk %}">Configuration</a> tab.
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    hljs.highlightAll();
+});
+</script>
+{% endblock %}

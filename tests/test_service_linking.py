@@ -50,8 +50,8 @@ def test_save_creates_and_links_service(vm_ip, service_template):
 
 
 def test_created_service_copies_template_ports(vm_ip, service_template):
-    """Read back through protocol/ports, which work on every NetBox version: columns
-    before 4.7, properties derived from port_mappings from 4.7 on."""
+    """Read back through protocol/ports, the read-only properties NetBox derives
+    from port_mappings."""
     server = _make_server("dhcp-ports", vm_ip, service_template)
     server.refresh_from_db()
     assert server.service.protocol == "udp"

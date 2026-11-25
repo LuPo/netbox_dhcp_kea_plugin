@@ -133,9 +133,9 @@ class D2DaemonFilter(NetBoxModelFilter):
 
 @strawberry_django.filter_type(DDNSDomain, lookups=True)
 class DDNSDomainFilter(NetBoxModelFilter):
-    d2_daemon: (
+    dhcp_server: (
         Annotated[
-            "D2DaemonFilter",
+            "DHCPServerFilter",
             strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
         ]
         | None

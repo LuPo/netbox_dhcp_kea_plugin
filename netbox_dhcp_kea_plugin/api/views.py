@@ -3,6 +3,7 @@ from ipam.api.serializers import IPAddressSerializer
 from ipam.filtersets import IPAddressFilterSet
 from ipam.models import IPAddress, Prefix
 from netbox.api.viewsets import NetBoxModelViewSet
+from netbox.plugins.utils import get_plugin_config
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -121,9 +122,26 @@ class DHCPServerViewSet(NetBoxModelViewSet):
         This endpoint generates a full Dhcp4 configuration dictionary
         including all option definitions, client classes, and subnets
         associated with this DHCP server.
+
+        When DDNS is enabled and the server uses a local D2 daemon, the host's
+        own kea-dhcp-ddns configuration is returned beside it as ``DhcpDdns``,
+        with only the domains and keys this server needs. Like the D2 daemon
+        endpoint, a configuration carrying TSIG secrets is refused rather than
+        redacted for a user without ``view_secret_tsigkey``.
         """
         server = self.get_object()
-        return Response(server.to_kea_dict())
+        config = server.to_kea_dict()
+        if get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns") and server.runs_local_d2():
+            derived = server.derived_ddns()
+            if server.d2_contains_secrets(derived) and not request.user.has_perm(
+                "netbox_dhcp_kea_plugin.view_secret_tsigkey"
+            ):
+                raise PermissionDenied(
+                    "This server's D2 configuration contains TSIG secrets. Rendering it requires the "
+                    "view_secret_tsigkey permission."
+                )
+            config.update(server.d2_kea_dict(derived=derived))
+        return Response(config)
 
 
 class ClientClassViewSet(NetBoxModelViewSet):
@@ -379,29 +397,37 @@ class TSIGKeyViewSet(NetBoxModelViewSet):
 
 
 class D2DaemonViewSet(NetBoxModelViewSet):
-    queryset = D2Daemon.objects.select_related("ip_address").prefetch_related("domains")
+    queryset = D2Daemon.objects.select_related("ip_address")
     serializer_class = D2DaemonSerializer
     filterset_class = filtersets.D2DaemonFilterSet
 
     @action(detail=True, methods=["get"], url_path="kea-config")
     def kea_config(self, request, pk=None):
         """
-        Return the complete kea-dhcp-ddns configuration for this D2 daemon.
+        Return the shared kea-dhcp-ddns configuration of a remote D2 daemon.
+
+        A local daemon has one configuration per DHCP host, served with that
+        server's kea-config, so it answers 409 here.
 
         A configuration carrying TSIG secrets is refused, not redacted, for a user
         without ``view_secret_tsigkey``: a redacted copy is what a deployment would
         install, and D2 would then fail TSIG authentication with nothing pointing here.
         """
         daemon = self.get_object()
-        if daemon.contains_secrets() and not request.user.has_perm("netbox_dhcp_kea_plugin.view_secret_tsigkey"):
+        if daemon.is_local:
+            return Response({"detail": daemon.local_config_message()}, status=status.HTTP_409_CONFLICT)
+        domains, _errors = daemon.derived_domains()
+        if daemon.contains_secrets(domains) and not request.user.has_perm(
+            "netbox_dhcp_kea_plugin.view_secret_tsigkey"
+        ):
             raise PermissionDenied(
                 "This configuration contains TSIG secrets. Rendering it requires the view_secret_tsigkey permission."
             )
-        return Response(daemon.to_kea_dict())
+        return Response(daemon.render(domains))
 
 
 class DDNSDomainViewSet(NetBoxModelViewSet):
-    queryset = DDNSDomain.objects.select_related("d2_daemon", "tsig_key", "zone")
+    queryset = DDNSDomain.objects.select_related("dhcp_server", "ha_relationship", "tsig_key", "zone")
     serializer_class = DDNSDomainSerializer
     filterset_class = filtersets.DDNSDomainFilterSet
 

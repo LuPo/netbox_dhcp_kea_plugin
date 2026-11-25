@@ -382,17 +382,34 @@ class D2DaemonFilterSet(NetBoxModelFilterSet):
 
 
 class DDNSDomainFilterSet(NetBoxModelFilterSet):
-    d2_daemon = django_filters.ModelChoiceFilter(queryset=D2Daemon.objects.all())
+    dhcp_server = django_filters.ModelChoiceFilter(queryset=DHCPServer.objects.all(), label="DHCP Server")
+    ha_relationship = django_filters.ModelChoiceFilter(
+        queryset=DHCPHARelationship.objects.all(), label="HA Relationship"
+    )
+    scope = django_filters.ChoiceFilter(choices=DDNSDomain.SCOPE_CHOICES, method="filter_scope", label="Scope")
     tsig_key = django_filters.ModelChoiceFilter(queryset=TSIGKey.objects.all())
 
     class Meta:
         model = DDNSDomain
-        fields = ["id", "d2_daemon", "zone", "tsig_key"]
+        fields = ["id", "dhcp_server", "ha_relationship", "always_include", "zone", "tsig_key"]
+
+    def filter_scope(self, queryset, name, value):
+        if value == DDNSDomain.SCOPE_SERVER:
+            return queryset.filter(dhcp_server__isnull=False)
+        if value == DDNSDomain.SCOPE_HA:
+            return queryset.filter(ha_relationship__isnull=False)
+        if value == DDNSDomain.SCOPE_GLOBAL:
+            return queryset.filter(dhcp_server__isnull=True, ha_relationship__isnull=True)
+        return queryset
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(Q(d2_daemon__name__icontains=value))
+        return queryset.filter(
+            Q(zone__name__icontains=value)
+            | Q(dhcp_server__name__icontains=value)
+            | Q(ha_relationship__name__icontains=value)
+        )
 
 
 class DDNSServerOverrideFilterSet(NetBoxModelFilterSet):

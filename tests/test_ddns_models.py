@@ -195,7 +195,7 @@ def test_ddnsdomain_is_reverse_for_in_addr_arpa(db, d2_daemon):
     from netbox_dhcp_kea_plugin.models import DDNSDomain
 
     zone = _make_zone("0.10.in-addr.arpa")
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone)
+    domain = DDNSDomain.objects.create(zone=zone)
     assert domain.is_reverse is True
 
 
@@ -203,7 +203,7 @@ def test_ddnsdomain_is_reverse_for_ip6_arpa(db, d2_daemon):
     from netbox_dhcp_kea_plugin.models import DDNSDomain
 
     zone = _make_zone("0.0.0.0.ip6.arpa")
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone)
+    domain = DDNSDomain.objects.create(zone=zone)
     assert domain.is_reverse is True
 
 
@@ -211,7 +211,7 @@ def test_ddnsdomain_is_forward_for_regular_zone(db, d2_daemon):
     from netbox_dhcp_kea_plugin.models import DDNSDomain
 
     zone = _make_zone("example.com")
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone)
+    domain = DDNSDomain.objects.create(zone=zone)
     assert domain.is_reverse is False
 
 
@@ -220,7 +220,7 @@ def test_ddnsdomain_to_kea_dict_omits_key_name_when_no_tsig(db, d2_daemon, name_
 
     zone = _make_zone("nokey.example.com")
     _attach_ns_to_zone(zone, name_server)
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone)
+    domain = DDNSDomain.objects.create(zone=zone)
     d = domain.to_kea_dict()
     assert "key-name" not in d
     assert d["name"].endswith(".")
@@ -233,7 +233,7 @@ def test_ddnsdomain_to_kea_dict_includes_key_name_when_tsig_set(
 
     zone = _make_zone("withkey.example.com")
     _attach_ns_to_zone(zone, name_server)
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone, tsig_key=tsig_key)
+    domain = DDNSDomain.objects.create(zone=zone, tsig_key=tsig_key)
     assert domain.to_kea_dict()["key-name"] == tsig_key.name
 
 
@@ -242,7 +242,7 @@ def test_ddnsdomain_to_kea_dict_resolves_nameserver_ips(db, d2_daemon, name_serv
 
     zone = _make_zone("ips.example.com")
     _attach_ns_to_zone(zone, name_server)
-    domain = DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=zone)
+    domain = DDNSDomain.objects.create(zone=zone)
     out = domain.to_kea_dict()
     assert out["dns-servers"] == [{"ip-address": "192.0.2.53", "port": 53}]
 
@@ -319,10 +319,10 @@ def test_d2daemon_to_kea_dict_partitions_forward_and_reverse(
     rev_zone = _make_zone("0.10.in-addr.arpa")
     _attach_ns_to_zone(fwd_zone, name_server)
     _attach_ns_to_zone(rev_zone, name_server)
-    DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=fwd_zone)
-    DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=rev_zone)
+    DDNSDomain.objects.create(zone=fwd_zone)
+    DDNSDomain.objects.create(zone=rev_zone)
 
-    config = d2_daemon.to_kea_dict()["DhcpDdns"]
+    config = d2_daemon.render(DDNSDomain.objects.all())["DhcpDdns"]
     fwd_names = [d["name"] for d in config["forward-ddns"]["ddns-domains"]]
     rev_names = [d["name"] for d in config["reverse-ddns"]["ddns-domains"]]
     assert any(n.startswith("fwd.") for n in fwd_names)
@@ -338,9 +338,9 @@ def test_d2daemon_to_kea_dict_emits_unique_tsig_keys(
     z2 = _make_zone("b.example.com")
     for z in (z1, z2):
         _attach_ns_to_zone(z, name_server)
-        DDNSDomain.objects.create(d2_daemon=d2_daemon, zone=z, tsig_key=tsig_key)
+        DDNSDomain.objects.create(zone=z, tsig_key=tsig_key)
 
-    config = d2_daemon.to_kea_dict()["DhcpDdns"]
+    config = d2_daemon.render(DDNSDomain.objects.all())["DhcpDdns"]
     assert "tsig-keys" in config
     assert len(config["tsig-keys"]) == 1
     assert config["tsig-keys"][0]["name"] == tsig_key.name
@@ -351,7 +351,7 @@ def test_d2daemon_listener_ip_local_mode(db):
 
     d = D2Daemon.objects.create(name="local-only", listener_mode="local")
     assert d.listener_ip == "127.0.0.1"
-    assert d.to_kea_dict()["DhcpDdns"]["ip-address"] == "127.0.0.1"
+    assert d.render([])["DhcpDdns"]["ip-address"] == "127.0.0.1"
 
 
 def test_d2daemon_listener_ip_remote_mode(db):

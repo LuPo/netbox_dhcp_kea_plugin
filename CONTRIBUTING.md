@@ -126,7 +126,7 @@ Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
 2. If the pull request adds functionality, the docs should be updated, and the change described under `Unreleased` in `CHANGELOG.md`.
-3. The pull request should work on every NetBox version in the README's compatibility table, with Python 3.12 or later. The [tests workflow](https://github.com/LuPo/netbox_dhcp_kea_plugin/actions/workflows/tests.yaml) runs the suite against each of them; make sure it passes.
+3. The pull request should work on every NetBox 4.7 release, with Python 3.12 or later. The [tests workflow](https://github.com/LuPo/netbox_dhcp_kea_plugin/actions/workflows/tests.yaml) runs the suite against the latest one; make sure it passes.
 
 ## Deploying
 
