@@ -245,8 +245,8 @@ Gated by `enable_ddns: True` and requires `enable_netbox_dns: True` (zones and n
 ### Models
 
 - **`TSIGKey`** — RFC 2845 keys with algorithm choices (`HMAC-MD5` / `SHA1` / `SHA224` / `SHA256` / `SHA384` / `SHA512`), optional digest-bits truncation, and a pluggable `secret_backend` registry (`plaintext` stores the secret; `vault` emits a reference for the deployment to substitute). Secret values are auto-generated on save when input is empty or not algorithm-length base64 — paste `tsig-keygen` output verbatim or save and let the plugin mint one. Plaintext reveal is gated by the `view_secret_tsigkey` permission — on the key itself and in every rendered D2 configuration.
-- **`D2Daemon`** — one row per logical D2 service. `listener_mode` chooses between **local** (renders `127.0.0.1`; deploy one D2 instance per peer for HA-pair DDNS redundancy) and **remote** (single shared instance pinned to an IPAM record). Hook groups can attach `kea-dhcp-ddns` hooks such as GSS-TSIG. Each daemon exposes a `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/<id>/kea-config/` endpoint that emits a complete `kea-dhcp-ddns.conf`.
-- **`DDNSDomain`** — binds a `D2Daemon` to a `netbox_dns.Zone`. Forward / reverse direction is derived from the zone name at emission time. Authoritative nameserver IPs are resolved from the A / AAAA records of the zone's `NameServer` rows. The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
+- **`D2Daemon`** — the D2 settings a server or HA relationship points at: listener, control socket, NCR transport, DNS server timeout, hooks. `listener_mode` chooses between **local** (D2 on `127.0.0.1` on every DHCP host, each configured with only its own server's domains) and **remote** (one shared instance pinned to an IPAM record, serving every server that uses it). Hook groups can attach `kea-dhcp-ddns` hooks such as GSS-TSIG.
+- **`DDNSDomain`** — how D2 updates one `netbox_dns.Zone`: its TSIG key and nameserver settings. A domain is **not** attached to a daemon; it is scoped to every server, one HA relationship or one DHCP server, and the narrowest scope wins for a server. That gives each HA pair its own key for a shared zone, while one key can still serve several servers. Forward / reverse direction is derived from the zone name. Authoritative nameserver IPs are resolved from the A / AAAA records of the zone's `NameServer` rows. The create form is multi-zone — pick any combination of forward and reverse zones in one shot.
 - **`DDNSServerOverride`** — the port and TSIG key for one nameserver's entries in a domain's `dns-servers`. Without one, a server is sent updates on port 53 under the domain's key.
 - **`DDNSPolicy`** — reusable `ddns-*` override group attachable at server / subnet / pool scope (`ddns-send-updates`, `ddns-override-no-update`, `ddns-replace-client-name`, `ddns-generated-prefix` / `-qualifying-suffix`, `hostname-char-set` / `-replacement`, conflict-resolution mode, TTL knobs). All fields nullable — only the keys you set are emitted, kebab-cased.
 
@@ -254,9 +254,19 @@ Gated by `enable_ddns: True` and requires `enable_netbox_dns: True` (zones and n
 
 When a `DHCPServer` belongs to an HA relationship and the relationship has its own `d2_daemon` or `ddns_policy` set, the relationship's value wins (peers must agree on the D2 target and the policy knobs). Sender IP and port stay per-server because the local source endpoint is always per-host. The DHCPServer detail page surfaces the effective values with an "inherited from HA relationship" badge.
 
+### Derived D2 domains
+
+A server's D2 domains are worked out from what it hands out, the way D2 itself matches names:
+
+- **forward** — the `ddns-qualifying-suffix` in effect for each subnet and pool that sends updates (pool → subnet → server policy) picks the domain whose zone is its longest match;
+- **reverse** — each such subnet's prefix picks every reverse zone it overlaps, so a `/22` brings in its four `/24` zones;
+- **always included** — a domain scoped to the server or its HA relationship can be included regardless, e.g. for client-supplied names.
+
+Nothing else reaches the host: another site's zones and TSIG keys stay off it. A suffix or subnet no domain covers is listed as a warning — D2 would drop those updates. The server's *D2 Configuration* tab shows each domain and what brought it in.
+
 ### Local-D2 redundancy (recommended for HA)
 
-Set `listener_mode: local` on the `D2Daemon` shared by an HA pair, then deploy `kea-dhcp-ddns` on every peer host with the same rendered config. Each peer's `kea-dhcp4` posts NCRs to its own `127.0.0.1:53001`. If the active peer reboots, the standby's local D2 takes over with zero DDNS gap.
+Set `listener_mode: local` on the `D2Daemon` used by an HA pair, then deploy `kea-dhcp-ddns` on every peer host. Peers serve the same subnets, so they derive the same domains. Each peer's `kea-dhcp4` posts NCRs to its own `127.0.0.1:53001`. If the active peer reboots, the standby's local D2 takes over with zero DDNS gap.
 
 ### Kea config emission rules
 
@@ -270,7 +280,7 @@ Kea resolves the precedence chain itself when processing packets. Client classes
 
 ### Bulk edit + quick-add
 
-- `DDNSDomain` has a bulk-edit form for setting `d2_daemon` / `tsig_key` on many rows at once.
+- `DDNSDomain` has a bulk-edit form for setting `tsig_key` / `always_include` on many rows at once.
 - The `tsig_key` field on the DDNS Domain form carries a `+` quick-add button so a new key can be created inline without leaving the form.
 
 ## NetBox integration

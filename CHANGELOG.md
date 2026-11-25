@@ -4,6 +4,25 @@
 
 Every Kea rule below was checked against Kea 3.0's own grammar and parsers (`dhcp4_parser.yy`, `d2_parser.yy`, `d2_client_cfg.cc`, `d2_config.cc`), not against prose.
 
+### Changed — D2 domains are derived per server (breaking)
+A DDNS domain was attached to a D2 daemon, and every host using that daemon got all of its domains and TSIG keys — one site's keys on another site's servers. Domains now belong to no daemon. Each server's D2 domains are derived from what it hands out:
+
+- **forward**: the `ddns-qualifying-suffix` in effect for each subnet and pool that sends updates picks the domain whose zone is its longest match;
+- **reverse**: each such subnet's prefix picks every reverse zone it overlaps (a `/22` brings in its four `/24` zones);
+- **always included**: a domain scoped to the server or its HA relationship, regardless of suffixes.
+
+A suffix or subnet that no domain covers is reported as a warning, since D2 would drop those updates.
+
+- **`DDNSDomain.d2_daemon` is removed.** A domain is scoped instead by `dhcp_server` or `ha_relationship` (neither means every server), and the narrowest scope wins for a server. A zone can have one entry per scope, so each HA pair can update a shared zone with its own key, while one key can still serve several servers. `always_include` is new, and only allowed on a scoped entry.
+- **`dhcp-servers/<id>/kea-config/` returns `DhcpDdns` beside `Dhcp4`** when the server uses a local D2 daemon with updates on, holding only that host's domains and keys. Like the daemon endpoint, it answers 403 without `view_secret_tsigkey` when a key's secret is held in NetBox.
+- **`d2-daemons/<id>/kea-config/` answers 409 for a local daemon**, which has no single configuration. A remote daemon serves the domains of every server using it, and its page reports a zone two of its servers resolve to different entries.
+- **UI:** the server has a new *D2 Configuration* tab showing each derived domain and what brought it in, plus its rendered `DhcpDdns`. The daemon's *Domains* tab is now *Servers & Domains*, listing this per server.
+- **API and GraphQL:** `D2Daemon.domains_count` is replaced by `servers`. `DDNSDomain` gains `scope`, `dhcp_server`, `ha_relationship` and `always_include`, and loses `d2_daemon`, both in REST and in GraphQL.
+- **Upgrading:** existing domains become entries for every server. A zone that was attached to two daemons would violate the new one-entry-per-scope rule, so give one of them a scope, or delete it, before migrating. Then scope each site's domains to its server or HA relationship.
+
+### Added — the format of OpenBao references is checked
+A `vault` TSIG key's `secret_ref` must fully match the new `ddns_secret_reference_pattern` setting. The default is `<path>#<field>` relative to the KV mount, without `kv/`, such as `dhcp/site-a/tsig-key#key`. A reference the deployment could not substitute is now refused when the key is saved, not at deploy time. Set your own pattern to match another store, or an empty string to turn the check off.
+
 ### Removed — DDNS policies on client classes (breaking)
 `ClientClass.ddns_policy` rendered `ddns-*` keys into the client-class entry. Kea's client-class grammar has no such keys: it answers `got unexpected keyword` and refuses the whole configuration, so a server with a class-level policy did not start.
 
@@ -57,6 +76,8 @@ Query roots and types for TSIG keys, D2 daemons, DDNS domains, server overrides 
 
 ### Migration
 `0015_remove_clientclass_ddns_policy_hookgroup_d2_daemons_and_more` adds `SubnetPool.ddns_policy`, `HookGroup.d2_daemons` and the `DDNSServerOverride` model, and removes `ClientClass.ddns_policy`. The choice changes need no migration.
+
+`0016_alter_ddnsdomain_options_and_more` removes `DDNSDomain.d2_daemon` and adds `dhcp_server`, `ha_relationship` and `always_include`, with one constraint allowing at most one scope and three allowing one entry per zone and scope. Existing domains become entries for every server; it fails if a zone was attached to two D2 daemons. It depends on NetBox 4.7 (`extras` 0145) and netbox-plugin-dns 1.7 (`netbox_dns` 0035) migrations.
 
 ## 0.10.4 (2026-10-22)
 

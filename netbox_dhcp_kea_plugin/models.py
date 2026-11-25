@@ -1218,6 +1218,48 @@ class DHCPServer(NetBoxModel):
             block["sender-port"] = self.ddns_sender_port
         return block
 
+    def derived_ddns(self):
+        """The DDNS domains this server's names and addresses fall in.
+
+        See ``netbox_dhcp_kea_plugin.ddns.derive_for_server``.
+        """
+        from netbox_dhcp_kea_plugin.ddns import derive_for_server
+
+        return derive_for_server(self)
+
+    def runs_local_d2(self):
+        """Whether this host runs its own D2, configured from this server."""
+        daemon = self.effective_d2_daemon
+        return daemon is not None and daemon.is_local and bool(self._effective_ddns_field("ddns_enable_updates"))
+
+    def d2_kea_dict(self, redact_secrets=False, derived=None):
+        """This host's ``kea-dhcp-ddns.conf``, or None when it runs no D2.
+
+        Only a server using a local D2 daemon with updates enabled gets one; a
+        remote daemon is configured as a whole (``D2Daemon.to_kea_dict``).
+        """
+        if not self.runs_local_d2():
+            return None
+        if derived is None:
+            derived = self.derived_ddns()
+        return self.effective_d2_daemon.render(derived.domain_list, redact_secrets=redact_secrets)
+
+    def d2_contains_secrets(self, derived=None):
+        """Whether this host's D2 configuration carries a secret NetBox holds."""
+        if not self.runs_local_d2():
+            return False
+        if derived is None:
+            derived = self.derived_ddns()
+        return self.effective_d2_daemon.contains_secrets(derived.domain_list)
+
+    def d2_requires_secret_substitution(self, derived=None):
+        """Whether this host's D2 configuration holds references to substitute."""
+        if not self.runs_local_d2():
+            return False
+        if derived is None:
+            derived = self.derived_ddns()
+        return self.effective_d2_daemon.requires_secret_substitution(derived.domain_list)
+
     def get_ha_primary(self):
         """Get the primary server in this server's HA relationship, if any.
 
@@ -4849,6 +4891,33 @@ class TSIGKey(NetBoxModel):
         self._normalize_secret()
         return super().save(*args, **kwargs)
 
+    @staticmethod
+    def secret_ref_problem(ref):
+        """Why a vault reference does not match the configured format, or None.
+
+        The format is the ``ddns_secret_reference_pattern`` plugin setting, a
+        regular expression the whole reference must match. Its default is what
+        the deployment substitutes: ``<path>#<field>`` relative to the KV mount.
+        An empty setting turns the check off.
+        """
+        from netbox.plugins.utils import get_plugin_config
+
+        from netbox_dhcp_kea_plugin import DEFAULT_SECRET_REFERENCE_PATTERN
+
+        pattern = get_plugin_config("netbox_dhcp_kea_plugin", "ddns_secret_reference_pattern")
+        if not pattern or re.fullmatch(pattern, ref):
+            return None
+        if pattern == DEFAULT_SECRET_REFERENCE_PATTERN:
+            return (
+                f"'{ref}' is not a reference the deployment can substitute. Use <path>#<field> relative "
+                "to the KV mount, without 'kv/', e.g. dhcp/site-a/tsig-key#key — letters, digits, "
+                "'.', '_' and '-' only, with exactly one '#'."
+            )
+        return (
+            f"'{ref}' does not match the reference format this NetBox requires "
+            f"(ddns_secret_reference_pattern: {pattern})."
+        )
+
     def clean(self):
         super().clean()
         errors = {}
@@ -4858,6 +4927,10 @@ class TSIGKey(NetBoxModel):
         else:
             if not self.secret_ref:
                 errors["secret_ref"] = f"Backend '{self.secret_backend}' requires a reference."
+            elif self.secret_backend == "vault":
+                problem = self.secret_ref_problem(self.secret_ref)
+                if problem:
+                    errors["secret_ref"] = problem
 
         # Digest-bits must be a positive multiple of 8 when set, and never
         # exceed the underlying algorithm's natural output.
@@ -4915,13 +4988,21 @@ class TSIGKey(NetBoxModel):
         return entry
 
 
-class D2Daemon(NetBoxModel):
-    """A kea-dhcp-ddns (D2) daemon instance.
+class LocalD2DaemonError(Exception):
+    """A local D2 daemon has one configuration per DHCP host, not one of its own."""
 
-    Models the listener socket, control socket, and NCR (NameChangeRequest)
-    transport for one D2 process. DDNSDomain rows attached to this daemon
-    become entries under ``forward-ddns.ddns-domains`` / ``reverse-ddns.ddns-domains``
-    in the emitted ``kea-dhcp-ddns.conf``.
+
+class D2Daemon(NetBoxModel):
+    """Settings for kea-dhcp-ddns (D2): listener, control socket, NCR transport.
+
+    The domains are not listed here. They are derived from the DHCP servers
+    that use the daemon (see ``netbox_dhcp_kea_plugin.ddns``):
+
+    - **local** — every server runs its own D2 on 127.0.0.1, configured with
+      only the domains that server needs. Render it per server
+      (``DHCPServer.d2_kea_dict``); there is no single configuration.
+    - **remote** — one shared D2 at the IPAM address, configured with the
+      domains of every server that uses it.
     """
 
     LISTENER_MODE_LOCAL = "local"
@@ -4938,9 +5019,9 @@ class D2Daemon(NetBoxModel):
         choices=LISTENER_MODE_CHOICES,
         default=LISTENER_MODE_LOCAL,
         help_text=(
-            "'Local' renders ip-address=127.0.0.1; deploy one D2 instance "
-            "on every host running kea-dhcp4/6 that uses this row. "
-            "'Remote' uses the IPAM-tracked listener address."
+            "'Local' runs D2 on 127.0.0.1 on every DHCP host that uses this row, each with only "
+            "its own server's domains. 'Remote' is one shared D2 at the IPAM-tracked address, "
+            "serving the domains of every server that uses it."
         ),
     )
     ip_address = models.ForeignKey(
@@ -5039,7 +5120,8 @@ class D2Daemon(NetBoxModel):
 
     def configuration_errors(self):
         """Why the emitted kea-dhcp-ddns.conf would not load, for the detail page."""
-        return list(self.config_problems().values())
+        _domains, domain_errors = self.derived_domains()
+        return list(self.config_problems().values()) + domain_errors
 
     @property
     def listener_ip(self):
@@ -5049,10 +5131,44 @@ class D2Daemon(NetBoxModel):
             return None
         return str(self.ip_address.address.ip)
 
-    def tsig_keys(self):
-        """Every TSIG key the config names, once each, in first-use order."""
+    @property
+    def is_local(self):
+        return self.listener_mode == self.LISTENER_MODE_LOCAL
+
+    def servers_using(self):
+        """DHCP servers whose effective D2 daemon is this one.
+
+        A server's HA relationship wins over its own field, so a server whose
+        relationship names another daemon is not counted here.
+        """
+        if self.pk is None:
+            return DHCPServer.objects.none()
+        return (
+            DHCPServer.objects.filter(
+                models.Q(ha_relationship__d2_daemon=self)
+                | models.Q(d2_daemon=self, ha_relationship__d2_daemon__isnull=True)
+            )
+            .select_related("ha_relationship")
+            .order_by("name")
+        )
+
+    def derived_domains(self):
+        """The domains this daemon serves, across every server that uses it.
+
+        Returns ``(domains, errors)``. For a remote daemon this is its
+        configuration. For a local one it is the union of what its hosts
+        receive individually, used only to describe the daemon.
+        """
+        from netbox_dhcp_kea_plugin.ddns import merge_for_daemon
+
+        return merge_for_daemon(self, [(server, server.derived_ddns()) for server in self.servers_using()])
+
+    def tsig_keys(self, domains=None):
+        """Every TSIG key the domains name, once each, in first-use order."""
+        if domains is None:
+            domains, _errors = self.derived_domains()
         keys = {}
-        for domain in self.domains.select_related("tsig_key"):
+        for domain in domains:
             for key in domain.referenced_tsig_keys():
                 keys.setdefault(key.name, key)
         return list(keys.values())
@@ -5070,7 +5186,25 @@ class D2Daemon(NetBoxModel):
         return hooks_libraries
 
     def to_kea_dict(self, redact_secrets=False):
-        """Emit a full ``kea-dhcp-ddns.conf`` dictionary for this D2 daemon.
+        """Emit the shared ``kea-dhcp-ddns.conf`` of a remote daemon.
+
+        A local daemon has no single configuration — each host gets its own —
+        so asking for one raises ``LocalD2DaemonError``; render it with
+        ``DHCPServer.d2_kea_dict`` instead.
+        """
+        if self.is_local:
+            raise LocalD2DaemonError(self.local_config_message())
+        domains, _errors = self.derived_domains()
+        return self.render(domains, redact_secrets=redact_secrets)
+
+    def local_config_message(self):
+        return (
+            f"D2 daemon '{self}' is local: each DHCP server that uses it runs its own D2 with only "
+            "its own domains. Fetch the server's configuration (dhcp-servers/<id>/kea-config/) instead."
+        )
+
+    def render(self, domains, redact_secrets=False):
+        """Emit a ``kea-dhcp-ddns.conf`` dictionary serving ``domains``.
 
         Domains are partitioned into forward/reverse based on the zone name
         (``.in-addr.arpa`` or ``.ip6.arpa`` ⇒ reverse). ``redact_secrets``
@@ -5080,7 +5214,7 @@ class D2Daemon(NetBoxModel):
         forward_domains = []
         reverse_domains = []
 
-        for domain in self.domains.select_related("zone", "tsig_key").prefetch_related("zone__nameservers"):
+        for domain in domains:
             domain_dict = domain.to_kea_dict()
             if domain.is_reverse:
                 reverse_domains.append(domain_dict)
@@ -5100,7 +5234,7 @@ class D2Daemon(NetBoxModel):
                 "socket-type": "unix",
                 "socket-name": self.control_socket_path,
             }
-        tsig_keys = self.tsig_keys()
+        tsig_keys = self.tsig_keys(domains)
         if tsig_keys:
             dhcp_ddns["tsig-keys"] = [key.to_kea_dict(redact_secret=redact_secrets) for key in tsig_keys]
         dhcp_ddns["forward-ddns"] = {"ddns-domains": forward_domains}
@@ -5111,22 +5245,35 @@ class D2Daemon(NetBoxModel):
 
         return {"DhcpDdns": dhcp_ddns}
 
-    def contains_secrets(self):
+    def contains_secrets(self, domains=None):
         """Whether the emitted config carries a secret NetBox holds, not a reference."""
-        return any(key.holds_secret for key in self.tsig_keys())
+        return any(key.holds_secret for key in self.tsig_keys(domains))
 
-    def requires_secret_substitution(self):
+    def requires_secret_substitution(self, domains=None):
         """Whether the emitted config is a template rather than deployable.
 
         True when any TSIG key it references resolves to a placeholder instead of
         a secret. Consumers should assert on this rather than discover it when D2
-        fails TSIG authentication against a literal reference.
+        fails TSIG authentication against a literal reference. For a local
+        daemon this covers every host's configuration.
         """
-        return any(not key.holds_secret for key in self.tsig_keys())
+        return any(not key.holds_secret for key in self.tsig_keys(domains))
 
 
 class DDNSDomain(NetBoxModel):
-    """A single forward or reverse DDNS domain entry on a D2 daemon.
+    """How D2 updates one zone: its TSIG key and DNS server settings.
+
+    A domain is not attached to a D2 daemon. Each DHCP server's D2
+    configuration is derived from what the server hands out — the qualifying
+    suffixes of its DDNS policies pick forward domains, its subnet prefixes
+    pick reverse ones — so a host only ever receives the domains, and the
+    keys, it uses.
+
+    The scope says which servers the entry applies to: one server, every
+    member of one HA relationship, or (neither set) every server. When more
+    than one applies to a server for the same zone, the narrowest wins:
+    server, then HA relationship, then global. That is how two sites update
+    one zone with different keys.
 
     Direction (forward vs reverse) is **derived** from the linked netbox-dns
     Zone's name — a zone ending in ``.in-addr.arpa`` or ``.ip6.arpa`` is
@@ -5134,11 +5281,31 @@ class DDNSDomain(NetBoxModel):
     sync with the zone.
     """
 
-    d2_daemon = models.ForeignKey(
-        "D2Daemon",
+    dhcp_server = models.ForeignKey(
+        "DHCPServer",
         on_delete=models.CASCADE,
-        related_name="domains",
-        help_text="The D2 daemon that handles this domain",
+        null=True,
+        blank=True,
+        related_name="ddns_domains",
+        verbose_name="DHCP server",
+        help_text="Limit this entry to one DHCP server. Leave blank, with no HA relationship, for every server.",
+    )
+    ha_relationship = models.ForeignKey(
+        "DHCPHARelationship",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="ddns_domains",
+        verbose_name="HA relationship",
+        help_text="Limit this entry to the members of one HA relationship.",
+    )
+    always_include = models.BooleanField(
+        default=False,
+        help_text=(
+            "Serve this zone even when no DDNS policy suffix or subnet points at it — for example "
+            "client-supplied names kept with ddns-replace-client-name 'never'. Only for an entry "
+            "limited to a server or HA relationship."
+        ),
     )
     user_context = models.JSONField(
         null=True,
@@ -5167,13 +5334,80 @@ class DDNSDomain(NetBoxModel):
     )
 
     class Meta:
-        ordering = ("d2_daemon", "zone")
+        ordering = ("zone", "pk")
         verbose_name = "DDNS Domain"
         verbose_name_plural = "DDNS Domains"
-        unique_together = (("d2_daemon", "zone"),)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(dhcp_server__isnull=True) | models.Q(ha_relationship__isnull=True),
+                name="netbox_dhcp_kea_plugin_ddnsdomain_one_scope",
+                violation_error_message="Limit a DDNS domain to a DHCP server or an HA relationship, not both.",
+            ),
+            models.UniqueConstraint(
+                fields=("zone",),
+                condition=models.Q(dhcp_server__isnull=True, ha_relationship__isnull=True),
+                name="netbox_dhcp_kea_plugin_ddnsdomain_unique_global_zone",
+                violation_error_message="This zone already has a DDNS domain for every server.",
+            ),
+            models.UniqueConstraint(
+                fields=("zone", "dhcp_server"),
+                condition=models.Q(dhcp_server__isnull=False),
+                name="netbox_dhcp_kea_plugin_ddnsdomain_unique_server_zone",
+                violation_error_message="This zone already has a DDNS domain for this DHCP server.",
+            ),
+            models.UniqueConstraint(
+                fields=("zone", "ha_relationship"),
+                condition=models.Q(ha_relationship__isnull=False),
+                name="netbox_dhcp_kea_plugin_ddnsdomain_unique_ha_zone",
+                violation_error_message="This zone already has a DDNS domain for this HA relationship.",
+            ),
+        ]
+
+    SCOPE_SERVER = "server"
+    SCOPE_HA = "ha_relationship"
+    SCOPE_GLOBAL = "global"
+    SCOPE_CHOICES = (
+        (SCOPE_GLOBAL, "All servers"),
+        (SCOPE_HA, "HA relationship"),
+        (SCOPE_SERVER, "DHCP server"),
+    )
+
+    # Lower wins when several entries for one zone apply to a server.
+    _SCOPE_RANK = {SCOPE_SERVER: 0, SCOPE_HA: 1, SCOPE_GLOBAL: 2}
 
     def __str__(self):
-        return f"{self.zone} @ {self.d2_daemon}"
+        return f"{self.zone} ({self.scope_label})"
+
+    @property
+    def scope(self):
+        if self.dhcp_server_id:
+            return self.SCOPE_SERVER
+        if self.ha_relationship_id:
+            return self.SCOPE_HA
+        return self.SCOPE_GLOBAL
+
+    @property
+    def scope_rank(self):
+        return self._SCOPE_RANK[self.scope]
+
+    @property
+    def scope_object(self):
+        """The server or HA relationship this entry is limited to, or None."""
+        if self.dhcp_server_id:
+            return self.dhcp_server
+        if self.ha_relationship_id:
+            return self.ha_relationship
+        return None
+
+    @property
+    def scope_label(self):
+        scope_object = self.scope_object
+        return str(scope_object) if scope_object is not None else "all servers"
+
+    @property
+    def zone_name(self):
+        """The zone's name, lowercased and without the trailing dot."""
+        return (self.zone.name or "").rstrip(".").lower()
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_dhcp_kea_plugin:ddnsdomain", args=[self.pk])
@@ -5285,17 +5519,28 @@ class DDNSDomain(NetBoxModel):
         """
         super().clean()
         validate_user_context(self.user_context)
+        errors = {}
+
+        if self.dhcp_server_id and self.ha_relationship_id:
+            errors["ha_relationship"] = "Limit a DDNS domain to a DHCP server or an HA relationship, not both."
+
+        # Global and always-included would push the zone, and its key, onto every
+        # server — the reverse of what deriving the configuration is for.
+        if self.always_include and not (self.dhcp_server_id or self.ha_relationship_id):
+            errors["always_include"] = (
+                "Only an entry limited to a DHCP server or an HA relationship can be always included. "
+                "On a global entry it would put this zone and its key on every server."
+            )
 
         if self.zone_id and not self.resolvable_nameserver_ips():
-            raise ValidationError(
-                {
-                    "zone": (
-                        f"Zone '{self.zone}' has no nameserver with a resolvable A/AAAA record in "
-                        "NetBox. KEA needs at least one DNS server per DDNS domain and refuses a "
-                        "configuration with an empty list, so this would render an unusable config."
-                    )
-                }
+            errors["zone"] = (
+                f"Zone '{self.zone}' has no nameserver with a resolvable A/AAAA record in "
+                "NetBox. KEA needs at least one DNS server per DDNS domain and refuses a "
+                "configuration with an empty list, so this would render an unusable config."
             )
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class DDNSServerOverride(NetBoxModel):

@@ -1,4 +1,5 @@
 import django_tables2 as tables
+from django.utils.html import format_html
 from netbox.tables import BooleanColumn, ChoiceFieldColumn, NetBoxTable
 from netbox.tables.columns import DateTimeColumn
 
@@ -761,11 +762,10 @@ class D2DaemonTable(NetBoxTable):
     port = tables.Column(verbose_name="Port")
     ncr_protocol = tables.Column(verbose_name="NCR Protocol")
     ncr_format = tables.Column(verbose_name="NCR Format")
-    domains_count = tables.Column(
-        verbose_name="Domains",
-        accessor="domains__count",
+    servers_count = tables.Column(
+        verbose_name="Servers",
+        empty_values=(),
         orderable=False,
-        linkify=False,
     )
     description = tables.Column(verbose_name="Description")
 
@@ -779,7 +779,7 @@ class D2DaemonTable(NetBoxTable):
             "port",
             "ncr_protocol",
             "ncr_format",
-            "domains_count",
+            "servers_count",
             "description",
             "actions",
         )
@@ -789,34 +789,51 @@ class D2DaemonTable(NetBoxTable):
             "ip_address",
             "port",
             "ncr_protocol",
-            "domains_count",
+            "servers_count",
         )
         exclude = ("id",)
 
+    def render_servers_count(self, record):
+        # Domains are derived per server, so the servers are what a daemon has.
+        return record.servers_using().count()
+
 
 class DDNSDomainTable(NetBoxTable):
-    d2_daemon = tables.Column(linkify=True, verbose_name="D2 Daemon")
     zone = tables.Column(linkify=True, verbose_name="Zone")
+    scope = tables.Column(
+        verbose_name="Scope",
+        empty_values=(),
+        order_by=("dhcp_server__name", "ha_relationship__name"),
+    )
     tsig_key = tables.Column(linkify=True, verbose_name="TSIG Key")
-    is_reverse = BooleanColumn(verbose_name="Reverse")
+    is_reverse = BooleanColumn(verbose_name="Reverse", orderable=False)
+    always_include = BooleanColumn(verbose_name="Always Included")
 
     class Meta(NetBoxTable.Meta):
         model = DDNSDomain
         fields = (
             "pk",
-            "d2_daemon",
             "zone",
+            "scope",
             "tsig_key",
             "is_reverse",
+            "always_include",
             "actions",
         )
         default_columns = (
-            "d2_daemon",
             "zone",
+            "scope",
             "tsig_key",
             "is_reverse",
+            "always_include",
         )
         exclude = ("id",)
+
+    def render_scope(self, record):
+        scope_object = record.scope_object
+        if scope_object is None:
+            return "All servers"
+        return format_html('<a href="{}">{}</a>', scope_object.get_absolute_url(), scope_object)
 
 
 class DDNSServerOverrideTable(NetBoxTable):

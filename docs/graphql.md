@@ -54,8 +54,8 @@ plugin types and to **native NetBox types**:
 | `SubnetPoolType` | `ip_range` → IPAM IP range | `subnet`, `client_class` |
 | `ClientClassType` | — | `servers` |
 | `StaticReservationType` | `ip_address` → IPAM IP address, `mac_address` → DCIM MAC address | `subnet` |
-| `D2DaemonType` | `ip_address` → IPAM IP address | `domains`; computed `requires_secret_substitution` |
-| `DDNSDomainType` | `zone` → netbox-dns zone | `d2_daemon`, `tsig_key`, `server_overrides`; computed `is_reverse` |
+| `D2DaemonType` | `ip_address` → IPAM IP address | computed `servers` (the DHCP servers using it), `requires_secret_substitution` |
+| `DDNSDomainType` | `zone` → netbox-dns zone | `dhcp_server`, `tsig_key`, `server_overrides`, `always_include`; computed `is_reverse`, `scope`, `ha_relationship_id` |
 | `DDNSServerOverrideType` | `nameserver` → netbox-dns nameserver | `ddns_domain`, `tsig_key` |
 | `DDNSPolicyType` | — | `servers`, `subnets`, `pools` |
 | `TSIGKeyType` | — | — |

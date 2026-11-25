@@ -1,0 +1,59 @@
+{% comment %}
+One server's derived D2 domains. Expects ``derived`` (ddns.DerivedDDNS).
+{% endcomment %}
+{% for error in derived.errors %}
+<div class="alert alert-danger" role="alert">
+    <i class="mdi mdi-alert-octagon"></i> {{ error }}
+</div>
+{% endfor %}
+{% for warning in derived.warnings %}
+<div class="alert alert-warning" role="alert">
+    <i class="mdi mdi-alert"></i> {{ warning }}
+</div>
+{% endfor %}
+{% if derived.domains %}
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Zone</th>
+            <th>Direction</th>
+            <th>Scope</th>
+            <th>TSIG Key</th>
+            <th>Brought in by</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in derived.domains %}
+        <tr>
+            <td><a href="{{ entry.domain.get_absolute_url }}">{{ entry.domain.zone }}</a></td>
+            <td>{% if entry.domain.is_reverse %}Reverse{% else %}Forward{% endif %}</td>
+            <td>
+                {% with scope_object=entry.domain.scope_object %}
+                {% if scope_object %}
+                <a href="{{ scope_object.get_absolute_url }}">{{ scope_object }}</a>
+                {% else %}
+                All servers
+                {% endif %}
+                {% endwith %}
+            </td>
+            <td>
+                {% if entry.domain.tsig_key %}
+                <a href="{{ entry.domain.tsig_key.get_absolute_url }}">{{ entry.domain.tsig_key.name }}</a>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% for reason in entry.reasons %}
+                <div>{{ reason }}</div>
+                {% endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% elif derived.enabled %}
+<div class="text-muted">No DDNS domain applies to this server's subnets yet.</div>
+{% else %}
+<div class="text-muted">DDNS updates are off for this server, or it has no D2 daemon.</div>
+{% endif %}

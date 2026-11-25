@@ -14,6 +14,7 @@ from netbox.forms import (
     NetBoxModelImportForm,
 )
 from netbox.plugins.utils import get_plugin_config
+from utilities.forms.constants import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
     CSVChoiceField,
     CSVModelChoiceField,
@@ -2643,7 +2644,18 @@ except ImportError:  # netbox_dns is optional unless enable_ddns=True
 
 
 class DDNSDomainForm(NetBoxModelForm):
-    d2_daemon = DynamicModelChoiceField(queryset=D2Daemon.objects.all())
+    dhcp_server = DynamicModelChoiceField(
+        queryset=DHCPServer.objects.all(),
+        required=False,
+        label="DHCP server",
+        help_text="Limit to one DHCP server. Leave both scope fields blank for every server.",
+    )
+    ha_relationship = DynamicModelChoiceField(
+        queryset=DHCPHARelationship.objects.all(),
+        required=False,
+        label="HA relationship",
+        help_text="Limit to the members of one HA relationship, e.g. to give a pair its own key.",
+    )
     tsig_key = DynamicModelChoiceField(
         queryset=TSIGKey.objects.all(),
         required=False,
@@ -2652,13 +2664,14 @@ class DDNSDomainForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet("d2_daemon", "zone", "tsig_key", "tags", name="General"),
+        FieldSet("zone", "tsig_key", "tags", name="General"),
+        FieldSet("dhcp_server", "ha_relationship", "always_include", name="Scope"),
         FieldSet("user_context", name="User Context"),
     )
 
     class Meta:
         model = DDNSDomain
-        fields = ("d2_daemon", "zone", "tsig_key", "user_context", "tags")
+        fields = ("zone", "tsig_key", "dhcp_server", "ha_relationship", "always_include", "user_context", "tags")
         widgets = {"user_context": forms.Textarea(attrs={"class": "font-monospace", "rows": 4})}
 
     def __init__(self, *args, **kwargs):
@@ -2673,9 +2686,9 @@ class DDNSDomainForm(NetBoxModelForm):
                 queryset=_DNSZone.objects.all(),
                 label="Zones",
                 help_text=(
-                    "Select one or more forward and/or reverse zones managed "
-                    "by this D2 daemon. One DDNS Domain row is created per "
-                    "selected zone."
+                    "Select one or more forward and/or reverse zones. One DDNS "
+                    "Domain row is created per selected zone, all with the "
+                    "same key and scope."
                 ),
             )
         else:
@@ -2683,9 +2696,8 @@ class DDNSDomainForm(NetBoxModelForm):
             self.fields["zone"] = DynamicModelChoiceField(
                 queryset=_DNSZone.objects.all(),
                 help_text=(
-                    "Forward or reverse zone managed by this D2 daemon. "
-                    "Authoritative DNS servers are taken from the zone's "
-                    "nameservers."
+                    "Forward or reverse zone D2 updates. Authoritative DNS "
+                    "servers are taken from the zone's nameservers."
                 ),
             )
 
@@ -2718,7 +2730,9 @@ class DDNSDomainForm(NetBoxModelForm):
         """
         for zone in zones:
             candidate = DDNSDomain(
-                d2_daemon=self.cleaned_data.get("d2_daemon"),
+                dhcp_server=self.cleaned_data.get("dhcp_server"),
+                ha_relationship=self.cleaned_data.get("ha_relationship"),
+                always_include=self.cleaned_data.get("always_include") or False,
                 zone=zone,
                 tsig_key=self.cleaned_data.get("tsig_key"),
                 user_context=self.cleaned_data.get("user_context"),
@@ -2736,22 +2750,27 @@ class DDNSDomainForm(NetBoxModelForm):
 
         zones_or_one = self.cleaned_data.get("zone")
         zones = [zones_or_one] if isinstance(zones_or_one, _DNSZone) else list(zones_or_one or [])
-        d2_daemon = self.cleaned_data["d2_daemon"]
         tsig_key = self.cleaned_data.get("tsig_key")
         user_context = self.cleaned_data.get("user_context")
+        always_include = self.cleaned_data.get("always_include") or False
         tags = self.cleaned_data.get("tags") or []
 
         created = []
         for z in zones:
+            # The scope is part of the identity: one zone can have an entry
+            # for every server and narrower ones for some.
             obj, was_created = DDNSDomain.objects.get_or_create(
-                d2_daemon=d2_daemon,
+                dhcp_server=self.cleaned_data.get("dhcp_server"),
+                ha_relationship=self.cleaned_data.get("ha_relationship"),
                 zone=z,
-                defaults={"tsig_key": tsig_key, "user_context": user_context},
+                defaults={"tsig_key": tsig_key, "user_context": user_context, "always_include": always_include},
             )
             new_tsig_pk = tsig_key.pk if tsig_key else None
-            if not was_created and (obj.tsig_key_id, obj.user_context) != (new_tsig_pk, user_context):
+            wanted = (new_tsig_pk, user_context, always_include)
+            if not was_created and (obj.tsig_key_id, obj.user_context, obj.always_include) != wanted:
                 obj.tsig_key = tsig_key
                 obj.user_context = user_context
+                obj.always_include = always_include
                 obj.save()
             if tags:
                 obj.tags.set(tags)
@@ -2765,12 +2784,31 @@ class DDNSDomainForm(NetBoxModelForm):
 
 class DDNSDomainFilterForm(NetBoxModelFilterSetForm):
     model = DDNSDomain
-    d2_daemon = DynamicModelChoiceField(queryset=D2Daemon.objects.all(), required=False)
+    scope = forms.ChoiceField(
+        choices=(("", "---------"), *DDNSDomain.SCOPE_CHOICES),
+        required=False,
+    )
+    dhcp_server = DynamicModelChoiceField(queryset=DHCPServer.objects.all(), required=False, label="DHCP server")
+    ha_relationship = DynamicModelChoiceField(
+        queryset=DHCPHARelationship.objects.all(), required=False, label="HA relationship"
+    )
+    always_include = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
     tsig_key = DynamicModelChoiceField(queryset=TSIGKey.objects.all(), required=False)
 
 
 class DDNSDomainImportForm(NetBoxModelImportForm):
-    d2_daemon = CSVModelChoiceField(queryset=D2Daemon.objects.all(), to_field_name="name")
+    dhcp_server = CSVModelChoiceField(
+        queryset=DHCPServer.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Name of the DHCP server this entry is limited to",
+    )
+    ha_relationship = CSVModelChoiceField(
+        queryset=DHCPHARelationship.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Name of the HA relationship this entry is limited to",
+    )
     tsig_key = CSVModelChoiceField(
         queryset=TSIGKey.objects.all(),
         to_field_name="name",
@@ -2779,7 +2817,7 @@ class DDNSDomainImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = DDNSDomain
-        fields = ("d2_daemon", "zone", "tsig_key")
+        fields = ("zone", "tsig_key", "dhcp_server", "ha_relationship", "always_include")
 
 
 try:
@@ -2896,11 +2934,11 @@ class DHCPServerBulkEditForm(NetBoxModelBulkEditForm):
 
 
 class DDNSDomainBulkEditForm(NetBoxModelBulkEditForm):
-    d2_daemon = DynamicModelChoiceField(queryset=D2Daemon.objects.all(), required=False)
     tsig_key = DynamicModelChoiceField(queryset=TSIGKey.objects.all(), required=False)
+    always_include = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
 
     model = DDNSDomain
-    fieldsets = (FieldSet("d2_daemon", "tsig_key"),)
+    fieldsets = (FieldSet("tsig_key", "always_include"),)
     nullable_fields = ("tsig_key",)
 
 

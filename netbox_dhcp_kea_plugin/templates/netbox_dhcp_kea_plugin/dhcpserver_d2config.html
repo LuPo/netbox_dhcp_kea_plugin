@@ -1,0 +1,82 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load builtins.tags %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card mb-3">
+            <h5 class="card-header">
+                DDNS Domains
+                {% if daemon %}
+                <span class="text-muted fs-6">· D2 daemon <a href="{{ daemon.get_absolute_url }}">{{ daemon }}</a> ({{ daemon.get_listener_mode_display }})</span>
+                {% endif %}
+            </h5>
+            <div class="card-body">
+                {% include 'netbox_dhcp_kea_plugin/inc/ddns_derived_domains.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if runs_local_d2 %}
+{% if requires_secret_substitution %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-warning" role="alert">
+            <i class="mdi mdi-alert"></i>
+            This configuration is a <strong>template</strong>. At least one TSIG key uses the
+            vault backend, so its secret is rendered as a reference rather than the secret
+            itself. Substitute it on the target before deploying, and validate the substituted
+            file: KEA reads each TSIG secret as base64 and will not load the reference.
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if secrets_redacted %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-info" role="alert">
+            <i class="mdi mdi-lock"></i>
+            TSIG secrets are hidden. Revealing them requires the <em>view_secret_tsigkey</em>
+            permission, so this copy cannot be deployed as shown.
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="card mb-3">
+            <h2 class="card-header d-flex justify-content-between">
+                <span>DhcpDdns in /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{{ object.pk }}/kea-config/</span>
+                <div>
+                    {% copy_content "d2-config" %}
+                </div>
+            </h2>
+            <pre class="card-body mb-0 language-json" id="d2-config">{{ config_json }}</pre>
+        </div>
+    </div>
+</div>
+{% elif daemon %}
+<div class="alert alert-secondary" role="alert">
+    {% if daemon.is_local %}
+    DDNS updates are off for this server, so it runs no D2.
+    {% else %}
+    D2 daemon {{ daemon }} is remote: one shared D2 serves every server using it. Its configuration
+    is on the daemon's <a href="{% url 'plugins:netbox_dhcp_kea_plugin:d2daemon_config' pk=daemon.pk %}">Configuration</a> tab.
+    {% endif %}
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    hljs.highlightAll();
+});
+</script>
+{% endblock %}

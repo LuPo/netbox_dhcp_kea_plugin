@@ -4,47 +4,34 @@
 {% block content %}
 <div class="row">
     <div class="col col-md-12">
-        {% if domains %}
-        <div class="card">
-            <h5 class="card-header">DDNS Domains</h5>
+        <div class="alert alert-info" role="alert">
+            <i class="mdi mdi-information"></i>
+            Domains are derived from each server's subnets: the qualifying suffixes of their DDNS
+            policies pick forward domains, their prefixes pick reverse ones.
+            {% if object.is_local %}
+            This daemon is local, so every server below runs its own D2 with only its own domains.
+            {% else %}
+            This daemon is remote, so one D2 serves the domains of every server below.
+            {% endif %}
+        </div>
+        {% for server, derived in derived_by_server %}
+        <div class="card mb-3">
+            <h5 class="card-header">
+                <a href="{{ server.get_absolute_url }}">{{ server }}</a>
+                {% if server.ha_relationship %}
+                <span class="text-muted fs-6">· {{ server.ha_relationship }}</span>
+                {% endif %}
+            </h5>
             <div class="card-body">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Zone</th>
-                            <th>Direction</th>
-                            <th>TSIG Key</th>
-                            <th>Nameservers</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for domain in domains %}
-                        <tr>
-                            <td><a href="{{ domain.get_absolute_url }}">{{ domain.zone }}</a></td>
-                            <td>{% if domain.is_reverse %}Reverse{% else %}Forward{% endif %}</td>
-                            <td>
-                                {% if domain.tsig_key %}
-                                <a href="{{ domain.tsig_key.get_absolute_url }}">{{ domain.tsig_key.name }}</a>
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% for ns in domain.zone.nameservers.all %}
-                                {{ ns }}{% if not forloop.last %}, {% endif %}
-                                {% empty %}
-                                <span class="text-muted">—</span>
-                                {% endfor %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                {% include 'netbox_dhcp_kea_plugin/inc/ddns_derived_domains.html' %}
             </div>
         </div>
-        {% else %}
-        <div class="alert alert-info">No DDNS domains are attached to this D2 daemon.</div>
-        {% endif %}
+        {% empty %}
+        <div class="alert alert-secondary">
+            No DHCP server uses this D2 daemon. Set it on a server, or on an HA relationship for all
+            its members.
+        </div>
+        {% endfor %}
     </div>
 </div>
 {% endblock %}

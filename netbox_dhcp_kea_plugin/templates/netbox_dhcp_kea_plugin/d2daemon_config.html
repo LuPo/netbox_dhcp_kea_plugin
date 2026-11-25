@@ -9,6 +9,31 @@
 {% endblock %}
 
 {% block content %}
+{% if object.is_local %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="alert alert-info" role="alert">
+            <i class="mdi mdi-information"></i>
+            This D2 daemon is local: every DHCP host that uses it runs its own D2, configured with only
+            that server's domains and keys. There is no single configuration. Each server's is on its
+            <em>D2 Configuration</em> tab, and is served beside its Dhcp4 configuration as DhcpDdns by
+            /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/&lt;id&gt;/kea-config/.
+        </div>
+        <div class="card">
+            <h5 class="card-header">Servers</h5>
+            <div class="card-body">
+                {% for server in servers %}
+                <div>
+                    <a href="{% url 'plugins:netbox_dhcp_kea_plugin:dhcpserver_d2config' pk=server.pk %}">{{ server }}</a>
+                </div>
+                {% empty %}
+                <span class="text-muted">No DHCP server uses this D2 daemon.</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
 {% if requires_secret_substitution %}
 <div class="row">
     <div class="col">
@@ -46,6 +71,8 @@
         </div>
     </div>
 </div>
+
+{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

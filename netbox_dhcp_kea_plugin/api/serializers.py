@@ -759,8 +759,9 @@ class D2DaemonSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-detail")
     # Writable: a remote-mode daemon cannot be created without it.
     ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
-    domains_count = serializers.SerializerMethodField()
+    servers = serializers.SerializerMethodField()
     # Lets a deployment see that kea-config is a template before fetching it.
+    # For a local daemon this covers every host's configuration.
     requires_secret_substitution = serializers.SerializerMethodField()
 
     class Meta:
@@ -778,7 +779,7 @@ class D2DaemonSerializer(NetBoxModelSerializer):
             "ncr_protocol",
             "ncr_format",
             "dns_server_timeout",
-            "domains_count",
+            "servers",
             "requires_secret_substitution",
             "tags",
             "custom_fields",
@@ -786,8 +787,9 @@ class D2DaemonSerializer(NetBoxModelSerializer):
             "last_updated",
         )
 
-    def get_domains_count(self, obj):
-        return obj.domains.count()
+    def get_servers(self, obj):
+        """The DHCP servers using this daemon; their subnets decide its domains."""
+        return [{"id": server.id, "name": server.name} for server in obj.servers_using()]
 
     def get_requires_secret_substitution(self, obj):
         return obj.requires_secret_substitution()
@@ -819,10 +821,12 @@ class DNSZoneField(serializers.PrimaryKeyRelatedField):
 
 class DDNSDomainSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-detail")
-    d2_daemon = NestedD2DaemonSerializer()
+    dhcp_server = NestedDHCPServerSerializer(required=False, allow_null=True)
+    ha_relationship = NestedDHCPHARelationshipSerializer(required=False, allow_null=True)
     tsig_key = NestedTSIGKeySerializer(required=False, allow_null=True)
     zone = DNSZoneField()
     is_reverse = serializers.BooleanField(read_only=True)
+    scope = serializers.CharField(read_only=True)
 
     class Meta:
         model = DDNSDomain
@@ -830,9 +834,12 @@ class DDNSDomainSerializer(NetBoxModelSerializer):
             "id",
             "url",
             "display",
-            "d2_daemon",
             "zone",
             "tsig_key",
+            "scope",
+            "dhcp_server",
+            "ha_relationship",
+            "always_include",
             "user_context",
             "is_reverse",
             "tags",

@@ -116,6 +116,7 @@ The endpoint returns a complete `Dhcp4` dictionary including:
 - Control sockets (if configured)
 - HA configuration (if applicable)
 - DDNS keys (`dhcp-ddns` block + `ddns-*` overrides) when `enable_ddns` is on and the server has a `d2_daemon` and/or `ddns_policy` set
+- a top-level `DhcpDdns` with this host's own `kea-dhcp-ddns` configuration, when the server uses a local D2 daemon with updates on
 
 ### HA fields on DHCPServer
 
@@ -386,13 +387,42 @@ conflicts that a ping check will not see.
 
 ## D2 daemon configuration generation
 
-When DDNS is enabled, each `D2Daemon` exposes a per-instance endpoint that emits a complete `kea-dhcp-ddns.conf`:
+A D2 configuration is derived from the DHCP servers that use the daemon (see
+[Derived D2 domains](features.md#derived-d2-domains)). Where it is served depends on the
+daemon's `listener_mode`:
 
-```bash
-GET /api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/
-```
+- **local** — each DHCP host runs its own D2 with only its own server's domains and keys.
+  The server's `kea-config` returns it beside `Dhcp4`:
 
-The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across this daemon's domains and their server overrides), the forward / reverse `ddns-domains` arrays partitioned by zone name, and `hooks-libraries` from any hook group attached to the daemon. `dns-server-timeout` is emitted when set on the daemon; left blank, Kea applies its default of 500 ms.
+    ```bash
+    GET /api/plugins/netbox_dhcp_kea_plugin/dhcp-servers/{id}/kea-config/
+    # → {"Dhcp4": {...}, "DhcpDdns": {...}}
+    ```
+
+    `DhcpDdns` is absent when the server has no D2 daemon, uses a remote one, or has DDNS
+    updates off — a deployment can stop `kea-dhcp-ddns` on that host. The daemon's own
+    endpoint answers **409** for a local daemon, which has no single configuration.
+
+- **remote** — one shared D2 serves every server using the daemon:
+
+    ```bash
+    GET /api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/
+    ```
+
+The output includes the listener block (`ip-address` resolved from `listener_mode` — `127.0.0.1` for local, the IPAM-pinned IP for remote), the control socket, the TSIG key ring (deduplicated across the derived domains and their server overrides), the forward / reverse `ddns-domains` arrays partitioned by zone name, and `hooks-libraries` from any hook group attached to the daemon. `dns-server-timeout` is emitted when set on the daemon; left blank, Kea applies its default of 500 ms.
+
+### Scoping a domain
+
+A DDNS domain applies to every server unless it is limited to one **HA relationship** or
+one **DHCP server**. A zone may have one entry of each scope; for a given server the
+narrowest wins (server, then HA relationship, then every server). Typical uses:
+
+- a zone two sites both update, each with its own key — one entry per HA relationship;
+- one key shared by several servers — point their entries at the same TSIG key;
+- names clients choose themselves — an entry scoped to the server with *always include*.
+
+A shared (remote) D2 cannot hold two entries for one zone, so its detail page reports it
+when two of its servers resolve the same zone to different entries.
 
 A configuration that carries a plaintext TSIG secret requires the `view_secret_tsigkey`
 permission to render. The endpoint answers **403** without it rather than redacting the
@@ -429,8 +459,13 @@ rendered config — and means there is no token, credential or renewal to manage
     Substitute first, then validate the substituted file.
 
     The D2 daemon's REST representation carries `requires_secret_substitution`, so a
-    deployment can check it before fetching the config, and the Configuration tab shows a
+    deployment can check it before fetching the config, and the configuration tabs show a
     banner.
+
+    A `vault` key's `secret_ref` must match the
+    [`ddns_secret_reference_pattern`](configuration.md#core-settings) setting. The default is
+    `<path>#<field>` relative to the KV mount, such as `dhcp/site-a/tsig-key#key` — a reference
+    the deployment could not substitute is refused when the key is saved.
 
 ### Validation worth knowing about
 
@@ -579,7 +614,7 @@ Responses:
 | `/api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/` | Stork agent group management *(if `enable_stork`)* |
 | `/api/plugins/netbox-dhcp-kea-plugin/stork-agent-groups/{id}/config/` | Stork agent env file *(if `enable_stork`)* |
 | `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/` | D2 daemon management *(if `enable_ddns`)* |
-| `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/` | Generate `kea-dhcp-ddns.conf` for a D2 daemon *(if `enable_ddns`)* |
+| `/api/plugins/netbox_dhcp_kea_plugin/d2-daemons/{id}/kea-config/` | Generate `kea-dhcp-ddns.conf` for a remote D2 daemon *(if `enable_ddns`; local daemons are served per server)* |
 | `/api/plugins/netbox_dhcp_kea_plugin/tsig-keys/` | TSIG keys *(if `enable_ddns`)* |
 | `/api/plugins/netbox_dhcp_kea_plugin/ddns-domains/` | DDNS domains *(if `enable_ddns`)* |
 | `/api/plugins/netbox_dhcp_kea_plugin/ddns-policies/` | DDNS policies *(if `enable_ddns`)* |
