@@ -4,6 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.urls import reverse
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from ipam.models import IPAddress, IPRange, Prefix, ServiceTemplate
 from netbox.forms import (
@@ -1465,6 +1466,33 @@ class SubnetForm(NetBoxModelForm):
         option_data = self.cleaned_data.get("option_data")
         validate_unique_option_data_space_code(option_data)
         return option_data
+
+    def clean_prefix(self):
+        """Say which server already serves the prefix.
+
+        A prefix carries one Subnet, so Django's own message ("Subnet with this
+        Prefix already exists") is all the uniqueness check would give, without
+        saying where that subnet is or what to do instead.
+        """
+        prefix = self.cleaned_data.get("prefix")
+        if prefix is None:
+            return prefix
+        existing = Subnet.objects.filter(prefix=prefix).exclude(pk=self.instance.pk).select_related("server").first()
+        if existing is not None:
+            server = existing.server.name if existing.server_id else "no server"
+            # format_html escapes the values and marks the result safe, so the
+            # field's error renders the link instead of its markup.
+            raise ValidationError(
+                format_html(
+                    '{} is already a DHCP subnet on {} (<a href="{}">subnet ID {}</a>). A prefix can belong to '
+                    "one DHCP subnet only. Edit that subnet to move it to another server, or delete it first.",
+                    prefix,
+                    server,
+                    existing.get_absolute_url(),
+                    existing.pk,
+                )
+            )
+        return prefix
 
     def clean(self):
         super().clean()

@@ -1070,3 +1070,31 @@ class TestModelDefaults:
         # Existing instance values should be used, not the config defaults
         assert form.initial["valid_lifetime"] == subnet.valid_lifetime
         assert form.initial["max_lifetime"] == subnet.max_lifetime
+
+    def test_subnet_form_names_the_server_holding_the_prefix(self, subnet_factory, dhcp_server_factory):
+        """A taken prefix is reported with the server that has it, not Django's generic message."""
+        import pytest
+        from django.core.exceptions import ValidationError
+
+        from netbox_dhcp_kea_plugin.forms import SubnetForm
+
+        existing = subnet_factory()
+        other_server = dhcp_server_factory()
+        form = SubnetForm()
+        form.cleaned_data = {"prefix": existing.prefix, "server": other_server}
+
+        with pytest.raises(ValidationError) as exc:
+            form.clean_prefix()
+
+        message = exc.value.messages[0]
+        assert existing.server.name in message
+        assert f'<a href="{existing.get_absolute_url()}">subnet ID {existing.pk}</a>' in message
+
+    def test_subnet_form_accepts_its_own_prefix_on_edit(self, subnet_factory):
+        from netbox_dhcp_kea_plugin.forms import SubnetForm
+
+        subnet = subnet_factory()
+        form = SubnetForm(instance=subnet)
+        form.cleaned_data = {"prefix": subnet.prefix}
+
+        assert form.clean_prefix() == subnet.prefix
