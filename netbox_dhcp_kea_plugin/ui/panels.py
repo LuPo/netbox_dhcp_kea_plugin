@@ -12,3 +12,12 @@ class HookPanel(panels.ObjectAttributesPanel):
     description = attrs.TextAttr("description")
     is_standard = attrs.BooleanAttr("is_standard", label=_("Standard hook"))
     allowed_processes = attrs.ArrayAttr("allowed_processes")
+
+
+class HookGroupPanel(panels.ObjectAttributesPanel):
+    title = _("Hook Group")
+
+    name = attrs.TextAttr("name")
+    description = attrs.TextAttr("description")
+    library_path = attrs.TextAttr("library_path", style="font-monospace")
+    d2_daemons = attrs.RelatedObjectListAttr("d2_daemons", linkify=True, label=_("D2 daemons"))

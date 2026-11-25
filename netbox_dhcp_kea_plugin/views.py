@@ -16,10 +16,17 @@ from .ui import panels as ui_panels
 from .models import SubnetPool
 
 
+def _ddns_enabled(_instance=None):
+    from netbox.plugins.utils import get_plugin_config
+
+    return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
+
+
 # Hook Views
 @register_model_view(models.Hook)
 class HookView(generic.ObjectView):
     queryset = models.Hook.objects.prefetch_related("hook_groups")
+    template_name = "generic/object.html"
     layout = layout.SimpleLayout(
         left_panels=[
             ui_panels.HookPanel(),
@@ -98,11 +105,16 @@ class HookHookGroupsView(generic.ObjectChildrenView):
 @register_model_view(models.HookGroup)
 class HookGroupView(generic.ObjectView):
     queryset = models.HookGroup.objects.prefetch_related("hooks", "servers", "d2_daemons")
-
-    def get_extra_context(self, request, instance):
-        from netbox.plugins.utils import get_plugin_config
-
-        return {"enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns")}
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.HookGroupPanel(exclude=[] if _ddns_enabled() else ["d2_daemons"]),
+            TagsPanel(),
+        ],
+        right_panels=[
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.HookGroup, "list", path="", detail=False)
@@ -147,28 +159,20 @@ def get_hookgroup_hooks_count(obj):
 
 
 @register_model_view(models.HookGroup, name="hooks", path="hooks")
-class HookGroupHooksView(generic.ObjectView):
+class HookGroupHooksView(generic.ObjectChildrenView):
     queryset = models.HookGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hookgroup_hooks.html"
+    child_model = models.Hook
+    table = tables.HookTable
+    filterset = filtersets.HookFilterSet
+    filterset_form = forms.HookFilterForm
     tab = ViewTab(
-        label="Hooks",
+        label=_("Hooks"),
         badge=get_hookgroup_hooks_count,
         permission="netbox_dhcp_kea_plugin.view_hookgroup",
     )
 
-    def get(self, request, pk):
-        hook_group = self.get_object(pk=pk)
-        hooks = hook_group.hooks.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook_group,
-                "hooks": hooks,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.hooks.restrict(request.user, "view")
 
 
 def get_hookgroup_servers_count(obj):
@@ -177,28 +181,20 @@ def get_hookgroup_servers_count(obj):
 
 
 @register_model_view(models.HookGroup, name="servers", path="servers")
-class HookGroupServersView(generic.ObjectView):
+class HookGroupServersView(generic.ObjectChildrenView):
     queryset = models.HookGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/hookgroup_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_hookgroup_servers_count,
         permission="netbox_dhcp_kea_plugin.view_hookgroup",
     )
 
-    def get(self, request, pk):
-        hook_group = self.get_object(pk=pk)
-        servers = hook_group.servers.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": hook_group,
-                "servers": servers,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 # VendorOptionSpace Views
@@ -1512,12 +1508,6 @@ class D2DaemonConfigView(generic.ObjectView):
                 )
             )
         return render(request, self.template_name, context)
-
-
-def _ddns_enabled(_instance=None):
-    from netbox.plugins.utils import get_plugin_config
-
-    return bool(get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"))
 
 
 @register_model_view(models.DHCPServer, name="d2config", path="d2-config")
