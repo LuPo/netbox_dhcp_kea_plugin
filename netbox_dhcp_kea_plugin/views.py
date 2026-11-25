@@ -1748,18 +1748,13 @@ class DHCPServerD2ConfigView(generic.ObjectView):
         permission="netbox_dhcp_kea_plugin.view_dhcpserver",
         weight=1600,
     )
+    # What the host gets on the left, the file it becomes on the right.
     layout = layout.Layout(
         layout.Row(
             layout.Column(
                 TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_daemon.html", title=_("D2 Daemon")),
-                width=4,
-            ),
-            layout.Column(
                 TemplatePanel("netbox_dhcp_kea_plugin/panels/derived_domains.html", title=_("DDNS Domains")),
-                width=8,
             ),
-        ),
-        layout.Row(
             layout.Column(
                 TemplatePanel("netbox_dhcp_kea_plugin/panels/server_d2_note.html"),
                 ui_panels.kea_config_panel(
