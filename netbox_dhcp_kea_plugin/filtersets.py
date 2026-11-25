@@ -155,6 +155,15 @@ class OptionDataFilterSet(NetBoxModelFilterSet):
     client_class_id = django_filters.ModelMultipleChoiceFilter(
         field_name="client_classes", queryset=ClientClass.objects.all(), label="Client Class (ID)"
     )
+    server_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="dhcp_servers", queryset=DHCPServer.objects.all(), label="DHCP Server (ID)"
+    )
+    subnet_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="subnet_items", queryset=Subnet.objects.all(), label="Subnet (ID)"
+    )
+    pool_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="pool_configs", queryset=SubnetPool.objects.all(), label="Subnet Pool (ID)"
+    )
 
     class Meta:
         model = OptionData

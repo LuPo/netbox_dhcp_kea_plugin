@@ -860,23 +860,30 @@ class SubnetView(generic.ObjectView):
     queryset = models.Subnet.objects.select_related("prefix", "server", "client_class").prefetch_related(
         "option_data", "evaluate_additional_classes"
     )
-
-    def get_extra_context(self, request, instance):
-        import json
-
-        from netbox.plugins.utils import get_plugin_config
-
-        # Find evaluate_additional_classes entries that don't have only_in_additional_list set.
-        # These classes are already evaluated globally by KEA, so listing them in
-        # evaluate-additional-classes is redundant.
-        redundant_eval_classes = list(instance.evaluate_additional_classes.filter(only_in_additional_list=False))
-
-        return {
-            "kea_config": json.dumps(instance.to_kea_dict(), indent=2),
-            "pool_count": instance.subnet_pools.count(),
-            "redundant_eval_classes": redundant_eval_classes,
-            "enable_ddns": get_plugin_config("netbox_dhcp_kea_plugin", "enable_ddns"),
-        }
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.SubnetPanel(exclude=[] if _ddns_enabled() else ["ddns_policy"]),
+            ui_panels.SubnetReservationModePanel(),
+            ui_panels.SubnetClientClassesPanel(),
+            ui_panels.RedundantEvaluationClassesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda subnet, _ctx: subnet.to_kea_dict(),
+                title=_("KEA Subnet Configuration"),
+                element_id="subnet-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"subnet_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.Subnet, "list", path="", detail=False)
@@ -1006,16 +1013,21 @@ def get_pool_count(obj):
 
 @register_model_view(models.Subnet, name="pools", path="pools")
 class SubnetPoolsView(generic.ObjectView):
+    """The prefix's child IP ranges as pools, each with its optional pool settings."""
+
     queryset = models.Subnet.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/subnet_pools.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Pools",
+        label=_("Pools"),
         badge=get_pool_count,
         permission="netbox_dhcp_kea_plugin.view_subnetpool",
     )
+    layout = layout.Layout(
+        layout.Row(layout.Column(TemplatePanel("netbox_dhcp_kea_plugin/panels/subnet_pools.html"))),
+    )
 
-    def get(self, request, pk):
-        subnet = self.get_object(pk=pk)
+    def get_extra_context(self, request, instance):
+        subnet = instance
         pools = subnet.get_pools()
 
         # Get IP ranges and their SubnetPool configs
@@ -1047,47 +1059,50 @@ class SubnetPoolsView(generic.ObjectView):
         # Also include computed pools (from available IPs) that don't have IP ranges
         has_ip_ranges = ip_ranges.exists()
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": subnet,
-                "pool_data": pool_data,
-                "pools": pools,
-                "has_ip_ranges": has_ip_ranges,
-                "pool_config_count": len(pool_configs),
-                "tab": self.tab,
-            },
-        )
+        return {
+            "pool_data": pool_data,
+            "pools": pools,
+            "has_ip_ranges": has_ip_ranges,
+            "pool_config_count": len(pool_configs),
+        }
 
 
 @register_model_view(models.Subnet, name="reservations", path="reservations")
 class SubnetReservationsView(generic.ObjectView):
+    """Reservations derived from devices and VMs, plus static ones, and their KEA entries."""
+
     queryset = models.Subnet.objects.select_related("prefix")
-    template_name = "netbox_dhcp_kea_plugin/subnet_reservations.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Reservations",
+        label=_("Reservations"),
         badge=get_reservation_count,
         permission="netbox_dhcp_kea_plugin.view_subnet",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                TemplatePanel("netbox_dhcp_kea_plugin/panels/subnet_reservations.html", title=_("DHCP Reservations")),
+                width=8,
+            ),
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda _subnet, ctx: ctx["kea_reservations"],
+                    title=_("KEA Reservations Configuration"),
+                    element_id="subnet-reservations-kea",
+                ),
+                width=4,
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        config = self.get_object(pk=pk)
-        reservations = config.get_reservations()
-        skipped_count = sum(1 for _, meta in reservations if not meta["has_hw_address"])
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": config,
-                "reservations": reservations,
-                "reservation_count": len(reservations),
-                "skipped_count": skipped_count,
-                "kea_reservations": config.get_kea_reservations(),
-                "tab": self.tab,
-            },
-        )
+    def get_extra_context(self, request, instance):
+        reservations = instance.get_reservations()
+        return {
+            "reservations": reservations,
+            "reservation_count": len(reservations),
+            "skipped_count": sum(1 for _, meta in reservations if not meta["has_hw_address"]),
+            "kea_reservations": instance.get_kea_reservations(),
+        }
 
 
 # SubnetPool Views

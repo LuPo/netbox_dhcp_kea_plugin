@@ -37,3 +37,22 @@ class JSONAttr(attrs.ObjectAttribute):
         if value in (None, "", {}, []):
             return self.placeholder
         return super().render(obj, context)
+
+
+class InheritedBooleanAttr(attrs.ObjectAttribute):
+    """A nullable boolean; None inherits, so the effective value is shown beside it."""
+
+    template_name = "netbox_dhcp_kea_plugin/attrs/inherited_boolean.html"
+
+    def __init__(self, accessor, effective_accessor, **kwargs):
+        super().__init__(accessor, **kwargs)
+        self.effective_accessor = effective_accessor
+
+    def render(self, obj, context):
+        from django.template.loader import render_to_string
+        from utilities.data import resolve_attr_path
+
+        return render_to_string(
+            self.template_name,
+            {"value": self.get_value(obj), "effective": resolve_attr_path(obj, self.effective_accessor)},
+        )

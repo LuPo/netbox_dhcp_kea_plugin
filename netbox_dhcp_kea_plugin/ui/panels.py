@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs, panels
 from netbox.ui.actions import CopyContent
 
-from netbox_dhcp_kea_plugin.ui.attrs import JSONAttr, SecondsAttr, hinted
+from netbox_dhcp_kea_plugin.ui.attrs import InheritedBooleanAttr, JSONAttr, SecondsAttr, hinted
 
 
 class ConditionalTemplatePanel(panels.TemplatePanel):
@@ -176,3 +176,73 @@ class ClientClassKeaPanel(panels.ObjectPanel):
             "kea_config_hex": client_class.to_kea_json(ascii_format=False, indent=4),
             "kea_config_ascii": client_class.to_kea_json(ascii_format=True, indent=4),
         }
+
+
+class SubnetPanel(panels.ObjectAttributesPanel):
+    title = _("Prefix DHCP Configuration")
+
+    prefix = attrs.RelatedObjectAttr("prefix", linkify=True)
+    vrf = attrs.RelatedObjectAttr("prefix.vrf", linkify=True, label=_("VRF"))
+    server = attrs.RelatedObjectAttr("server", linkify=True)
+    valid_lifetime = SecondsAttr("valid_lifetime")
+    max_lifetime = SecondsAttr("max_lifetime")
+    renew_timer = SecondsAttr("renew_timer", label=_("Renew timer (T1)"))
+    rebind_timer = SecondsAttr("rebind_timer", label=_("Rebind timer (T2)"))
+    user_context = JSONAttr(
+        "user_context",
+        label=hinted(
+            _("User context"),
+            _(
+                "Passed through to KEA as user-context. Hook libraries read their configuration from "
+                "here — libdhcp_limits.so takes per-subnet limits from it."
+            ),
+        ),
+    )
+    routers_option_offset = attrs.TemplatedAttr(
+        "routers_option_offset",
+        template_name="netbox_dhcp_kea_plugin/attrs/router_offset.html",
+        label=_("Router option offset"),
+    )
+    ddns_policy = attrs.RelatedObjectAttr("ddns_policy", linkify=True, label=_("DDNS policy"))
+
+
+class SubnetReservationModePanel(panels.ObjectAttributesPanel):
+    title = _("Reservation Mode")
+
+    reservations_global = InheritedBooleanAttr("reservations_global", "effective_reservations_global")
+    reservations_in_subnet = InheritedBooleanAttr(
+        "reservations_in_subnet", "effective_reservations_in_subnet", label=_("Reservations in-subnet")
+    )
+    reservations_out_of_pool = InheritedBooleanAttr(
+        "reservations_out_of_pool", "effective_reservations_out_of_pool", label=_("Reservations out-of-pool")
+    )
+    reservations_only = attrs.BooleanAttr(
+        "reservations_only",
+        label=hinted(_("Reservations only"), _("No dynamic pools — only reserved hosts get addresses.")),
+    )
+
+
+class SubnetClientClassesPanel(panels.ObjectAttributesPanel):
+    title = _("Client Classes")
+
+    client_class = attrs.RelatedObjectAttr(
+        "client_class",
+        linkify=True,
+        label=hinted(_("Restricting class"), _("Only clients matching this class can use this subnet.")),
+    )
+    evaluate_additional_classes = attrs.RelatedObjectListAttr("evaluate_additional_classes", linkify=True)
+
+
+class RedundantEvaluationClassesPanel(panels.ObjectPanel):
+    """Additional classes KEA evaluates globally anyway, when there are any."""
+
+    template_name = "netbox_dhcp_kea_plugin/panels/redundant_eval_classes.html"
+    title = _("Redundant Evaluate-Additional-Classes")
+
+    def get_context(self, context):
+        ctx = super().get_context(context)
+        redundant = list(ctx["object"].evaluate_additional_classes.filter(only_in_additional_list=False))
+        return {**ctx, "redundant_eval_classes": redundant}
+
+    def should_render(self, context):
+        return bool(context["redundant_eval_classes"])

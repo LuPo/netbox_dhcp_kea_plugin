@@ -1,0 +1,30 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body pb-0">
+    <div class="alert alert-info" role="alert">
+        <i class="mdi mdi-information"></i>
+        <div>
+            These classes in evaluate-additional-classes do not have "Only in additional list" enabled.
+            KEA already evaluates them globally for every packet, so listing them here is redundant.
+            Enable "Only in additional list" on them, or remove them from evaluate-additional-classes.
+        </div>
+    </div>
+</div>
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Client Class</th>
+            <th>Test Expression</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cc in redundant_eval_classes %}
+        <tr>
+            <td><a href="{{ cc.get_absolute_url }}">{{ cc.name }}</a></td>
+            <td class="font-monospace">{{ cc.test_expression|default:"(unconditional)" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock panel_content %}
