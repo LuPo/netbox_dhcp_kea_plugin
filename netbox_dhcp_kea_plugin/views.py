@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.db.models import Count, Q
 from django.http import Http404
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
@@ -1303,14 +1303,30 @@ class StaticReservationImportView(generic.BulkImportView):
 @register_model_view(models.StorkServer)
 class StorkServerView(generic.ObjectView):
     queryset = models.StorkServer.objects.prefetch_related("agent_groups")
+    template_name = "generic/object.html"
+    layout = layout.Layout(
+        # Dialling an address over TLS is unusual but not impossible, so this
+        # is shown rather than enforced at save time.
+        layout.Row(layout.Column(ui_panels.ContextAlertsPanel("tls_verification_warnings"))),
+        layout.Row(
+            layout.Column(
+                ui_panels.StorkServerPanel(),
+                ui_panels.StorkRESTPanel(),
+                TagsPanel(),
+                PluginContentPanel("left_page"),
+            ),
+            layout.Column(
+                ui_panels.StorkDatabasePanel(),
+                ui_panels.StorkIntegrationPanel(),
+                CustomFieldsPanel(),
+                PluginContentPanel("right_page"),
+            ),
+        ),
+        layout.Row(layout.Column(PluginContentPanel("full_width_page"))),
+    )
 
     def get_extra_context(self, request, instance):
-        return {
-            # Dialling an address over TLS is unusual but not impossible, so
-            # this is shown rather than enforced at save time.
-            "tls_verification_warnings": instance.tls_verification_warnings(),
-            "endpoint_record": instance.endpoint_record(),
-        }
+        return {"tls_verification_warnings": instance.tls_verification_warnings()}
 
 
 @register_model_view(models.StorkServer, "list", path="", detail=False)
@@ -1354,60 +1370,56 @@ def get_storkserver_agent_groups_count(obj):
 
 
 @register_model_view(models.StorkServer, name="agent_groups", path="agent-groups")
-class StorkServerAgentGroupsView(generic.ObjectView):
+class StorkServerAgentGroupsView(generic.ObjectChildrenView):
     queryset = models.StorkServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkserver_agent_groups.html"
+    child_model = models.StorkAgentGroup
+    table = tables.StorkAgentGroupTable
+    filterset = filtersets.StorkAgentGroupFilterSet
+    filterset_form = forms.StorkAgentGroupFilterForm
     tab = ViewTab(
-        label="Agent Groups",
+        label=_("Agent Groups"),
         badge=get_storkserver_agent_groups_count,
         permission="netbox_dhcp_kea_plugin.view_storkserver",
     )
 
-    def get(self, request, pk):
-        stork_server = self.get_object(pk=pk)
-        agent_groups = stork_server.agent_groups.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": stork_server,
-                "agent_groups": agent_groups,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.agent_groups.restrict(request.user, "view")
 
 
 @register_model_view(models.StorkServer, name="config", path="config")
 class StorkServerConfigView(generic.ObjectView):
     queryset = models.StorkServer.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkserver_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_storkserver",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda server, _ctx: server.to_env_content(),
+                    as_text=True,
+                    title=_("stork-server.env"),
+                    intro=lambda server: format_html(
+                        "Served by /api/plugins/netbox_dhcp_kea_plugin/stork-servers/{}/config/", server.pk
+                    ),
+                    element_id="stork-server-env",
+                    actions=[ui_panels.ExportAction("stork-server-config")],
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        server = self.get_object(pk=pk)
-        env_content = server.to_env_content()
-
+    def get(self, request, **kwargs):
         if request.GET.get("export") == "stork-server-config":
-            response = HttpResponse(env_content, content_type="text/plain")
-            filename = f"{server.name}_stork-server.env"
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            return response
+            from django.http import HttpResponse
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": server,
-                "tab": self.tab,
-                "env_content": env_content,
-            },
-        )
+            server = self.get_object(**kwargs)
+            response = HttpResponse(server.to_env_content(), content_type="text/plain")
+            response["Content-Disposition"] = f'attachment; filename="{server.name}_stork-server.env"'
+            return response
+        return super().get(request, **kwargs)
 
 
 # --- Stork Agent Group Views ---
@@ -1416,6 +1428,20 @@ class StorkServerConfigView(generic.ObjectView):
 @register_model_view(models.StorkAgentGroup)
 class StorkAgentGroupView(generic.ObjectView):
     queryset = models.StorkAgentGroup.objects.select_related("stork_server").prefetch_related("servers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.StorkAgentGroupPanel(),
+            ui_panels.StorkAgentGRPCPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.ConditionalPanel(
+                ui_panels.StorkPrometheusPanel(), lambda group: group.operating_mode != "stork-only"
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.StorkAgentGroup, "list", path="", detail=False)
@@ -1459,69 +1485,64 @@ def get_storkagentgroup_servers_count(obj):
 
 
 @register_model_view(models.StorkAgentGroup, name="servers", path="servers")
-class StorkAgentGroupServersView(generic.ObjectView):
+class StorkAgentGroupServersView(generic.ObjectChildrenView):
     queryset = models.StorkAgentGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_storkagentgroup_servers_count,
         permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
     )
 
-    def get(self, request, pk):
-        agent_group = self.get_object(pk=pk)
-        servers = agent_group.servers.all()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": agent_group,
-                "servers": servers,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 @register_model_view(models.StorkAgentGroup, name="config", path="config")
 class StorkAgentGroupConfigView(generic.ObjectView):
     queryset = models.StorkAgentGroup.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/storkagentgroup_config.html"
+    template_name = "generic/object.html"
     tab = ViewTab(
-        label="Configuration",
+        label=_("Configuration"),
         permission="netbox_dhcp_kea_plugin.view_storkagentgroup",
     )
+    layout = layout.Layout(
+        layout.Row(
+            layout.Column(
+                ui_panels.KeaJSONPanel(
+                    lambda group, _ctx: group.to_env_content(),
+                    as_text=True,
+                    title=_("stork-agent.env"),
+                    intro=lambda group: format_html(
+                        "Served by /api/plugins/netbox_dhcp_kea_plugin/stork-agent-groups/{}/config/. Add "
+                        "?server=&lt;id&gt; to replace &lt;AGENT_HOST_IP&gt; with that KEA server's address.",
+                        group.pk,
+                    ),
+                    element_id="stork-agent-env",
+                ),
+            ),
+        ),
+    )
 
-    def get(self, request, pk):
-        from django.http import HttpResponse
-
-        agent_group = self.get_object(pk=pk)
-
-        # Download env file for a specific server: ?server=<id>
+    def get(self, request, **kwargs):
+        # Download the env file for one server: ?server=<id>
         server_id = request.GET.get("server")
         if server_id:
+            from django.http import HttpResponse
+
+            agent_group = self.get_object(**kwargs)
             try:
                 server = agent_group.servers.select_related("ip_address").get(pk=int(server_id))
-                env_content = agent_group.to_env_content(server=server)
-                response = HttpResponse(env_content, content_type="text/plain")
-                filename = f"{server.name}_stork-agent.env"
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
-                return response
             except (ValueError, models.DHCPServer.DoesNotExist):
                 pass
-
-        # Display generic template with placeholder
-        env_content = agent_group.to_env_content()
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": agent_group,
-                "tab": self.tab,
-                "env_content": env_content,
-            },
-        )
+            else:
+                response = HttpResponse(agent_group.to_env_content(server=server), content_type="text/plain")
+                response["Content-Disposition"] = f'attachment; filename="{server.name}_stork-agent.env"'
+                return response
+        return super().get(request, **kwargs)
 
 
 # --- TSIGKey Views ---

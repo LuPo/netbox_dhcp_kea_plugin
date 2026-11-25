@@ -89,9 +89,19 @@ class KeaJSONPanel(panels.ObjectPanel):
     template_name = "netbox_dhcp_kea_plugin/panels/kea_json.html"
 
     def __init__(
-        self, data, intro=None, empty_message="", element_id="kea-json", title_icons=None, condition=None, **kwargs
+        self,
+        data,
+        intro=None,
+        empty_message="",
+        element_id="kea-json",
+        title_icons=None,
+        condition=None,
+        as_text=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
+        # Render ``data`` verbatim (e.g. an .env file) instead of as JSON.
+        self.as_text = as_text
         self.data = data
         self.intro = intro
         self.empty_message = empty_message
@@ -117,6 +127,7 @@ class KeaJSONPanel(panels.ObjectPanel):
             "intro": intro,
             "empty_message": self.empty_message,
             "element_id": self.element_id,
+            "as_text": self.as_text,
         }
 
     def should_render(self, context):
@@ -787,3 +798,78 @@ class DDNSPolicyTTLPanel(AttributesPanel):
     ddns_ttl = attrs.NumericAttr("ddns_ttl", label=_("TTL"))
     ddns_ttl_min = attrs.NumericAttr("ddns_ttl_min", label=_("TTL Min"))
     ddns_ttl_max = attrs.NumericAttr("ddns_ttl_max", label=_("TTL Max"))
+
+
+
+class StorkServerPanel(AttributesPanel):
+    title = _("Stork Server")
+
+    name = attrs.TextAttr("name")
+    description = attrs.TextAttr("description")
+    status = attrs.ChoiceAttr("status")
+    ip_address = attrs.TemplatedAttr(
+        "ip_address", template_name="netbox_dhcp_kea_plugin/attrs/server_ip.html", label=_("IP Address")
+    )
+    url = attrs.TemplatedAttr("url", template_name="netbox_dhcp_kea_plugin/attrs/external_link.html", label=_("Stork URL"))
+    stork_version = attrs.TextAttr("stork_version", label=_("Version"))
+    log_level = attrs.ChoiceAttr("log_level")
+
+
+class StorkRESTPanel(AttributesPanel):
+    title = _("REST API Settings")
+
+    rest_port = attrs.NumericAttr("rest_port", label=_("REST Port"))
+    rest_base_url = attrs.TextAttr("rest_base_url", label=_("Base URL"), style="font-monospace")
+    use_tls = attrs.BooleanAttr("use_tls", label=_("TLS Enabled"))
+    endpoint = attrs.TemplatedAttr(
+        "endpoint_host", template_name="netbox_dhcp_kea_plugin/attrs/stork_endpoint.html", label=_("Agent Endpoint")
+    )
+    enable_metrics = attrs.BooleanAttr("enable_metrics", label=_("Metrics Endpoint"))
+
+
+class StorkDatabasePanel(AttributesPanel):
+    title = _("Database Connection")
+
+    db_host = attrs.TextAttr("db_host", label=_("DB Host"))
+    db_port = attrs.NumericAttr("db_port", label=_("DB Port"))
+    db_name = attrs.TextAttr("db_name", label=_("DB Name"))
+    db_user = attrs.TextAttr("db_user", label=_("DB User"))
+    db_ssl_mode = attrs.ChoiceAttr("db_ssl_mode", label=_("DB SSL Mode"))
+
+
+class StorkIntegrationPanel(AttributesPanel):
+    title = _("Integration")
+
+    default_agent_registration = attrs.ChoiceAttr("default_agent_registration", label=_("Agent Registration"))
+    grafana_url = attrs.TemplatedAttr(
+        "grafana_url", template_name="netbox_dhcp_kea_plugin/attrs/external_link.html", label=_("Grafana URL")
+    )
+
+
+class StorkAgentGroupPanel(AttributesPanel):
+    title = _("Stork Agent Group")
+
+    name = attrs.TextAttr("name")
+    description = attrs.TextAttr("description")
+    operating_mode = attrs.ChoiceAttr("operating_mode")
+    stork_server = DefaultedAttr("stork_server", default_label=_("None (Prometheus-only mode)"))
+    log_level = attrs.ChoiceAttr("log_level")
+
+
+class StorkAgentGRPCPanel(AttributesPanel):
+    title = _("Agent gRPC Settings")
+
+    agent_port = attrs.NumericAttr("agent_port")
+    tls_cert_verification = attrs.TemplatedAttr(
+        "skip_tls_cert_verification",
+        template_name="netbox_dhcp_kea_plugin/attrs/negated_boolean.html",
+        label=_("TLS Cert Verification"),
+    )
+
+
+class StorkPrometheusPanel(AttributesPanel):
+    title = _("Prometheus Exporter")
+
+    prometheus_exporter_address = attrs.TextAttr("prometheus_exporter_address", label=_("Listen Address"))
+    prometheus_exporter_port = attrs.NumericAttr("prometheus_exporter_port", label=_("Port"))
+    prometheus_per_subnet_stats = attrs.BooleanAttr("prometheus_per_subnet_stats", label=_("Per-Subnet Stats"))

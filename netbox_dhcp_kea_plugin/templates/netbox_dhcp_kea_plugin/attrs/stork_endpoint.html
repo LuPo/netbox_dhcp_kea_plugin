@@ -1,0 +1,2 @@
+{% with record=object.endpoint_record %}{% if record %}<a href="{{ record.get_absolute_url }}">{{ value }}</a>{% else %}{{ value }}{% endif %}{% endwith %}
+<span class="badge text-bg-info ms-1">{{ object.get_endpoint_type_display }}</span>
