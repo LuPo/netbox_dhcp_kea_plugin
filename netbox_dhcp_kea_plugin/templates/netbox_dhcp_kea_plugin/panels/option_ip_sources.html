@@ -1,0 +1,22 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body pb-0 text-muted">
+    IPs resolved from linked objects at config generation time. These override the Data field.
+</div>
+<table class="table table-hover attr-table">
+    {% for source in ip_sources %}
+    <tr>
+        <th scope="row">#{{ source.ordinal }}</th>
+        <td>
+            {% if source.ip_source %}
+            <a href="{{ source.ip_source.get_absolute_url }}">{{ source.ip_source }}</a>
+            <span class="text-muted">→ {{ source.resolved_ip }}</span>
+            {% else %}
+            <span class="text-danger">Source deleted</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock panel_content %}

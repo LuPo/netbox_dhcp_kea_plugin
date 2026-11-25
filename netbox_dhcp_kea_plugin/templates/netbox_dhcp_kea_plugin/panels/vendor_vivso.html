@@ -1,0 +1,17 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+<div class="card-body">
+    <p class="text-muted">To use this space with VIVSO (Option 125):</p>
+    <pre class="mb-0">{
+    "name": "vivso-suboptions",
+    "data": "{{ object.enterprise_id }}"
+},
+{
+    "space": "vendor-{{ object.enterprise_id }}",
+    "name": "your-option-name",
+    "code": 1,
+    "data": "your-value"
+}</pre>
+</div>
+{% endblock panel_content %}

@@ -1,0 +1,12 @@
+{% extends "ui/panels/_base.html" %}
+
+{% block panel_content %}
+{% if intro %}
+<div class="card-body pb-0 text-muted">{{ intro }}</div>
+{% endif %}
+{% if data is not None %}
+<pre class="card-body mb-0" id="{{ element_id }}">{{ data|json }}</pre>
+{% else %}
+<div class="card-body text-muted">{{ empty_message }}</div>
+{% endif %}
+{% endblock panel_content %}

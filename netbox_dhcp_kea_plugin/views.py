@@ -7,7 +7,8 @@ from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
-from netbox.ui.panels import JSONPanel, ObjectsTablePanel
+from netbox.ui.actions import AddObject
+from netbox.ui.panels import JSONPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -201,6 +202,40 @@ class HookGroupServersView(generic.ObjectChildrenView):
 @register_model_view(models.VendorOptionSpace)
 class VendorOptionSpaceView(generic.ObjectView):
     queryset = models.VendorOptionSpace.objects.annotate(definitions_count=Count("option_definitions"))
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.VendorOptionSpacePanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            TemplatePanel(
+                "netbox_dhcp_kea_plugin/panels/vendor_option43.html", title=_("KEA Option 43 Configuration")
+            ),
+            ui_panels.ConditionalTemplatePanel(
+                "netbox_dhcp_kea_plugin/panels/vendor_vivso.html",
+                condition=lambda space: space.enterprise_id,
+                title=_("KEA VIVSO (Option 125) Configuration"),
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionDefinition",
+                filters={"vendor_option_space_id": lambda ctx: ctx["object"].pk},
+                actions=[
+                    AddObject(
+                        "netbox_dhcp_kea_plugin.OptionDefinition",
+                        url_params={"vendor_option_space": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
+            ),
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"vendor_option_space": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.VendorOptionSpace, "list", path="", detail=False)
@@ -240,6 +275,38 @@ class VendorOptionSpaceImportView(generic.BulkImportView):
 @register_model_view(models.OptionDefinition)
 class OptionDefinitionView(generic.ObjectView):
     queryset = models.OptionDefinition.objects.select_related("vendor_option_space")
+    # Extends generic/object.html only to make standard options read-only.
+    template_name = "netbox_dhcp_kea_plugin/optiondefinition.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.OptionDefinitionPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda definition, _ctx: None if definition.is_standard else definition.to_kea_dict(),
+                title=_("KEA Configuration"),
+                intro=lambda definition: (
+                    ""
+                    if definition.is_standard
+                    else _("This option definition generates the following KEA option-def entry:")
+                ),
+                empty_message=_(
+                    "Standard DHCP options are built into KEA and need no option-def entry. Use this option "
+                    "directly in option-data by name or code."
+                ),
+                element_id="optiondefinition-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                title=_("Option Data Using This Definition"),
+                filters={"definition": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.OptionDefinition, "list", path="", detail=False)
@@ -308,20 +375,34 @@ class OptionDefinitionImportView(generic.BulkImportView):
 
 
 # OptionData Views
+def _option_data_intro(option):
+    if option.delivery_type == "option43":
+        return _("Delivered via Option 43 (Vendor-Encapsulated-Options) in this KEA option-data entry:")
+    if option.delivery_type == "vivso":
+        return _("Delivered via Option 125 (VIVSO) in this KEA option-data entry:")
+    return _("This option data generates the following KEA option-data entry:")
+
+
 @register_model_view(models.OptionData)
 class OptionDataView(generic.ObjectView):
     queryset = models.OptionData.objects.select_related("definition", "vendor_option_space")
-
-    def get_extra_context(self, request, instance):
-        ip_sources = list(instance.ip_sources.order_by("ordinal"))
-        for source in ip_sources:
-            source.resolved_ip = models.OptionData._resolve_ip(source.ip_source)
-        # Resolve effective data for KEA config preview (IP sources override manual data)
-        kea_dict = instance.to_kea_dict()
-        return {
-            "ip_sources": ip_sources,
-            "kea_data": kea_dict.get("data", instance.data),
-        }
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.OptionDataPanel(),
+            ui_panels.OptionIPSourcesPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.KeaJSONPanel(
+                lambda option, _ctx: option.to_kea_dict(),
+                title=_("KEA Configuration"),
+                intro=_option_data_intro,
+                element_id="optiondata-kea",
+            ),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.OptionData, "list", path="", detail=False)
@@ -365,25 +446,20 @@ class OptionDataImportView(generic.BulkImportView):
 
 
 @register_model_view(models.OptionData, name="client_classes", path="client-classes")
-class OptionDataClientClassesView(generic.ObjectView):
-    queryset = models.OptionData.objects.prefetch_related("client_classes")
-    template_name = "netbox_dhcp_kea_plugin/optiondata_clientclasses.html"
+class OptionDataClientClassesView(generic.ObjectChildrenView):
+    queryset = models.OptionData.objects.all()
+    child_model = models.ClientClass
+    table = tables.ClientClassTable
+    filterset = filtersets.ClientClassFilterSet
+    filterset_form = forms.ClientClassFilterForm
     tab = ViewTab(
-        label="Client Classes",
-        badge=lambda obj: obj.client_classes.count(),
+        label=_("Client Classes"),
+        badge=lambda option: option.client_classes.count(),
         permission="netbox_dhcp_kea_plugin.view_optiondata",
     )
 
-    def get(self, request, pk):
-        option_data = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": option_data,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.client_classes.restrict(request.user, "view")
 
 
 # DHCPServer Views

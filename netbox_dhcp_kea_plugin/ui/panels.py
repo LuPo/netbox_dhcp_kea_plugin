@@ -2,6 +2,51 @@
 
 from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs, panels
+from netbox.ui.actions import CopyContent
+
+
+class ConditionalTemplatePanel(panels.TemplatePanel):
+    """A template panel shown only when ``condition(object)`` is true."""
+
+    def __init__(self, template_name, condition, **kwargs):
+        super().__init__(template_name, **kwargs)
+        self.condition = condition
+
+    def should_render(self, context):
+        return bool(self.condition(context.get("object")))
+
+
+class KeaJSONPanel(panels.ObjectPanel):
+    """Kea JSON computed from the object, with a copy button.
+
+    Parameters:
+        data (callable): ``data(object, context)`` returning the JSON-able value, or None
+        intro (str | callable): text shown above the JSON; a callable gets the object
+        empty_message (str): shown instead when ``data`` returns None
+        element_id (str): DOM id of the JSON block, for the copy button
+    """
+
+    template_name = "netbox_dhcp_kea_plugin/panels/kea_json.html"
+
+    def __init__(self, data, intro=None, empty_message="", element_id="kea-json", **kwargs):
+        super().__init__(**kwargs)
+        self.data = data
+        self.intro = intro
+        self.empty_message = empty_message
+        self.element_id = element_id
+        self.actions.append(CopyContent(element_id))
+
+    def get_context(self, context):
+        ctx = super().get_context(context)
+        obj = ctx["object"]
+        intro = self.intro(obj) if callable(self.intro) else self.intro
+        return {
+            **ctx,
+            "data": self.data(obj, context),
+            "intro": intro,
+            "empty_message": self.empty_message,
+            "element_id": self.element_id,
+        }
 
 
 class HookPanel(panels.ObjectAttributesPanel):
@@ -21,3 +66,60 @@ class HookGroupPanel(panels.ObjectAttributesPanel):
     description = attrs.TextAttr("description")
     library_path = attrs.TextAttr("library_path", style="font-monospace")
     d2_daemons = attrs.RelatedObjectListAttr("d2_daemons", linkify=True, label=_("D2 daemons"))
+
+
+class VendorOptionSpacePanel(panels.ObjectAttributesPanel):
+    title = _("Vendor Option Space")
+
+    name = attrs.TextAttr("name")
+    enterprise_id = attrs.NumericAttr("enterprise_id", label=_("Enterprise ID"))
+    manufacturer = attrs.RelatedObjectAttr("manufacturer", linkify=True)
+    description = attrs.TextAttr("description")
+
+
+class OptionDefinitionPanel(panels.ObjectAttributesPanel):
+    title = _("Option Definition")
+
+    name = attrs.TextAttr("name")
+    code = attrs.NumericAttr("code")
+    option_type = attrs.ChoiceAttr("option_type", label=_("Type"))
+    option_space = attrs.ChoiceAttr("option_space")
+    vendor_option_space = attrs.RelatedObjectAttr("vendor_option_space", linkify=True)
+    is_array = attrs.BooleanAttr("is_array", label=_("Array"))
+    is_standard = attrs.BooleanAttr("is_standard", label=_("Standard option (RFC)"))
+    encapsulate = attrs.TextAttr("encapsulate", label=_("Encapsulates"))
+    record_types = attrs.TextAttr("record_types", style="font-monospace")
+    description = attrs.TextAttr("description")
+
+
+class OptionDataPanel(panels.ObjectAttributesPanel):
+    title = _("Option Data")
+
+    distinctive_name = attrs.TextAttr("distinctive_name")
+    definition = attrs.RelatedObjectAttr("definition", linkify=True)
+    vendor_option_space = attrs.RelatedObjectAttr("vendor_option_space", linkify=True)
+    delivery_type = attrs.ChoiceAttr("delivery_type")
+    data = attrs.TextAttr("data", style="font-monospace")
+    ascii_data = attrs.TextAttr("ascii_data", label=_("ASCII data"))
+    always_send = attrs.BooleanAttr("always_send")
+    csv_format = attrs.BooleanAttr("csv_format", label=_("CSV format"))
+    description = attrs.TextAttr("description")
+
+
+class OptionIPSourcesPanel(panels.ObjectPanel):
+    """The IP sources an option's data is resolved from, when it has any."""
+
+    template_name = "netbox_dhcp_kea_plugin/panels/option_ip_sources.html"
+    title = _("IP Sources")
+
+    def get_context(self, context):
+        from netbox_dhcp_kea_plugin.models import OptionData
+
+        ctx = super().get_context(context)
+        sources = list(ctx["object"].ip_sources.order_by("ordinal"))
+        for source in sources:
+            source.resolved_ip = OptionData._resolve_ip(source.ip_source)
+        return {**ctx, "ip_sources": sources}
+
+    def should_render(self, context):
+        return bool(context["ip_sources"])
