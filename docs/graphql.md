@@ -29,10 +29,17 @@ Each exposed model provides a single-object lookup and a `_list` field (the list
 | `netbox_dhcp_kea_subnet_pool` / `_list` | Subnet pools |
 | `netbox_dhcp_kea_client_class` / `_list` | Client classes |
 | `netbox_dhcp_kea_static_reservation` / `_list` | Static (explicit) host reservations |
+| `netbox_dhcp_kea_tsig_key` / `_list` | TSIG keys *(DDNS)* |
+| `netbox_dhcp_kea_d2_daemon` / `_list` | D2 daemons *(DDNS)* |
+| `netbox_dhcp_kea_ddns_domain` / `_list` | DDNS domains *(DDNS)* |
+| `netbox_dhcp_kea_ddns_server_override` / `_list` | DDNS server overrides *(DDNS)* |
+| `netbox_dhcp_kea_ddns_policy` / `_list` | DDNS policies *(DDNS)* |
 
 !!! note "Scope"
     The query roots above cover the models needed to discover and inspect DHCP subnets and their
-    explicit host reservations. Remaining types (DDNS, Stork, option data) will be added
+    explicit host reservations, plus DDNS. The DDNS roots exist only with
+    [`enable_ddns`](configuration.md#core-settings) on, like the DDNS REST routes. Remaining
+    types (Stork, option data) will be added
     incrementally using the same pattern.
 
 ## Types and traversals
@@ -47,6 +54,16 @@ plugin types and to **native NetBox types**:
 | `SubnetPoolType` | `ip_range` → IPAM IP range | `subnet`, `client_class` |
 | `ClientClassType` | — | `servers` |
 | `StaticReservationType` | `ip_address` → IPAM IP address, `mac_address` → DCIM MAC address | `subnet` |
+| `D2DaemonType` | `ip_address` → IPAM IP address | `domains`; computed `requires_secret_substitution` |
+| `DDNSDomainType` | `zone` → netbox-dns zone | `d2_daemon`, `tsig_key`, `server_overrides`; computed `is_reverse` |
+| `DDNSServerOverrideType` | `nameserver` → netbox-dns nameserver | `ddns_domain`, `tsig_key` |
+| `DDNSPolicyType` | — | `servers`, `subnets`, `pools` |
+| `TSIGKeyType` | — | — |
+
+!!! note "No TSIG secrets in GraphQL"
+    `TSIGKeyType` exposes the key's name, algorithm, backend and `secret_ref`, never the
+    plaintext secret. GraphQL has no equivalent of the REST API's per-field
+    `view_secret_tsigkey` check, so the field is left out rather than gated.
 
 `StaticReservationType` also exposes the reservation's stored fields — `hostname`, `source`,
 `external_id`, `last_synced`, `description`. Filter the list root by `subnet`, `ip_address`, or

@@ -3,9 +3,12 @@
 Base ``NetBoxObjectType`` (the models are ``NetBoxModel`` subclasses). Scalar
 fields are listed explicitly via ``fields=[...]`` rather than ``"__all__"`` so
 the schema does not pull in related plugin models that have no GraphQL type yet
-(option data, HA relationships, DDNS policies, …). Cross-type relations are
-declared as lazy ``Annotated[...]`` attributes pointing only at the four built
-types or at native NetBox types (IPAM Prefix / IPAddress / IPRange / Service).
+(option data, HA relationships, Stork, …). Cross-type relations are declared as
+lazy ``Annotated[...]`` attributes pointing only at built plugin types, native
+NetBox types (IPAM Prefix / IPAddress / IPRange / Service) or netbox-dns types.
+
+The TSIG key type has no secret field, by design: GraphQL has no per-field
+permission like the REST serializer's ``view_secret_tsigkey`` check.
 """
 
 from typing import Annotated
@@ -16,27 +19,42 @@ from netbox.graphql.types import NetBoxObjectType
 
 from netbox_dhcp_kea_plugin.models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
+    DDNSServerOverride,
     DHCPServer,
     StaticReservation,
     Subnet,
     SubnetPool,
+    TSIGKey,
 )
 
 from .filters import (
     ClientClassFilter,
+    D2DaemonFilter,
+    DDNSDomainFilter,
+    DDNSPolicyFilter,
+    DDNSServerOverrideFilter,
     DHCPServerFilter,
     StaticReservationFilter,
     SubnetFilter,
     SubnetPoolFilter,
+    TSIGKeyFilter,
 )
 
 __all__ = (
     "ClientClassType",
+    "D2DaemonType",
+    "DDNSDomainType",
+    "DDNSPolicyType",
+    "DDNSServerOverrideType",
     "DHCPServerType",
     "StaticReservationType",
     "SubnetType",
     "SubnetPoolType",
     "SubnetPoolEntryType",
+    "TSIGKeyType",
 )
 
 
@@ -216,3 +234,105 @@ class StaticReservationType(NetBoxObjectType):
     ]
     ip_address: Annotated["IPAddressType", strawberry.lazy("ipam.graphql.types")]
     mac_address: Annotated["MACAddressType", strawberry.lazy("dcim.graphql.types")]
+
+
+# --- DDNS ---
+
+_PLUGIN_TYPES = "netbox_dhcp_kea_plugin.graphql.types"
+
+
+@strawberry_django.type(
+    TSIGKey,
+    # No secret_plaintext: see the module docstring.
+    fields=["id", "name", "description", "algorithm", "digest_bits", "secret_backend", "secret_ref"],
+    filters=TSIGKeyFilter,
+    pagination=True,
+)
+class TSIGKeyType(NetBoxObjectType):
+    name: str
+
+
+@strawberry_django.type(
+    D2Daemon,
+    fields=[
+        "id",
+        "name",
+        "description",
+        "listener_mode",
+        "port",
+        "dns_server_timeout",
+        "control_socket_path",
+        "ncr_protocol",
+        "ncr_format",
+    ],
+    filters=D2DaemonFilter,
+    pagination=True,
+)
+class D2DaemonType(NetBoxObjectType):
+    name: str
+    ip_address: Annotated["IPAddressType", strawberry.lazy("ipam.graphql.types")] | None
+    domains: list[Annotated["DDNSDomainType", strawberry.lazy(_PLUGIN_TYPES)]]
+
+    @strawberry_django.field(description="Whether kea-config is a template awaiting secret substitution.")
+    def requires_secret_substitution(self) -> bool:
+        return self.requires_secret_substitution()
+
+
+@strawberry_django.type(
+    DDNSDomain,
+    fields=["id", "user_context"],
+    filters=DDNSDomainFilter,
+    pagination=True,
+)
+class DDNSDomainType(NetBoxObjectType):
+    d2_daemon: Annotated["D2DaemonType", strawberry.lazy(_PLUGIN_TYPES)]
+    zone: Annotated["NetBoxDNSZoneType", strawberry.lazy("netbox_dns.graphql.types")]
+    tsig_key: Annotated["TSIGKeyType", strawberry.lazy(_PLUGIN_TYPES)] | None
+    server_overrides: list[Annotated["DDNSServerOverrideType", strawberry.lazy(_PLUGIN_TYPES)]]
+
+    @strawberry_django.field(description="Whether the zone is a reverse (in-addr.arpa / ip6.arpa) zone.")
+    def is_reverse(self) -> bool:
+        return self.is_reverse
+
+
+@strawberry_django.type(
+    DDNSServerOverride,
+    fields=["id", "port", "description"],
+    filters=DDNSServerOverrideFilter,
+    pagination=True,
+)
+class DDNSServerOverrideType(NetBoxObjectType):
+    ddns_domain: Annotated["DDNSDomainType", strawberry.lazy(_PLUGIN_TYPES)]
+    nameserver: Annotated["NetBoxDNSNameServerType", strawberry.lazy("netbox_dns.graphql.types")]
+    tsig_key: Annotated["TSIGKeyType", strawberry.lazy(_PLUGIN_TYPES)] | None
+
+
+@strawberry_django.type(
+    DDNSPolicy,
+    fields=[
+        "id",
+        "name",
+        "description",
+        "ddns_send_updates",
+        "ddns_override_no_update",
+        "ddns_override_client_update",
+        "ddns_replace_client_name",
+        "ddns_generated_prefix",
+        "ddns_qualifying_suffix",
+        "hostname_char_set",
+        "hostname_char_replacement",
+        "ddns_update_on_renew",
+        "ddns_conflict_resolution_mode",
+        "ddns_ttl_percent",
+        "ddns_ttl",
+        "ddns_ttl_min",
+        "ddns_ttl_max",
+    ],
+    filters=DDNSPolicyFilter,
+    pagination=True,
+)
+class DDNSPolicyType(NetBoxObjectType):
+    name: str
+    servers: list[Annotated["DHCPServerType", strawberry.lazy(_PLUGIN_TYPES)]]
+    subnets: list[Annotated["SubnetType", strawberry.lazy(_PLUGIN_TYPES)]]
+    pools: list[Annotated["SubnetPoolType", strawberry.lazy(_PLUGIN_TYPES)]]

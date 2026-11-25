@@ -757,7 +757,8 @@ class TSIGKeySerializer(NetBoxModelSerializer):
 
 class D2DaemonSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-detail")
-    ip_address = IPAddressSerializer(nested=True, read_only=True)
+    # Writable: a remote-mode daemon cannot be created without it.
+    ip_address = IPAddressSerializer(nested=True, required=False, allow_null=True)
     domains_count = serializers.SerializerMethodField()
     # Lets a deployment see that kea-config is a template before fetching it.
     requires_secret_substitution = serializers.SerializerMethodField()
@@ -792,11 +793,35 @@ class D2DaemonSerializer(NetBoxModelSerializer):
         return obj.requires_secret_substitution()
 
 
+class DNSZoneField(serializers.PrimaryKeyRelatedField):
+    """A netbox-dns Zone, written by ID (or {"id": ...}) and read as {"id", "name"}.
+
+    The queryset is resolved per request so this module still imports when
+    netbox-dns is not installed; DDNS is gated on it being present.
+    """
+
+    def get_queryset(self):
+        from netbox_dns.models import Zone
+
+        return Zone.objects.all()
+
+    def use_pk_only_optimization(self):
+        return False
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = data.get("id")
+        return super().to_internal_value(data)
+
+    def to_representation(self, value):
+        return {"id": value.pk, "name": value.name}
+
+
 class DDNSDomainSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-detail")
-    d2_daemon = NestedD2DaemonSerializer(read_only=True)
-    tsig_key = NestedTSIGKeySerializer(read_only=True)
-    zone = serializers.SerializerMethodField()
+    d2_daemon = NestedD2DaemonSerializer()
+    tsig_key = NestedTSIGKeySerializer(required=False, allow_null=True)
+    zone = DNSZoneField()
     is_reverse = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -815,11 +840,6 @@ class DDNSDomainSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
-
-    def get_zone(self, obj):
-        if obj.zone_id is None:
-            return None
-        return {"id": obj.zone_id, "name": obj.zone.name}
 
 
 class NestedDDNSDomainSerializer(WritableNestedSerializer):

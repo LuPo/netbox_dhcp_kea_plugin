@@ -44,6 +44,12 @@ The docs, the vault backend and the *Configuration* tab said Kea would load a co
 ### Changed — a taken subnet prefix names its server
 A prefix carries one DHCP subnet, and saving a second one only said "Subnet with this Prefix already exists". The message now names the server that has it and the existing subnet's ID. On the form, the ID links to that subnet; the REST API and CSV import get the same text without the link.
 
+### Fixed — DDNS domains could not be created through the REST API
+`DDNSDomainSerializer` marked `d2_daemon`, `tsig_key` and `zone` read-only, so a domain could be read but never written; likewise `D2DaemonSerializer.ip_address`, so no remote-mode daemon could be created. All four are writable now, by ID. `zone` still reads as `{"id", "name"}`, and the model's checks (a resolvable nameserver, the remote listener address) apply to API writes.
+
+### Added — DDNS in GraphQL
+Query roots and types for TSIG keys, D2 daemons, DDNS domains, server overrides and policies, registered with `enable_ddns`. Domains traverse to netbox-dns zones and overrides to nameservers. The TSIG key type carries no secret.
+
 ### Changed
 - The `vault` secret backend is labelled *OpenBao / Vault (by reference)*, matching its `${BAO:…}` default.
 - `D2DaemonImportForm` accepts `dns_server_timeout`.

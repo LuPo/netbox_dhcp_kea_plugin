@@ -14,10 +14,15 @@ from netbox.graphql.filters import NetBoxModelFilter
 
 from netbox_dhcp_kea_plugin.models import (
     ClientClass,
+    D2Daemon,
+    DDNSDomain,
+    DDNSPolicy,
+    DDNSServerOverride,
     DHCPServer,
     StaticReservation,
     Subnet,
     SubnetPool,
+    TSIGKey,
 )
 
 if TYPE_CHECKING:
@@ -30,10 +35,15 @@ if TYPE_CHECKING:
 
 __all__ = (
     "ClientClassFilter",
+    "D2DaemonFilter",
+    "DDNSDomainFilter",
+    "DDNSPolicyFilter",
+    "DDNSServerOverrideFilter",
     "DHCPServerFilter",
     "StaticReservationFilter",
     "SubnetFilter",
     "SubnetPoolFilter",
+    "TSIGKeyFilter",
 )
 
 
@@ -106,3 +116,50 @@ class SubnetPoolFilter(NetBoxModelFilter):
         ]
         | None
     ) = strawberry_django.filter_field()
+
+
+# --- DDNS ---
+
+
+@strawberry_django.filter_type(TSIGKey, lookups=True)
+class TSIGKeyFilter(NetBoxModelFilter):
+    pass
+
+
+@strawberry_django.filter_type(D2Daemon, lookups=True)
+class D2DaemonFilter(NetBoxModelFilter):
+    pass
+
+
+@strawberry_django.filter_type(DDNSDomain, lookups=True)
+class DDNSDomainFilter(NetBoxModelFilter):
+    d2_daemon: (
+        Annotated[
+            "D2DaemonFilter",
+            strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
+        ]
+        | None
+    ) = strawberry_django.filter_field()
+    tsig_key: (
+        Annotated[
+            "TSIGKeyFilter",
+            strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
+        ]
+        | None
+    ) = strawberry_django.filter_field()
+
+
+@strawberry_django.filter_type(DDNSServerOverride, lookups=True)
+class DDNSServerOverrideFilter(NetBoxModelFilter):
+    ddns_domain: (
+        Annotated[
+            "DDNSDomainFilter",
+            strawberry.lazy("netbox_dhcp_kea_plugin.graphql.filters"),
+        ]
+        | None
+    ) = strawberry_django.filter_field()
+
+
+@strawberry_django.filter_type(DDNSPolicy, lookups=True)
+class DDNSPolicyFilter(NetBoxModelFilter):
+    pass

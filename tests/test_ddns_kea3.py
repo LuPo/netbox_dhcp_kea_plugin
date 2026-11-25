@@ -436,3 +436,107 @@ def test_the_d2_api_reports_outstanding_substitution(d2_daemon, forward_zone, na
     resp = client.get(url)
 
     assert resp.data["requires_secret_substitution"] is True
+
+
+# ---------------------------------------------------------------------------
+# Writing DDNS objects through the REST API
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def admin_api(db):
+    user = get_user_model().objects.create_superuser(username="ddns-api-admin", password="x")
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
+
+
+@ddns_routes
+class TestWritableAPI:
+    def test_a_domain_can_be_created(self, admin_api, d2_daemon, forward_zone, name_server, tsig_key):
+        forward_zone.nameservers.add(name_server)
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
+
+        resp = admin_api.post(
+            url,
+            {"d2_daemon": d2_daemon.pk, "zone": forward_zone.pk, "tsig_key": tsig_key.pk},
+            format="json",
+        )
+
+        assert resp.status_code == 201, resp.data
+        assert resp.data["zone"] == {"id": forward_zone.pk, "name": forward_zone.name}
+        assert resp.data["d2_daemon"]["id"] == d2_daemon.pk
+        assert resp.data["tsig_key"]["id"] == tsig_key.pk
+
+    def test_a_domain_without_a_resolvable_nameserver_is_refused(self, admin_api, d2_daemon):
+        zone = _make_zone("unresolvable.example.com")
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:ddnsdomain-list")
+
+        resp = admin_api.post(url, {"d2_daemon": d2_daemon.pk, "zone": zone.pk}, format="json")
+
+        assert resp.status_code == 400
+        assert "zone" in resp.data
+
+    def test_a_remote_daemon_takes_its_listener_address(self, admin_api, d2_listener_ip):
+        url = reverse("plugins-api:netbox_dhcp_kea_plugin-api:d2daemon-list")
+
+        resp = admin_api.post(
+            url,
+            {"name": "d2-remote", "listener_mode": "remote", "ip_address": d2_listener_ip.pk},
+            format="json",
+        )
+
+        assert resp.status_code == 201, resp.data
+        assert resp.data["ip_address"]["id"] == d2_listener_ip.pk
+
+
+# ---------------------------------------------------------------------------
+# GraphQL
+# ---------------------------------------------------------------------------
+
+
+def _gql(user, query):
+    import json
+
+    from django.test import Client
+
+    client = Client()
+    client.force_login(user)
+    resp = client.post("/graphql/", data=json.dumps({"query": query}), content_type="application/json")
+    assert resp.status_code == 200, resp.content
+    return resp.json()
+
+
+@ddns_routes
+class TestGraphQL:
+    @pytest.fixture
+    def admin(self, db):
+        return get_user_model().objects.create_superuser(username="ddns-gql-admin", password="x")
+
+    def test_a_domain_traverses_to_its_daemon_zone_and_key(self, admin, domain, d2_daemon, tsig_key):
+        payload = _gql(
+            admin,
+            """
+            {
+              netbox_dhcp_kea_ddns_domain_list {
+                is_reverse
+                zone { name }
+                tsig_key { name algorithm secret_backend }
+                d2_daemon { name requires_secret_substitution }
+              }
+            }
+            """,
+        )
+
+        assert "errors" not in payload, payload.get("errors")
+        (row,) = payload["data"]["netbox_dhcp_kea_ddns_domain_list"]
+        assert row["zone"]["name"] == domain.zone.name
+        assert row["tsig_key"]["name"] == tsig_key.name
+        assert row["d2_daemon"] == {"name": d2_daemon.name, "requires_secret_substitution": False}
+        assert row["is_reverse"] is False
+
+    def test_the_tsig_key_type_has_no_secret(self, admin, tsig_key):
+        payload = _gql(admin, "{ netbox_dhcp_kea_tsig_key_list { name secret_plaintext } }")
+
+        assert "errors" in payload
+        assert "secret_plaintext" in str(payload["errors"])
