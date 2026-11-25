@@ -21,11 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # netbox-plugin-dns tracks NetBox minor versions: 1.6 for 4.6, 1.7 for 4.7.
-          - netbox: v4.6.10
-            netbox-dns: "~=1.6.0"
-            python: "3.12"
-          - netbox: v4.7.3
+          # netbox-plugin-dns tracks NetBox minor versions: 1.7 for 4.7.
+          - netbox: v4.7.6
             netbox-dns: "~=1.7.0"
             python: "3.14"
 

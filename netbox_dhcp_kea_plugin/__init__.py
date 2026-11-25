@@ -2,7 +2,7 @@
 
 __author__ = """Łukasz Polański"""
 __email__ = "wookasz@gmail.com"
-__version__ = "0.10.4"
+__version__ = "0.11.0"
 
 
 from netbox.plugins import PluginConfig
@@ -21,6 +21,8 @@ class DHCPKEAConfig(PluginConfig):
     author = __author__
     author_email = __email__
     base_url = "netbox_dhcp_kea_plugin"
+    # An older NetBox skips the plugin with a warning instead of loading it
+    min_version = "4.7.0"
     default_settings = {
         "top_level_menu": True,
         "menu_name": "DHCP KEA",

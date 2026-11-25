@@ -7,12 +7,12 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("extras", "0145_taggeditem_object_id_bigint"),
+        ("extras", "0134_owner"),
         (
             "netbox_dhcp_kea_plugin",
             "0015_remove_clientclass_ddns_policy_hookgroup_d2_daemons_and_more",
         ),
-        ("netbox_dns", "0035_alter_dnsseckeytemplate_owner_and_more"),
+        ("netbox_dns", "0001_squashed_netbox_dns_0_22"),
     ]
 
     operations = [

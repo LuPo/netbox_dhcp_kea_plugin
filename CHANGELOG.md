@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (2026-11-25)
 
 Every Kea rule below was checked against Kea 3.0's own grammar and parsers (`dhcp4_parser.yy`, `d2_parser.yy`, `d2_client_cfg.cc`, `d2_config.cc`), not against prose.
+
+### Changed — NetBox 4.7 is required (breaking)
+NetBox 4.6 is no longer supported; 0.10.4 is the last release for it. The plugin now sets `min_version = "4.7.0"`, so an older NetBox starts without it and warns that it "requires NetBox minimum version 4.7.0". Install netbox-plugin-dns 1.7 alongside it.
+
+- The `compat` module drops its NetBox 4.6 code: `service_port_fields` and `port_fields_from` always write `port_mappings`, and `has_port_mappings()` is gone.
+- CI tests NetBox 4.7.6 with netbox-plugin-dns 1.7 and Python 3.14. The NetBox 4.6 job is gone.
+- The compatibility table now says NetBox 4.5 needs 4.5.4 or later. Since 0.7.0, the plugin's first migration depends on `dcim` 0226, which 4.5.4 added.
 
 ### Changed — D2 domains are derived per server (breaking)
 A DDNS domain was attached to a D2 daemon, and every host using that daemon got all of its domains and TSIG keys — one site's keys on another site's servers. Domains now belong to no daemon. Each server's D2 domains are derived from what it hands out:
@@ -77,7 +84,7 @@ Query roots and types for TSIG keys, D2 daemons, DDNS domains, server overrides 
 ### Migration
 `0015_remove_clientclass_ddns_policy_hookgroup_d2_daemons_and_more` adds `SubnetPool.ddns_policy`, `HookGroup.d2_daemons` and the `DDNSServerOverride` model, and removes `ClientClass.ddns_policy`. The choice changes need no migration.
 
-`0016_alter_ddnsdomain_options_and_more` removes `DDNSDomain.d2_daemon` and adds `dhcp_server`, `ha_relationship` and `always_include`, with one constraint allowing at most one scope and three allowing one entry per zone and scope. Existing domains become entries for every server; it fails if a zone was attached to two D2 daemons. It depends on NetBox 4.7 (`extras` 0145) and netbox-plugin-dns 1.7 (`netbox_dns` 0035) migrations.
+`0016_alter_ddnsdomain_options_and_more` removes `DDNSDomain.d2_daemon` and adds `dhcp_server`, `ha_relationship` and `always_include`, with one constraint allowing at most one scope and three allowing one entry per zone and scope. Existing domains become entries for every server; it fails if a zone was attached to two D2 daemons. Like `0006` and `0015`, it depends only on long-standing `extras` and `netbox_dns` migrations, so it runs on every NetBox 4.7 release.
 
 ## 0.10.4 (2026-10-22)
 
