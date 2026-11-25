@@ -1,65 +1,7 @@
-{% extends 'generic/object.html' %}
-{% load helpers %}
+{% extends "ui/panels/_base.html" %}
 
-{% block content %}
-<div class="row">
-    <div class="col col-md-6">
-        <div class="card">
-            <h5 class="card-header">DDNS Domain</h5>
-            <div class="card-body">
-                <table class="table table-hover attr-table">
-                    <tr>
-                        <th>Zone</th>
-                        <td>{{ object.zone }}</td>
-                    </tr>
-                    <tr>
-                        <th>Scope</th>
-                        <td>
-                            {% with scope_object=object.scope_object %}
-                            {% if scope_object %}
-                            <a href="{{ scope_object.get_absolute_url }}">{{ scope_object }}</a>
-                            {% else %}
-                            All servers
-                            {% endif %}
-                            {% endwith %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Always Included</th>
-                        <td>{% checkmark object.always_include %}</td>
-                    </tr>
-                    <tr>
-                        <th>Direction</th>
-                        <td>{% if object.is_reverse %}Reverse{% else %}Forward{% endif %}</td>
-                    </tr>
-                    <tr>
-                        <th>TSIG Key</th>
-                        <td>
-                            {% if object.tsig_key %}
-                            <a href="{{ object.tsig_key.get_absolute_url }}">{{ object.tsig_key.name }}</a>
-                            {% else %}
-                            {{ ''|placeholder }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>User Context</th>
-                        <td>
-                            {% if object.user_context %}
-                            <pre class="mb-0">{{ object.user_context|json }}</pre>
-                            {% else %}
-                            {{ ''|placeholder }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-    </div>
-    <div class="col col-md-6">
-        <div class="card">
-            <h5 class="card-header">DNS Servers</h5>
-            <div class="card-body">
+{% block panel_content %}
+<div class="card-body">
                 {% if nameserver_entries %}
                 <table class="table table-hover">
                     <thead>
@@ -106,8 +48,5 @@
                 {% else %}
                 <p class="text-muted mb-0">Zone has no nameservers assigned.</p>
                 {% endif %}
-            </div>
-        </div>
-    </div>
 </div>
-{% endblock %}
+{% endblock panel_content %}

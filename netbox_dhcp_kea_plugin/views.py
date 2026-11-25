@@ -1781,6 +1781,17 @@ class DDNSDomainView(generic.ObjectView):
     queryset = models.DDNSDomain.objects.select_related(
         "dhcp_server", "ha_relationship", "zone", "tsig_key"
     ).prefetch_related("zone__nameservers")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSDomainPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            TemplatePanel("netbox_dhcp_kea_plugin/panels/ddns_dns_servers.html", title=_("DNS Servers")),
+            CustomFieldsPanel(),
+        ],
+    )
 
     def get_extra_context(self, request, instance):
         # What each nameserver renders as, with the override (if any) that shapes it.
@@ -1834,6 +1845,16 @@ class DDNSDomainImportView(generic.BulkImportView):
 @register_model_view(models.DDNSServerOverride)
 class DDNSServerOverrideView(generic.ObjectView):
     queryset = models.DDNSServerOverride.objects.select_related("ddns_domain", "ddns_domain__zone", "tsig_key")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSServerOverridePanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.DDNSServerOverride, "list", path="", detail=False)
@@ -1869,6 +1890,20 @@ class DDNSServerOverrideBulkDeleteView(generic.BulkDeleteView):
 @register_model_view(models.DDNSPolicy)
 class DDNSPolicyView(generic.ObjectView):
     queryset = models.DDNSPolicy.objects.prefetch_related("servers", "subnets", "pools")
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.DDNSPolicyPanel(),
+            ui_panels.DDNSPolicyFlagsPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.DDNSPolicyHostnamePanel(),
+            ui_panels.DDNSPolicyConflictPanel(),
+            ui_panels.DDNSPolicyTTLPanel(),
+            CustomFieldsPanel(),
+        ],
+    )
 
 
 @register_model_view(models.DDNSPolicy, "list", path="", detail=False)
@@ -1921,58 +1956,51 @@ def get_ddnspolicy_pools_count(obj):
 
 
 @register_model_view(models.DDNSPolicy, name="servers", path="servers")
-class DDNSPolicyServersView(generic.ObjectView):
+class DDNSPolicyServersView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_servers.html"
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="Servers",
+        label=_("Servers"),
         badge=get_ddnspolicy_servers_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "servers": policy.servers.all(), "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 @register_model_view(models.DDNSPolicy, name="subnets", path="subnets")
-class DDNSPolicySubnetsView(generic.ObjectView):
+class DDNSPolicySubnetsView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_subnets.html"
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=get_ddnspolicy_subnets_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "subnets": policy.subnets.all(), "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.subnets.restrict(request.user, "view").select_related("prefix", "server")
 
 
 @register_model_view(models.DDNSPolicy, name="pools", path="pools")
-class DDNSPolicyPoolsView(generic.ObjectView):
+class DDNSPolicyPoolsView(generic.ObjectChildrenView):
     queryset = models.DDNSPolicy.objects.all()
-    template_name = "netbox_dhcp_kea_plugin/ddnspolicy_pools.html"
+    child_model = models.SubnetPool
+    table = tables.SubnetPoolTable
+    filterset = filtersets.SubnetPoolFilterSet
+    filterset_form = forms.SubnetPoolFilterForm
     tab = ViewTab(
-        label="Pools",
+        label=_("Pools"),
         badge=get_ddnspolicy_pools_count,
         permission="netbox_dhcp_kea_plugin.view_ddnspolicy",
     )
 
-    def get(self, request, pk):
-        policy = self.get_object(pk=pk)
-        pools = policy.pools.select_related("subnet", "subnet__prefix", "ip_range")
-        return render(
-            request,
-            self.template_name,
-            {"object": policy, "pools": pools, "tab": self.tab},
-        )
+    def get_children(self, request, parent):
+        return parent.pools.restrict(request.user, "view").select_related("subnet", "subnet__prefix", "ip_range")

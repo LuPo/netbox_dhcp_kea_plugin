@@ -45,7 +45,7 @@ def stork_enabled(_obj=None):
 
 
 # Words kept upper-case in labels derived from field names.
-_ACRONYMS = {"ha", "ip", "kea", "ddns", "d2", "pki", "fqdn", "http", "id", "ascii", "csv", "url", "vrf", "tsig", "ncr"}
+_ACRONYMS = {"ha", "ip", "kea", "ddns", "d2", "pki", "fqdn", "http", "id", "ascii", "csv", "url", "vrf", "tsig", "ncr", "ttl"}
 
 
 class AttributesPanel(panels.ObjectAttributesPanel):
@@ -721,3 +721,69 @@ class D2NCRPanel(AttributesPanel):
     )
     servers = MethodListAttr("servers_using", linkify=True)
     hook_groups = attrs.RelatedObjectListAttr("hook_groups", linkify=True)
+
+
+class DDNSDomainPanel(AttributesPanel):
+    title = _("DDNS Domain")
+
+    zone = attrs.RelatedObjectAttr("zone", linkify=True)
+    scope = attrs.TemplatedAttr("pk", template_name="netbox_dhcp_kea_plugin/attrs/ddns_scope.html")
+    always_include = attrs.BooleanAttr("always_include", label=_("Always Included"))
+    direction = attrs.TextAttr("direction")
+    tsig_key = attrs.RelatedObjectAttr("tsig_key", linkify=True, label=_("TSIG Key"))
+    user_context = JSONAttr("user_context")
+
+
+class DDNSServerOverridePanel(AttributesPanel):
+    title = _("DDNS Server Override")
+
+    ddns_domain = attrs.RelatedObjectAttr("ddns_domain", linkify=True, label=_("DDNS Domain"))
+    nameserver = attrs.RelatedObjectAttr("nameserver", linkify=True)
+    port = DefaultedAttr("port", default_label=_("53 (default)"))
+    tsig_key = attrs.TemplatedAttr(
+        "pk", template_name="netbox_dhcp_kea_plugin/attrs/override_tsig_key.html", label=_("TSIG Key")
+    )
+    description = attrs.TextAttr("description")
+
+
+class DDNSPolicyPanel(AttributesPanel):
+    title = _("DDNS Policy")
+
+    name = attrs.TextAttr("name")
+    description = attrs.TextAttr("description")
+
+
+class DDNSPolicyFlagsPanel(AttributesPanel):
+    title = _("Override Flags")
+
+    ddns_send_updates = attrs.BooleanAttr("ddns_send_updates", label=_("Send Updates"))
+    ddns_override_no_update = attrs.BooleanAttr("ddns_override_no_update", label=_("Override No Update"))
+    ddns_override_client_update = attrs.BooleanAttr(
+        "ddns_override_client_update", label=_("Override Client Update")
+    )
+    ddns_update_on_renew = attrs.BooleanAttr("ddns_update_on_renew", label=_("Update on Renew"))
+    ddns_replace_client_name = attrs.ChoiceAttr("ddns_replace_client_name", label=_("Replace Client Name"))
+
+
+class DDNSPolicyHostnamePanel(AttributesPanel):
+    title = _("Hostname")
+
+    ddns_generated_prefix = attrs.TextAttr("ddns_generated_prefix", label=_("Generated Prefix"))
+    ddns_qualifying_suffix = attrs.TextAttr("ddns_qualifying_suffix", label=_("Qualifying Suffix"))
+    hostname_char_set = attrs.TextAttr("hostname_char_set", style="font-monospace")
+    hostname_char_replacement = attrs.TextAttr("hostname_char_replacement", style="font-monospace")
+
+
+class DDNSPolicyConflictPanel(AttributesPanel):
+    title = _("Conflict Resolution")
+
+    ddns_conflict_resolution_mode = attrs.ChoiceAttr("ddns_conflict_resolution_mode", label=_("Mode"))
+
+
+class DDNSPolicyTTLPanel(AttributesPanel):
+    title = _("TTL")
+
+    ddns_ttl_percent = attrs.TextAttr("ddns_ttl_percent", label=_("TTL Percent"))
+    ddns_ttl = attrs.NumericAttr("ddns_ttl", label=_("TTL"))
+    ddns_ttl_min = attrs.NumericAttr("ddns_ttl_min", label=_("TTL Min"))
+    ddns_ttl_max = attrs.NumericAttr("ddns_ttl_max", label=_("TTL Max"))
