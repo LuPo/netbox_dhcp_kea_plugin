@@ -14,7 +14,6 @@ from netaddr import IPNetwork
 from netbox.registry import registry
 from utilities.views import get_viewname
 
-
 pytestmark = pytest.mark.django_db
 
 APP_LABEL = "netbox_dhcp_kea_plugin"
@@ -112,11 +111,44 @@ def _detail_view_names(model):
     return [view["name"] for view in views if view["detail"]]
 
 
+# Query parameters an embedded table URL carries that are not filters.
+_NON_FILTER_PARAMS = {"embedded", "return_url", "include_columns", "exclude_columns"}
+
+
+def _embedded_table_problems(client, page_url, content):
+    """Fetch every HTMX-embedded table on a page and check its filters exist.
+
+    NetBox list views ignore unknown query parameters, so a misspelt filter
+    would quietly list every object instead of the related ones.
+    """
+    import html
+    import re
+    from urllib.parse import parse_qsl, urlsplit
+
+    from django.urls import resolve
+
+    problems = []
+    tables = re.findall(r'hx-get="([^"]+embedded=True[^"]*)"', content)
+    for raw in tables:
+        url = html.unescape(raw)
+        parts = urlsplit(url)
+        filterset = resolve(parts.path).func.view_class.filterset
+        known = set(filterset.base_filters) | {"q"}
+        for key, _value in parse_qsl(parts.query):
+            if key not in _NON_FILTER_PARAMS and key not in known:
+                problems.append(f"{page_url}: table {parts.path} has no filter '{key}'")
+        resp = client.get(url, HTTP_HX_REQUEST="true")
+        if resp.status_code != 200:
+            problems.append(f"{page_url}: table {url} → {resp.status_code}")
+    return problems, len(tables)
+
+
 def test_every_page_and_tab_renders(every_object, client):
     client.force_login(get_user_model().objects.create_superuser(username="ui-pages", password="x"))
 
     failures = []
     rendered = 0
+    embedded = 0
     for obj in every_object:
         for name in _detail_view_names(type(obj)):
             try:
@@ -131,9 +163,14 @@ def test_every_page_and_tab_renders(every_object, client):
                 continue
             if resp.status_code != 200:
                 failures.append(f"{url} → {resp.status_code}")
+                continue
+            problems, count = _embedded_table_problems(client, url, resp.content.decode())
+            failures += problems
+            embedded += count
 
     assert not failures, "\n".join(failures)
     assert rendered > len(every_object)
+    assert embedded > 0
 
 
 def test_every_list_renders(every_object, client):

@@ -151,6 +151,10 @@ class OptionDataFilterSet(NetBoxModelFilterSet):
     )
     delivery_type = django_filters.ChoiceFilter(choices=OptionData.DELIVERY_TYPE_CHOICES, label="Delivery Type")
     always_send = django_filters.BooleanFilter(label="Always Send")
+    # Reverse relations, so a page can list the option data attached to one object.
+    client_class_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="client_classes", queryset=ClientClass.objects.all(), label="Client Class (ID)"
+    )
 
     class Meta:
         model = OptionData

@@ -4,6 +4,8 @@ from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs, panels
 from netbox.ui.actions import CopyContent
 
+from netbox_dhcp_kea_plugin.ui.attrs import JSONAttr, SecondsAttr, hinted
+
 
 class ConditionalTemplatePanel(panels.TemplatePanel):
     """A template panel shown only when ``condition(object)`` is true."""
@@ -123,3 +125,54 @@ class OptionIPSourcesPanel(panels.ObjectPanel):
 
     def should_render(self, context):
         return bool(context["ip_sources"])
+
+
+class ClientClassPanel(panels.ObjectAttributesPanel):
+    title = _("Client Class")
+
+    name = attrs.TextAttr("name")
+    test_expression = attrs.TextAttr("test_expression", style="font-monospace")
+    template_test = attrs.BooleanAttr(
+        "template_test",
+        label=hinted(
+            _("Template class"),
+            _(
+                "Rendered as template-test. KEA spawns a subclass named SPAWN_<class>_<value> per distinct "
+                "result, so one class definition yields one class per client."
+            ),
+        ),
+    )
+    valid_lifetime = SecondsAttr("valid_lifetime")
+    renew_timer = SecondsAttr("renew_timer", label=_("Renew timer (T1)"))
+    rebind_timer = SecondsAttr("rebind_timer", label=_("Rebind timer (T2)"))
+    user_context = JSONAttr(
+        "user_context",
+        label=hinted(
+            _("User context"),
+            _(
+                "Passed through to KEA as user-context. Hook libraries read their configuration from "
+                "here — libdhcp_limits.so takes its limits from it."
+            ),
+        ),
+    )
+    only_in_additional_list = attrs.BooleanAttr("only_in_additional_list")
+    description = attrs.TextAttr("description")
+    next_server = attrs.TextAttr("next_server")
+    server_hostname = attrs.TextAttr("server_hostname")
+    boot_file_name = attrs.TextAttr("boot_file_name")
+
+
+class ClientClassKeaPanel(panels.ObjectPanel):
+    """The class's KEA entry, switchable between hex and ASCII option data."""
+
+    template_name = "netbox_dhcp_kea_plugin/panels/client_class_kea.html"
+    title = _("KEA Configuration Preview")
+
+    def get_context(self, context):
+        ctx = super().get_context(context)
+        client_class = ctx["object"]
+        return {
+            **ctx,
+            "kea_config_hex": client_class.to_kea_json(ascii_format=False, indent=4),
+            "kea_config_ascii": client_class.to_kea_json(ascii_format=True, indent=4),
+        }

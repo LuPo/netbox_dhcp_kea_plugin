@@ -684,12 +684,23 @@ class DHCPServerKeaConfigView(generic.ObjectView):
 @register_model_view(models.ClientClass)
 class ClientClassView(generic.ObjectView):
     queryset = models.ClientClass.objects.prefetch_related("option_data")
-
-    def get_extra_context(self, request, instance):
-        return {
-            "kea_config_hex": instance.to_kea_json(ascii_format=False, indent=4),
-            "kea_config_ascii": instance.to_kea_json(ascii_format=True, indent=4),
-        }
+    template_name = "generic/object.html"
+    layout = layout.SimpleLayout(
+        left_panels=[
+            ui_panels.ClientClassPanel(),
+            TagsPanel(),
+        ],
+        right_panels=[
+            ui_panels.ClientClassKeaPanel(),
+            CustomFieldsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                "netbox_dhcp_kea_plugin.OptionData",
+                filters={"client_class_id": lambda ctx: ctx["object"].pk},
+            ),
+        ],
+    )
 
 
 @register_model_view(models.ClientClass, "list", path="", detail=False)
@@ -795,25 +806,20 @@ class ClientClassImportView(generic.BulkImportView):
 
 
 @register_model_view(models.ClientClass, name="servers", path="servers")
-class ClientClassServersView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related("servers")
-    template_name = "netbox_dhcp_kea_plugin/clientclass_servers.html"
+class ClientClassServersView(generic.ObjectChildrenView):
+    queryset = models.ClientClass.objects.all()
+    child_model = models.DHCPServer
+    table = tables.DHCPServerTable
+    filterset = filtersets.DHCPServerFilterSet
+    filterset_form = forms.DHCPServerFilterForm
     tab = ViewTab(
-        label="DHCP Servers",
+        label=_("DHCP Servers"),
         badge=lambda obj: obj.servers.count(),
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
-    def get(self, request, pk):
-        client_class = self.get_object(pk=pk)
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": client_class,
-                "tab": self.tab,
-            },
-        )
+    def get_children(self, request, parent):
+        return parent.servers.restrict(request.user, "view")
 
 
 def _get_subnet_count_for_class(obj):
@@ -824,41 +830,27 @@ def _get_subnet_count_for_class(obj):
 
 
 @register_model_view(models.ClientClass, name="prefixes", path="prefixes")
-class ClientClassPrefixesView(generic.ObjectView):
-    queryset = models.ClientClass.objects.prefetch_related(
-        "subnet_restrictions__prefix",
-        "subnet_restrictions__server",
-        "subnet_evaluations__prefix",
-        "subnet_evaluations__server",
-    )
-    template_name = "netbox_dhcp_kea_plugin/clientclass_prefixes.html"
+class ClientClassPrefixesView(generic.ObjectChildrenView):
+    """Subnets that restrict to this class or evaluate it as an additional class."""
+
+    queryset = models.ClientClass.objects.all()
+    child_model = models.Subnet
+    table = tables.SubnetTable
+    filterset = filtersets.SubnetFilterSet
+    filterset_form = forms.SubnetFilterForm
     tab = ViewTab(
-        label="Subnets",
+        label=_("Subnets"),
         badge=lambda obj: _get_subnet_count_for_class(obj),
         visible=lambda obj: obj.only_in_additional_list,
         permission="netbox_dhcp_kea_plugin.view_clientclass",
     )
 
-    def get(self, request, pk):
-        client_class = self.get_object(pk=pk)
-        # Subnets where this class is the restricting client_class
-        restricting_subnets = client_class.subnet_restrictions.select_related("prefix", "server").all()
-        # Subnets where this class is in evaluate_additional_classes
-        evaluation_subnets = client_class.subnet_evaluations.select_related("prefix", "server").all()
-        # Combine and deduplicate
-        all_subnet_ids = set(restricting_subnets.values_list("pk", flat=True)) | set(
-            evaluation_subnets.values_list("pk", flat=True)
-        )
-        subnet_items = models.Subnet.objects.filter(pk__in=all_subnet_ids).select_related("prefix", "server")
-
-        return render(
-            request,
-            self.template_name,
-            {
-                "object": client_class,
-                "subnet_items": subnet_items,
-                "tab": self.tab,
-            },
+    def get_children(self, request, parent):
+        return (
+            models.Subnet.objects.restrict(request.user, "view")
+            .filter(Q(client_class=parent) | Q(evaluate_additional_classes=parent))
+            .distinct()
+            .select_related("prefix", "server")
         )
 
 
