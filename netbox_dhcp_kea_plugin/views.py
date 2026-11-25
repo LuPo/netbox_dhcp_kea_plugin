@@ -13,8 +13,8 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, models, tables
-from .ui import panels as ui_panels
 from .models import SubnetPool
+from .ui import panels as ui_panels
 
 
 def _ddns_enabled(_instance=None):
